@@ -30,7 +30,6 @@
             min-height: 100vh;
         }
 
-        /* Header */
         .header {
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
             color: white;
@@ -67,23 +66,10 @@
             font-size: 22px;
         }
 
-        .logo-area h1 {
-            font-size: 18px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
+        .logo-area h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .logo-area .subtitle { font-size: 11px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; }
 
-        .logo-area .subtitle {
-            font-size: 11px;
-            opacity: 0.7;
-            letter-spacing: 1px;
-            text-transform: uppercase;
-        }
-
-        .header-nav {
-            display: flex;
-            gap: 4px;
-        }
+        .header-nav { display: flex; gap: 4px; }
 
         .header-nav button {
             background: transparent;
@@ -101,20 +87,10 @@
         }
 
         .header-nav button:hover,
-        .header-nav button.active {
-            background: rgba(255,255,255,0.12);
-            color: white;
-        }
+        .header-nav button.active { background: rgba(255,255,255,0.12); color: white; }
+        .header-nav button.active { background: var(--accent); }
 
-        .header-nav button.active {
-            background: var(--accent);
-        }
-
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .header-actions { display: flex; align-items: center; gap: 12px; }
 
         .sync-badge {
             display: flex;
@@ -127,27 +103,23 @@
             color: rgba(255,255,255,0.8);
         }
 
-        .sync-badge .dot {
-            width: 7px;
-            height: 7px;
-            background: #4ade80;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
+        .integration-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
+        .integration-badge.shopify { background: #e8f5e9; color: #2e7d32; }
+        .integration-badge.airtable { background: #e3f2fd; color: #1565c0; }
 
-        /* Main Layout */
-        .main {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 24px 32px;
-        }
+        .main { max-width: 1400px; margin: 0 auto; padding: 24px 32px; }
 
-        /* Cards */
         .card {
             background: var(--card);
             border-radius: 12px;
@@ -156,9 +128,7 @@
             transition: box-shadow 0.2s;
         }
 
-        .card:hover {
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        }
+        .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
 
         .card-header {
             padding: 18px 24px;
@@ -176,15 +146,9 @@
             gap: 10px;
         }
 
-        .card-header h2 i {
-            color: var(--accent);
-        }
+        .card-header h2 i { color: var(--accent); }
+        .card-body { padding: 24px; }
 
-        .card-body {
-            padding: 24px;
-        }
-
-        /* Stats Grid */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -201,15 +165,7 @@
             overflow: hidden;
         }
 
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-        }
-
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
         .stat-card.gold::before { background: var(--accent); }
         .stat-card.green::before { background: var(--success); }
         .stat-card.blue::before { background: #3b82f6; }
@@ -223,18 +179,9 @@
             margin-bottom: 8px;
         }
 
-        .stat-card .stat-value {
-            font-size: 28px;
-            font-weight: 700;
-        }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-card .stat-sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
 
-        .stat-card .stat-sub {
-            font-size: 12px;
-            color: var(--text-light);
-            margin-top: 4px;
-        }
-
-        /* Courses Grid */
         .courses-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
@@ -251,40 +198,20 @@
             cursor: pointer;
         }
 
-        .course-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-        }
+        .course-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
 
-        .course-banner {
-            height: 6px;
-        }
+        .course-banner { height: 6px; }
+        .course-banner.certificato { background: linear-gradient(90deg, var(--accent), #d4a76a); }
+        .course-banner.introduttivo { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+        .course-banner.shochu { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
+        .course-banner.masterclass { background: linear-gradient(90deg, var(--success), #34d399); }
+        .course-banner.online { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
 
-        .course-banner.sustainable { background: linear-gradient(90deg, var(--success), #34d399); }
-        .course-banner.warning { background: linear-gradient(90deg, var(--warning), #fbbf24); }
-        .course-banner.critical { background: linear-gradient(90deg, var(--danger), #f87171); }
+        .course-content { padding: 20px 24px; }
 
-        .course-content {
-            padding: 20px 24px;
-        }
-
-        .course-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
-        }
-
-        .course-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .course-dates {
-            font-size: 12px;
-            color: var(--text-light);
-        }
+        .course-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+        .course-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .course-dates { font-size: 12px; color: var(--text-light); }
 
         .badge {
             display: inline-flex;
@@ -297,10 +224,17 @@
             letter-spacing: 0.5px;
         }
 
+        .badge.certificato { background: #fef3c7; color: #92400e; }
+        .badge.introduttivo { background: #dbeafe; color: #1d4ed8; }
+        .badge.shochu { background: #ede9fe; color: #6d28d9; }
+        .badge.masterclass { background: #dcfce7; color: var(--success); }
+        .badge.online { background: #cffafe; color: #0e7490; }
         .badge.sustainable { background: #dcfce7; color: var(--success); }
         .badge.warning { background: #fef3c7; color: #92400e; }
         .badge.critical { background: #fee2e2; color: var(--danger); }
         .badge.active { background: #dbeafe; color: #1d4ed8; }
+        .badge.paid { background: #dcfce7; color: var(--success); }
+        .badge.pending { background: #fef3c7; color: #92400e; }
 
         .course-stats {
             display: grid;
@@ -311,47 +245,17 @@
             border-top: 1px solid var(--border);
         }
 
-        .course-stat {
-            text-align: center;
-        }
+        .course-stat { text-align: center; }
+        .course-stat .val { font-size: 20px; font-weight: 700; }
+        .course-stat .lbl { font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.3px; }
 
-        .course-stat .val {
-            font-size: 20px;
-            font-weight: 700;
-        }
-
-        .course-stat .lbl {
-            font-size: 11px;
-            color: var(--text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .sustainability-bar {
-            width: 100%;
-            height: 6px;
-            background: #e5e7eb;
-            border-radius: 3px;
-            margin-top: 12px;
-            overflow: hidden;
-        }
-
-        .sustainability-bar .fill {
-            height: 100%;
-            border-radius: 3px;
-            transition: width 0.5s ease;
-        }
-
+        .sustainability-bar { width: 100%; height: 6px; background: #e5e7eb; border-radius: 3px; margin-top: 12px; overflow: hidden; }
+        .sustainability-bar .fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
         .sustainability-bar .fill.green { background: var(--success); }
         .sustainability-bar .fill.yellow { background: var(--warning); }
         .sustainability-bar .fill.red { background: var(--danger); }
 
-        /* Table */
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
+        .data-table { width: 100%; border-collapse: collapse; }
         .data-table th {
             text-align: left;
             padding: 12px 16px;
@@ -363,17 +267,8 @@
             border-bottom: 1px solid var(--border);
             font-weight: 600;
         }
-
-        .data-table td {
-            padding: 14px 16px;
-            font-size: 13px;
-            border-bottom: 1px solid var(--border);
-            vertical-align: middle;
-        }
-
-        .data-table tr:hover td {
-            background: #faf8f5;
-        }
+        .data-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .data-table tr:hover td { background: #faf8f5; }
 
         .data-table .avatar {
             width: 32px;
@@ -389,22 +284,10 @@
             margin-right: 10px;
         }
 
-        .data-table .name-cell {
-            display: flex;
-            align-items: center;
-        }
+        .data-table .name-cell { display: flex; align-items: center; }
+        .data-table .name-info .name { font-weight: 600; font-size: 13px; }
+        .data-table .name-info .email { font-size: 11px; color: var(--text-light); }
 
-        .data-table .name-info .name {
-            font-weight: 600;
-            font-size: 13px;
-        }
-
-        .data-table .name-info .email {
-            font-size: 11px;
-            color: var(--text-light);
-        }
-
-        /* Link button */
         .link-btn {
             display: inline-flex;
             align-items: center;
@@ -419,33 +302,12 @@
             transition: all 0.2s;
             text-decoration: none;
         }
+        .link-btn:hover { background: var(--accent); }
+        .link-btn.outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .link-btn.outline:hover { border-color: var(--accent); color: var(--accent); }
+        .link-btn.sm { padding: 4px 10px; font-size: 10px; }
 
-        .link-btn:hover {
-            background: var(--accent);
-        }
-
-        .link-btn.outline {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
-
-        .link-btn.outline:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        .link-btn.sm {
-            padding: 4px 10px;
-            font-size: 10px;
-        }
-
-        /* Educator Cards */
-        .educator-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-            gap: 20px;
-        }
+        .educator-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
 
         .educator-card {
             background: var(--card);
@@ -454,17 +316,9 @@
             padding: 24px;
             transition: all 0.2s;
         }
+        .educator-card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
 
-        .educator-card:hover {
-            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
-        }
-
-        .educator-top {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            margin-bottom: 20px;
-        }
+        .educator-top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 
         .educator-avatar {
             width: 56px;
@@ -479,21 +333,10 @@
             font-weight: 600;
         }
 
-        .educator-name {
-            font-size: 16px;
-            font-weight: 600;
-        }
+        .educator-name { font-size: 16px; font-weight: 600; }
+        .educator-role { font-size: 12px; color: var(--text-light); }
 
-        .educator-role {
-            font-size: 12px;
-            color: var(--text-light);
-        }
-
-        .educator-courses {
-            list-style: none;
-            margin-top: 12px;
-        }
-
+        .educator-courses { list-style: none; margin-top: 12px; }
         .educator-courses li {
             display: flex;
             align-items: center;
@@ -502,15 +345,8 @@
             border-bottom: 1px solid var(--border);
             font-size: 13px;
         }
-
-        .educator-courses li:last-child {
-            border-bottom: none;
-        }
-
-        .educator-courses .course-name {
-            font-weight: 500;
-        }
-
+        .educator-courses li:last-child { border-bottom: none; }
+        .educator-courses .course-name { font-weight: 500; }
         .educator-courses .students-count {
             background: #f3f4f6;
             padding: 2px 10px;
@@ -519,45 +355,7 @@
             font-weight: 600;
         }
 
-        .share-link-box {
-            margin-top: 16px;
-            background: #faf8f5;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .share-link-box input {
-            flex: 1;
-            border: none;
-            background: transparent;
-            font-size: 12px;
-            color: var(--text-light);
-            font-family: monospace;
-            outline: none;
-        }
-
-        .share-link-box button {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 11px;
-            cursor: pointer;
-            white-space: nowrap;
-            font-weight: 600;
-        }
-
-        /* Sake section */
-        .sake-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 12px;
-        }
+        .sake-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 
         .sake-item {
             background: #faf8f5;
@@ -582,209 +380,83 @@
             flex-shrink: 0;
         }
 
-        .sake-item .sake-name {
-            font-size: 13px;
-            font-weight: 600;
-        }
+        .sake-item .sake-name { font-size: 13px; font-weight: 600; }
+        .sake-item .sake-type { font-size: 11px; color: var(--text-light); }
+        .sake-item .sake-size { font-size: 11px; color: var(--accent); font-weight: 600; }
 
-        .sake-item .sake-type {
-            font-size: 11px;
-            color: var(--text-light);
-        }
-
-        .sake-item .sake-size {
-            font-size: 11px;
-            color: var(--accent);
-            font-weight: 600;
-        }
-
-        /* Tabs */
-        .tab-row {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 0;
-        }
-
-        .tab-row button {
-            background: transparent;
-            border: none;
-            padding: 10px 20px;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            color: var(--text-light);
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-            transition: all 0.2s;
-        }
-
-        .tab-row button.active {
-            color: var(--accent);
-            border-bottom-color: var(--accent);
-        }
-
-        /* Detail View / Modal Overlay */
-        .detail-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s;
-        }
-
-        .detail-overlay.show {
-            opacity: 1;
-            pointer-events: all;
-        }
-
-        .detail-panel {
-            background: var(--card);
-            width: 90%;
-            max-width: 900px;
-            max-height: 85vh;
-            border-radius: 16px;
-            overflow-y: auto;
-            transform: translateY(20px);
-            transition: transform 0.3s;
-        }
-
-        .detail-overlay.show .detail-panel {
-            transform: translateY(0);
-        }
-
-        .detail-header {
-            padding: 24px 32px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            background: var(--card);
-            z-index: 1;
-        }
-
-        .detail-header h2 {
-            font-size: 18px;
-        }
-
-        .detail-header .close-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            border: 1px solid var(--border);
-            background: transparent;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 16px;
-            transition: all 0.2s;
-        }
-
-        .detail-header .close-btn:hover {
-            background: #fee2e2;
-            color: var(--danger);
-            border-color: var(--danger);
-        }
-
-        .detail-body {
-            padding: 24px 32px;
-        }
-
-        /* Copied toast */
-        .toast {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            background: var(--primary);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 13px;
-            z-index: 999;
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .toast.show {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* Section spacing */
-        .section {
-            margin-bottom: 32px;
-        }
-
-        .section-title {
-            font-size: 13px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-light);
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .section-title i {
-            color: var(--accent);
-        }
-
-        /* Two columns */
-        .two-cols {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 24px;
-        }
-
-        /* Filter bar */
-        .filter-bar {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
+        .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
         .filter-bar input[type="text"] {
-            flex: 1;
-            min-width: 200px;
-            padding: 10px 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 13px;
-            outline: none;
-            background: var(--card);
+            flex: 1; min-width: 200px; padding: 10px 16px;
+            border: 1px solid var(--border); border-radius: 8px;
+            font-size: 13px; outline: none; background: var(--card);
         }
-
-        .filter-bar input[type="text"]:focus {
-            border-color: var(--accent);
-        }
-
+        .filter-bar input[type="text"]:focus { border-color: var(--accent); }
         .filter-bar select {
-            padding: 10px 16px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            font-size: 13px;
-            outline: none;
-            background: var(--card);
+            padding: 10px 16px; border: 1px solid var(--border);
+            border-radius: 8px; font-size: 13px; outline: none; background: var(--card);
         }
 
-        /* Responsive */
+        .detail-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 200; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+        }
+        .detail-overlay.show { opacity: 1; pointer-events: all; }
+        .detail-panel {
+            background: var(--card); width: 90%; max-width: 900px; max-height: 85vh;
+            border-radius: 16px; overflow-y: auto;
+            transform: translateY(20px); transition: transform 0.3s;
+        }
+        .detail-overlay.show .detail-panel { transform: translateY(0); }
+        .detail-header {
+            padding: 24px 32px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            position: sticky; top: 0; background: var(--card); z-index: 1;
+        }
+        .detail-header h2 { font-size: 18px; }
+        .detail-header .close-btn {
+            width: 36px; height: 36px; border-radius: 50%;
+            border: 1px solid var(--border); background: transparent;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; transition: all 0.2s;
+        }
+        .detail-header .close-btn:hover { background: #fee2e2; color: var(--danger); border-color: var(--danger); }
+        .detail-body { padding: 24px 32px; }
+
+        .toast {
+            position: fixed; bottom: 24px; right: 24px;
+            background: var(--primary); color: white;
+            padding: 12px 24px; border-radius: 8px; font-size: 13px;
+            z-index: 999; opacity: 0; transform: translateY(10px);
+            transition: all 0.3s; display: flex; align-items: center; gap: 8px;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+
+        .section { margin-bottom: 32px; }
+        .section-title {
+            font-size: 13px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.5px; color: var(--text-light); margin-bottom: 16px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-title i { color: var(--accent); }
+
+        .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+        .loading-spinner {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 60px; color: var(--text-light);
+        }
+        .loading-spinner i { font-size: 32px; margin-bottom: 12px; animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        .empty-state {
+            text-align: center; padding: 60px 24px; color: var(--text-light);
+        }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; color: var(--border); }
+        .empty-state h3 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
+
+        .page-hidden { display: none; }
+
         @media (max-width: 768px) {
             .stats-grid { grid-template-columns: repeat(2, 1fr); }
             .courses-grid { grid-template-columns: 1fr; }
@@ -795,34 +467,14 @@
             .header-nav { display: none; }
         }
 
-        /* Print styles */
         @media print {
             .header { position: relative; }
             .header-nav, .header-actions { display: none; }
         }
-
-        /* Shopify integration indicator */
-        .integration-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 10px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .integration-badge.shopify { background: #e8f5e9; color: #2e7d32; }
-        .integration-badge.airtable { background: #e3f2fd; color: #1565c0; }
-
-        .page-hidden { display: none; }
     </style>
 </head>
 <body>
 
-<!-- Header -->
 <header class="header">
     <div class="header-inner">
         <div class="logo-area">
@@ -843,20 +495,17 @@
             <span class="integration-badge shopify"><i class="fab fa-shopify"></i> Shopify</span>
             <span class="integration-badge airtable"><i class="fas fa-table"></i> Airtable</span>
             <div class="sync-badge" id="connectionStatus">
-                <span class="dot"></span>
-                Caricamento...
+                <span style="color: var(--warning);">&#9679;</span> Caricamento...
             </div>
         </div>
     </div>
 </header>
 
-<!-- Toast -->
 <div class="toast" id="toast">
     <i class="fas fa-check-circle"></i>
     <span id="toastMsg">Link copiato!</span>
 </div>
 
-<!-- Detail Overlay -->
 <div class="detail-overlay" id="detailOverlay">
     <div class="detail-panel">
         <div class="detail-header">
@@ -867,42 +516,40 @@
     </div>
 </div>
 
-<!-- Main Content -->
 <main class="main">
 
-    <!-- ===== DASHBOARD PAGE ===== -->
+    <!-- DASHBOARD PAGE -->
     <div id="page-dashboard">
-        <!-- Stats -->
         <div class="stats-grid">
             <div class="stat-card gold">
                 <div class="stat-label">Corsi Attivi</div>
-                <div class="stat-value" id="totalCorsi">6</div>
-                <div class="stat-sub">2 in programma</div>
+                <div class="stat-value" id="totalCorsi">-</div>
+                <div class="stat-sub" id="totalCorsiSub">caricamento...</div>
             </div>
             <div class="stat-card green">
                 <div class="stat-label">Corsisti Totali</div>
-                <div class="stat-value" id="totalCorsisti">87</div>
-                <div class="stat-sub">+12 questo mese</div>
+                <div class="stat-value" id="totalCorsisti">-</div>
+                <div class="stat-sub">da ordini Shopify</div>
             </div>
             <div class="stat-card blue">
                 <div class="stat-label">Fatturato Corsi</div>
-                <div class="stat-value" id="totalRevenue">&euro;34.800</div>
+                <div class="stat-value" id="totalRevenue">-</div>
                 <div class="stat-sub">via Shopify</div>
             </div>
             <div class="stat-card red">
                 <div class="stat-label">Corsi a Rischio</div>
-                <div class="stat-value" id="totalRisk">1</div>
+                <div class="stat-value" id="totalRisk">-</div>
                 <div class="stat-sub">sotto soglia minima</div>
             </div>
         </div>
 
-        <!-- Quick Courses Overview -->
         <div class="section">
-            <div class="section-title"><i class="fas fa-graduation-cap"></i> Corsi Attivi &mdash; Panoramica Rapida</div>
-            <div class="courses-grid" id="dashCoursesGrid"></div>
+            <div class="section-title"><i class="fas fa-graduation-cap"></i> Corsi Attivi &mdash; Panoramica</div>
+            <div class="courses-grid" id="dashCoursesGrid">
+                <div class="loading-spinner"><i class="fas fa-circle-notch"></i> Caricamento corsi da Shopify...</div>
+            </div>
         </div>
 
-        <!-- Two columns: Top educators + Recent enrollments -->
         <div class="two-cols">
             <div class="card">
                 <div class="card-header">
@@ -910,14 +557,7 @@
                 </div>
                 <div class="card-body" style="padding: 0;">
                     <table class="data-table" id="dashEducatorTable">
-                        <thead>
-                            <tr>
-                                <th>Educator</th>
-                                <th>Corsi</th>
-                                <th>Corsisti Tot.</th>
-                                <th></th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Educator</th><th>Corsi</th><th>Corsisti</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -928,13 +568,7 @@
                 </div>
                 <div class="card-body" style="padding: 0;">
                     <table class="data-table" id="dashRecentTable">
-                        <thead>
-                            <tr>
-                                <th>Corsista</th>
-                                <th>Corso</th>
-                                <th>Data</th>
-                            </tr>
-                        </thead>
+                        <thead><tr><th>Corsista</th><th>Corso</th><th>Data</th></tr></thead>
                         <tbody></tbody>
                     </table>
                 </div>
@@ -942,21 +576,24 @@
         </div>
     </div>
 
-    <!-- ===== CORSI PAGE ===== -->
+    <!-- CORSI PAGE -->
     <div id="page-corsi" class="page-hidden">
         <div class="filter-bar">
             <input type="text" id="corsiSearch" placeholder="Cerca corso..." oninput="renderCorsiPage()">
             <select id="corsiFilter" onchange="renderCorsiPage()">
-                <option value="all">Tutti</option>
-                <option value="sustainable">Sostenibili</option>
-                <option value="warning">Attenzione</option>
-                <option value="critical">Non Sostenibili</option>
+                <option value="all">Tutti i tipi</option>
+                <option value="certificato-presenza">In presenza Certificato</option>
+                <option value="introduttivo-presenza">In presenza Introduttivo</option>
+                <option value="certificato-online">Online Certificato</option>
+                <option value="introduttivo-online">Online Introduttivo</option>
+                <option value="shochu">Shochu Professional</option>
+                <option value="masterclass">Masterclass</option>
             </select>
         </div>
         <div class="courses-grid" id="corsiGrid"></div>
     </div>
 
-    <!-- ===== CORSISTI PAGE ===== -->
+    <!-- CORSISTI PAGE -->
     <div id="page-corsisti" class="page-hidden">
         <div class="filter-bar">
             <input type="text" id="corsistiSearch" placeholder="Cerca corsista per nome o email..." oninput="renderCorsistiPage()">
@@ -968,29 +605,23 @@
         <div class="card">
             <div class="card-body" style="padding: 0;">
                 <table class="data-table" id="corsistiTable">
-                    <thead>
-                        <tr>
-                            <th>Corsista</th>
-                            <th>Corso</th>
-                            <th>Data Iscrizione</th>
-                            <th>Pagamento</th>
-                            <th>Shopify Order</th>
-                            <th>Link Profilo</th>
-                        </tr>
-                    </thead>
+                    <thead><tr>
+                        <th>Corsista</th><th>Corso</th><th>Data Iscrizione</th>
+                        <th>Pagamento</th><th>Ordine Shopify</th>
+                    </tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
         </div>
     </div>
 
-    <!-- ===== EDUCATOR PAGE ===== -->
+    <!-- EDUCATOR PAGE -->
     <div id="page-educator" class="page-hidden">
-        <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator &mdash; Pagine Dedicate con Link Condivisibili</div>
+        <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator SSA &mdash; Corsi Assegnati</div>
         <div class="educator-grid" id="educatorGrid"></div>
     </div>
 
-    <!-- ===== SAKE PAGE ===== -->
+    <!-- SAKE PAGE -->
     <div id="page-sake" class="page-hidden">
         <div class="card">
             <div class="card-header">
@@ -1000,13 +631,7 @@
             <div class="card-body">
                 <div class="filter-bar" style="margin-bottom: 16px;">
                     <input type="text" id="sakeSearch" placeholder="Cerca sake..." oninput="renderSakePage()">
-                    <select id="sakeTypeFilter" onchange="renderSakePage()">
-                        <option value="all">Tutti i tipi</option>
-                    </select>
                 </div>
-                <div class="section-title" style="margin-bottom:12px;">Sake assegnati ai corsi attivi</div>
-                <div id="sakeAssignments" style="margin-bottom: 24px;"></div>
-                <div class="section-title" style="margin-bottom:12px;">Catalogo completo (353 prodotti)</div>
                 <div class="sake-grid" id="sakeGrid"></div>
             </div>
         </div>
@@ -1016,314 +641,293 @@
 
 <script>
 // =============================================
-// CONNECTION STATUS INDICATOR
+// GLOBAL STATE
 // =============================================
-let apiStatus = {
-    shopify: false,
-    airtable: false,
-    courses: false
+let COURSES = [];
+let EDUCATORS = [];
+let SAKE_CATALOG = [];
+let apiStatus = { shopify: false, airtable: false, courses: false };
+
+// =============================================
+// EDUCATOR DATA FROM SSA WEBSITE
+// =============================================
+// Mapping: Shopify handle -> educator info (scraped from sakesommelierassociation.it product pages)
+const EDUCATOR_MAP = {
+    'corso-di-sake-sommelier-certificato-marzo-2026-torino': {
+        name: 'Brunella Bettati', region: 'Piemonte', initials: 'BB'
+    },
+    'corso-introduttivo-al-sake-marzo-2026-online': {
+        name: 'Gabriele Merlo', region: 'Lombardia', initials: 'GM'
+    },
+    'corso-di-sake-sommelier-certificato-aprile-2026-vercelli': {
+        name: 'Brunella Bettati', region: 'Piemonte', initials: 'BB'
+    },
+    'corso-di-sake-sommelier-certificato-aprile-2026-napoli': {
+        name: 'Stefania Battiloro', region: 'Campania', initials: 'SB'
+    },
+    'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': {
+        name: 'Da confermare', region: 'Trentino-Alto Adige', initials: '?'
+    },
+    'corso-di-sake-sommelier-certificato-maggio-2026-milano': {
+        name: 'Da confermare', region: 'Lombardia', initials: '?'
+    },
+    'corso-di-sake-sommelier-certificato-maggio-2025-roma': {
+        name: 'Camilla Bonnannini', region: 'Lazio', initials: 'CB'
+    }
 };
 
-function updateConnectionStatus() {
-    const indicator = document.getElementById('connectionStatus');
-    if (!indicator) return;
-    
-    const allConnected = apiStatus.shopify && apiStatus.airtable && apiStatus.courses;
-    if (allConnected) {
-        indicator.innerHTML = '<span style="color: #2d8a4e;">Ã¢ÂÂ Connesso</span>';
-    } else {
-        const status = [];
-        if (!apiStatus.shopify) status.push('Shopify');
-        if (!apiStatus.airtable) status.push('Airtable');
-        if (!apiStatus.courses) status.push('Corsi');
-        indicator.innerHTML = '<span style="color: #e6a817;">Ã¢ÂÂ  Demo mode (' + status.join(', ') + ' offline)</span>';
+// Known course locations from SSA website
+const LOCATION_MAP = {
+    'corso-di-sake-sommelier-certificato-marzo-2026-torino': 'To-working, Corso Regina Margherita 226, Torino',
+    'corso-introduttivo-al-sake-marzo-2026-online': 'Online',
+    'corso-di-sake-sommelier-certificato-aprile-2026-vercelli': 'Vercelli (sede da confermare)',
+    'corso-di-sake-sommelier-certificato-aprile-2026-napoli': 'Villa Vittoria, Via Cifelli 44, Boscotrecase (NA)',
+    'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': 'Falkensteiner Hotel, Via Alto Adige, Bolzano',
+    'corso-di-sake-sommelier-certificato-maggio-2026-milano': 'Japan Center, Via Ludovico il Moro 147, Milano',
+    'corso-di-sake-sommelier-certificato-maggio-2025-roma': 'Hiromi La Maison, Via Reggio Emilia 24, Roma'
+};
+
+// Known dates from SSA website
+const DATE_MAP = {
+    'corso-di-sake-sommelier-certificato-marzo-2026-torino': { start: '2026-03-21', end: '2026-03-23', display: '21-23 Mar 2026' },
+    'corso-introduttivo-al-sake-marzo-2026-online': { start: '2026-03-24', end: '2026-03-27', display: '24-27 Mar 2026' },
+    'corso-di-sake-sommelier-certificato-aprile-2026-vercelli': { start: '2026-04-18', end: '2026-04-20', display: '18-20 Apr 2026' },
+    'corso-di-sake-sommelier-certificato-aprile-2026-napoli': { start: '2026-04-20', end: '2026-04-22', display: '20-22 Apr 2026' },
+    'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': { start: '2026-04-20', end: '2026-04-22', display: '20-22 Apr 2026' },
+    'corso-di-sake-sommelier-certificato-maggio-2026-milano': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' },
+    'corso-di-sake-sommelier-certificato-maggio-2025-roma': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' }
+};
+
+// =============================================
+// COURSE PARSING UTILITIES
+// =============================================
+
+function parseCourseType(handle, title) {
+    const h = (handle || '').toLowerCase();
+    const t = (title || '').toLowerCase();
+    const isOnline = h.includes('online') || t.includes('online');
+
+    if (h.includes('shochu') || t.includes('shochu')) return { type: 'shochu', label: 'Shochu Professional', color: 'shochu' };
+    if (h.includes('masterclass') || t.includes('masterclass')) return { type: 'masterclass', label: 'Masterclass', color: 'masterclass' };
+    if (h.includes('mixology') || h.includes('bartending') || t.includes('mixology') || t.includes('bartending'))
+        return { type: 'masterclass', label: 'Masterclass', color: 'masterclass' };
+
+    if (h.includes('certificato') || t.includes('certificato')) {
+        if (isOnline) return { type: 'certificato-online', label: 'Online Certificato', color: 'online' };
+        return { type: 'certificato-presenza', label: 'In Presenza Certificato', color: 'certificato' };
     }
+
+    if (h.includes('introduttivo') || h.includes('introductory') || t.includes('introduttivo')) {
+        if (isOnline) return { type: 'introduttivo-online', label: 'Online Introduttivo', color: 'online' };
+        return { type: 'introduttivo-presenza', label: 'In Presenza Introduttivo', color: 'introduttivo' };
+    }
+
+    return { type: 'altro', label: 'Altro', color: 'certificato' };
+}
+
+function parseCourseCity(handle, title) {
+    const cities = {
+        'milano': 'Milano', 'roma': 'Roma', 'torino': 'Torino',
+        'napoli': 'Napoli', 'bolzano': 'Bolzano', 'vercelli': 'Vercelli',
+        'firenze': 'Firenze', 'castelfranco': 'Castelfranco Veneto',
+        'tortona': 'Tortona', 'colli-del-tronto': 'Colli del Tronto'
+    };
+    const h = (handle || '').toLowerCase();
+    const t = (title || '').toLowerCase();
+
+    if (h.includes('online') || t.includes('online')) return 'Online';
+
+    for (const [key, city] of Object.entries(cities)) {
+        if (h.includes(key) || t.toLowerCase().includes(key)) return city;
+    }
+    return '';
+}
+
+function parseCourseDate(handle) {
+    // Check known dates first
+    if (DATE_MAP[handle]) return DATE_MAP[handle];
+
+    // Try to parse from handle: e.g., certificato-online-gennaio-2025
+    const months = {
+        'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
+        'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
+        'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
+    };
+
+    const h = (handle || '').toLowerCase();
+    for (const [monthName, monthNum] of Object.entries(months)) {
+        if (h.includes(monthName)) {
+            const yearMatch = h.match(/(\d{4})/);
+            if (yearMatch) {
+                const year = yearMatch[1];
+                const startDate = `${year}-${monthNum}-01`;
+                return { start: startDate, end: startDate, display: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}` };
+            }
+        }
+    }
+
+    return null;
+}
+
+function isFutureCourse(handle) {
+    const dateInfo = parseCourseDate(handle);
+    if (!dateInfo) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Use end date for comparison (course is still "active" during its dates)
+    const endDate = new Date(dateInfo.end + 'T23:59:59');
+    return endDate >= today;
 }
 
 // =============================================
-// API DATA LOADING LAYER
+// API DATA LOADING
 // =============================================
 
 async function loadApiData() {
-    // 1. Check Shopify connection via /api/shopify/products
-    try {
-        const shopifyResp = await fetch('/api/shopify/products');
-        if (shopifyResp.ok) {
-            const shopifyData = await shopifyResp.json();
-            if (shopifyData.success) {
-                apiStatus.shopify = true;
-            }
-        }
-    } catch (e) {
-        console.log('Shopify connection check failed', e);
-    }
+    let coursesData = [];
 
-    // 2. Check Airtable connection via /api/airtable/sake
-    try {
-        const airtableResp = await fetch('/api/airtable/sake');
-        if (airtableResp.ok) {
-            const airtableData = await airtableResp.json();
-            if (airtableData.success) {
-                apiStatus.airtable = true;
-            }
-        }
-    } catch (e) {
-        console.log('Airtable connection check failed', e);
-    }
-
-    // 3. Load courses from aggregated API endpoint
+    // Load courses from API
     try {
         const response = await fetch('/api/courses');
         if (response.ok) {
             const data = await response.json();
-            if (data.success && data.data && Array.isArray(data.data)) {
-                const apiCourses = data.data.map(course => ({
-                    id: course.handle || course.id,
-                    name: course.name || course.title,
-                    city: extractCity(course.title || course.name || ''),
-                    level: extractLevel(course.title || course.name || ''),
-                    dates: course.created_at ? new Date(course.created_at).toLocaleDateString('it-IT') : '',
-                    startDate: course.created_at ? course.created_at.split('T')[0] : '',
-                    educator: 'edu-01',
-                    price: course.variants && course.variants[0] ? parseFloat(course.variants[0].price) : 0,
-                    minStudents: 5,
-                    maxStudents: 20,
-                    costs: { location: 0, educator: 800, food: 0, sake: 300, adv: 0 },
-                    sakeIds: [],
-                    students: [],
-                    enrollmentCount: course.enrollmentCount || 0,
-                    revenue: course.revenue || 0,
-                    shopifyProductId: course.id,
-                    status: 'active'
-                }));
-                
-                if (apiCourses.length > 0) {
-                    COURSES = apiCourses;
-                    apiStatus.courses = true;
-                }
+            if (data.success && Array.isArray(data.data)) {
+                apiStatus.shopify = true;
+                apiStatus.courses = true;
+                coursesData = data.data;
             }
         }
     } catch (e) {
-        console.log('Could not load courses from API, using demo data', e);
+        console.error('Could not load courses from API:', e);
     }
-    
+
+    // Process courses: filter to future only, enrich with SSA data
+    COURSES = coursesData
+        .filter(c => isFutureCourse(c.handle))
+        .map(c => {
+            const typeInfo = parseCourseType(c.handle, c.title);
+            const city = parseCourseCity(c.handle, c.title);
+            const dateInfo = parseCourseDate(c.handle);
+            const educator = EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            const location = LOCATION_MAP[c.handle] || city || '';
+            const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
+
+            return {
+                id: c.handle,
+                shopifyId: c.shopifyId,
+                name: c.title,
+                handle: c.handle,
+                city: city,
+                location: location,
+                courseType: typeInfo,
+                dates: dateInfo ? dateInfo.display : '',
+                startDate: dateInfo ? dateInfo.start : '',
+                endDate: dateInfo ? dateInfo.end : '',
+                educator: educator,
+                price: price,
+                minStudents: typeInfo.type.includes('online') ? 3 : 6,
+                maxStudents: typeInfo.type.includes('online') ? 50 : 20,
+                costs: {
+                    location: typeInfo.type.includes('online') ? 0 : 500,
+                    educator: 800,
+                    food: typeInfo.type.includes('online') ? 0 : 250,
+                    sake: typeInfo.type.includes('online') ? 150 : 300,
+                    adv: 200
+                },
+                students: c.students || [],
+                enrollmentCount: c.enrollmentCount || 0,
+                revenue: c.revenue || 0,
+                status: 'active'
+            };
+        })
+        .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+
+    // Build educators list from courses
+    const educatorMap = new Map();
+    COURSES.forEach(c => {
+        const ed = c.educator;
+        if (!educatorMap.has(ed.name)) {
+            educatorMap.set(ed.name, {
+                name: ed.name,
+                region: ed.region,
+                initials: ed.initials,
+                courses: [],
+                totalStudents: 0
+            });
+        }
+        const edData = educatorMap.get(ed.name);
+        edData.courses.push(c);
+        edData.totalStudents += c.students.length;
+    });
+    EDUCATORS = Array.from(educatorMap.values());
+
+    // Load Airtable sake data
+    try {
+        const airtableResp = await fetch('/api/airtable/sake');
+        if (airtableResp.ok) {
+            const airtableData = await airtableResp.json();
+            if (airtableData.success && Array.isArray(airtableData.data)) {
+                apiStatus.airtable = true;
+                SAKE_CATALOG = airtableData.data.map(record => ({
+                    id: record.id,
+                    code: record.fields?.['Codice Prodotto'] || record.fields?.['Code'] || record.id,
+                    name: record.fields?.['Nome Prodotto'] || record.fields?.['Name'] || record.fields?.['Sake Name'] || 'Sake',
+                    type: record.fields?.['Tipologia'] || record.fields?.['Type'] || record.fields?.['Sake Type'] || '',
+                    sakagura: record.fields?.['Sakagura'] || record.fields?.['Producer'] || '',
+                    size: record.fields?.['Formato'] || record.fields?.['Size'] || record.fields?.['ML'] || '',
+                    fields: record.fields
+                }));
+            }
+        }
+    } catch (e) {
+        console.error('Airtable connection failed:', e);
+    }
+
     updateConnectionStatus();
+    renderDashboard();
 }
 
-// Helper: extract city from course title (e.g. "SSA Livello 1 - Milano" -> "Milano")
-function extractCity(title) {
-    const parts = title.split(' - ');
-    if (parts.length > 1) return parts[parts.length - 1].trim();
-    const cities = ['Milano', 'Roma', 'Torino', 'Firenze', 'Bologna', 'Napoli', 'Venezia', 'Palermo', 'Genova', 'Catania'];
-    for (const city of cities) {
-        if (title.includes(city)) return city;
+// =============================================
+// CONNECTION STATUS
+// =============================================
+
+function updateConnectionStatus() {
+    const indicator = document.getElementById('connectionStatus');
+    if (!indicator) return;
+
+    const allConnected = apiStatus.shopify && apiStatus.airtable && apiStatus.courses;
+    if (allConnected) {
+        indicator.innerHTML = '<span style="color: #4ade80;">&#9679;</span> <span style="color: #2d8a4e;">Connesso</span>';
+    } else {
+        const offline = [];
+        if (!apiStatus.shopify) offline.push('Shopify');
+        if (!apiStatus.airtable) offline.push('Airtable');
+        if (!apiStatus.courses) offline.push('Corsi');
+        indicator.innerHTML = '<span style="color: var(--warning);">&#9679;</span> ' + offline.join(', ') + ' offline';
     }
-    return '';
 }
-
-// Helper: extract level from course title (e.g. "SSA Livello 1" -> "Livello 1")
-function extractLevel(title) {
-    const match = title.match(/Livello\s*\d+/i);
-    if (match) return match[0];
-    if (title.toLowerCase().includes('master')) return 'Master';
-    if (title.toLowerCase().includes('intro')) return 'Introduzione';
-    return '';
-}
-
-// =============================================
-// FALLBACK DEMO DATA
-// =============================================
-
-
-// =============================================
-// DATA LAYER
-// =============================================
-
-// --- COURSES (simulated from Shopify + internal) ---
-let COURSES = [
-    {
-        id: "SSA-L1-MI-2026-04",
-        name: "SSA Livello 1 - Milano",
-        city: "Milano",
-        level: "Livello 1",
-        dates: "12-13 Apr 2026",
-        startDate: "2026-04-12",
-        educator: "edu-01",
-        price: 450,
-        minStudents: 8,
-        maxStudents: 20,
-        costs: { location: 500, educator: 800, food: 300, sake: 300, adv: 200 },
-        sakeIds: ["AK006-0720", "S088-0720", "S056-0720", "S194-0720", "S187-0720", "S181-0720"],
-        students: ["st-01","st-02","st-03","st-04","st-05","st-06","st-07","st-08","st-09","st-10","st-11","st-12","st-13","st-14","st-15"],
-        shopifyProductId: "gid://shopify/Product/8012345678",
-        status: "active"
-    },
-    {
-        id: "SSA-L1-RM-2026-05",
-        name: "SSA Livello 1 - Roma",
-        city: "Roma",
-        level: "Livello 1",
-        dates: "10-11 Mag 2026",
-        startDate: "2026-05-10",
-        educator: "edu-02",
-        price: 450,
-        minStudents: 8,
-        maxStudents: 18,
-        costs: { location: 400, educator: 800, food: 250, sake: 300, adv: 150 },
-        sakeIds: ["AK006-0720", "S088-0720", "S056-0720", "S019-0220", "S171-0300"],
-        students: ["st-16","st-17","st-18","st-19","st-20","st-21","st-22","st-23","st-24","st-25","st-26"],
-        shopifyProductId: "gid://shopify/Product/8012345679",
-        status: "active"
-    },
-    {
-        id: "SSA-L2-MI-2026-05",
-        name: "SSA Livello 2 - Milano",
-        city: "Milano",
-        level: "Livello 2",
-        dates: "24-25 Mag 2026",
-        startDate: "2026-05-24",
-        educator: "edu-01",
-        price: 650,
-        minStudents: 6,
-        maxStudents: 15,
-        costs: { location: 600, educator: 1000, food: 400, sake: 500, adv: 200 },
-        sakeIds: ["S056-0720", "S194-0720", "S187-0720", "S181-0720", "S235-0720", "S088-0720", "S019-0220", "S171-0300"],
-        students: ["st-27","st-28","st-29","st-30","st-31","st-32","st-33","st-34","st-35","st-36","st-37","st-38","st-39"],
-        shopifyProductId: "gid://shopify/Product/8012345680",
-        status: "active"
-    },
-    {
-        id: "SSA-L1-FI-2026-06",
-        name: "SSA Livello 1 - Firenze",
-        city: "Firenze",
-        level: "Livello 1",
-        dates: "7-8 Giu 2026",
-        startDate: "2026-06-07",
-        educator: "edu-03",
-        price: 450,
-        minStudents: 8,
-        maxStudents: 16,
-        costs: { location: 350, educator: 800, food: 200, sake: 300, adv: 100 },
-        sakeIds: ["AK006-0720", "S088-0720", "S194-0720", "S181-0720"],
-        students: ["st-40","st-41","st-42","st-43","st-44","st-45","st-46","st-47","st-48","st-49","st-50","st-51","st-52","st-53","st-54","st-55","st-56","st-57"],
-        shopifyProductId: "gid://shopify/Product/8012345681",
-        status: "active"
-    },
-    {
-        id: "SSA-L2-RM-2026-06",
-        name: "SSA Livello 2 - Roma",
-        city: "Roma",
-        level: "Livello 2",
-        dates: "21-22 Giu 2026",
-        startDate: "2026-06-21",
-        educator: "edu-02",
-        price: 650,
-        minStudents: 6,
-        maxStudents: 14,
-        costs: { location: 450, educator: 1000, food: 350, sake: 500, adv: 150 },
-        sakeIds: ["S056-0720", "S194-0720", "S235-0720", "S181-0720", "S088-0720", "S171-0300", "S019-0220"],
-        students: ["st-58","st-59","st-60","st-61","st-62"],
-        shopifyProductId: "gid://shopify/Product/8012345682",
-        status: "active"
-    },
-    {
-        id: "SSA-L3-MI-2026-09",
-        name: "SSA Livello 3 - Milano",
-        city: "Milano",
-        level: "Livello 3",
-        dates: "20-21 Set 2026",
-        startDate: "2026-09-20",
-        educator: "edu-01",
-        price: 900,
-        minStudents: 5,
-        maxStudents: 12,
-        costs: { location: 700, educator: 1200, food: 500, sake: 700, adv: 300 },
-        sakeIds: ["S056-0720", "S194-0720", "S235-0720", "S181-0720", "S088-0720", "S171-0300", "S019-0220", "AK006-0720", "S187-0720"],
-        students: ["st-63","st-64","st-65","st-66","st-67","st-68","st-69","st-70","st-71","st-72","st-73","st-74","st-75","st-76","st-77","st-78","st-79","st-80","st-81","st-82","st-83","st-84","st-85","st-86","st-87"],
-        shopifyProductId: "gid://shopify/Product/8012345683",
-        status: "planned"
-    }
-];
-
-// --- EDUCATORS ---
-const EDUCATORS = [
-    { id: "edu-01", name: "Lorenzo Ferraboschi", email: "lorenzo@sakesommelierassociation.it", role: "Master Educator", initials: "LF" },
-    { id: "edu-02", name: "Maiko Takahashi", email: "maiko@sakesommelierassociation.it", role: "Senior Educator", initials: "MT" },
-    { id: "edu-03", name: "Marco Bernardi", email: "marco@sakesommelierassociation.it", role: "Educator", initials: "MB" }
-];
-
-// --- STUDENTS (from Shopify orders) ---
-const FIRST_NAMES = ["Alessandro","Sofia","Matteo","Giulia","Lorenzo","Emma","Andrea","Chiara","Luca","Francesca","Marco","Valentina","Davide","Beatrice","Simone","Alice","Federico","Elena","Giacomo","Sara","Roberto","Laura","Tommaso","Elisa","Nicola","Martina","Riccardo","Anna","Paolo","Silvia","Giovanni","Maria","Pietro","Claudia","Carlo","Cristina","Stefano","Arianna","Fabio","Serena","Antonio","Irene","Daniele","Vittoria","Alberto","Camilla","Filippo","Federica","Giorgio","Lucia","Diego","Michela","Edoardo","Teresa","Enrico","Ilaria","Vincenzo","Marta","Angelo","Diana","Massimo","Veronica","Giuseppe","Monica","Umberto","Greta","Emanuele","Paola","Salvatore","Roberta","Claudio","Emanuela","Gabriele","Noemi","Bruno","Sabrina","Dario","Aurora","Enzo","Patrizia","Sergio","Manuela","Maurizio","Rosa","Raffaele","Alessia","Alfredo"];
-const LAST_NAMES = ["Rossi","Russo","Ferrari","Esposito","Bianchi","Romano","Colombo","Ricci","Marino","Greco","Bruno","Gallo","Conti","De Luca","Mancini","Costa","Giordano","Rizzo","Lombardi","Moretti","Barbieri","Fontana","Santoro","Mariani","Rinaldi","Caruso","Ferrara","Galli","Martini","Leone","Longo","Gentile","Martinelli","Vitale","Lombardo","Serra","Coppola","De Santis","D'Angelo","Marchetti","Parisi","Villa","Conte","Ferraro","Ferri","Fabbri","Bianco","Marini","Grasso","Valentini","Messina","Sala","De Angelis","Gatti","Pellegrini","Palumbo","Sanna","Farina","Rizzi","Monti","Cattaneo","Morelli","Amato","Silvestri","Mazza","Testa","Grassi","Piras","Neri","Battaglia","D'Amico","Basile","Giuliani","Bellini","Orlando","Pagano","De Rosa","Bernardi","Sorrentino","Benedetti","Caputo","Montanari","Ferretti","Palmieri","Donati","Poli","Barone"];
-
-function generateStudents() {
-    const students = {};
-    for (let i = 1; i <= 87; i++) {
-        const fn = FIRST_NAMES[i - 1] || FIRST_NAMES[i % FIRST_NAMES.length];
-        const ln = LAST_NAMES[i % LAST_NAMES.length];
-        const courseRef = COURSES.find(c => c.students.includes(`st-${String(i).padStart(2,'0')}`));
-        const daysAgo = Math.floor(Math.random() * 45) + 5;
-        const enrollDate = new Date(Date.now() - daysAgo * 86400000);
-        students[`st-${String(i).padStart(2,'0')}`] = {
-            id: `st-${String(i).padStart(2,'0')}`,
-            name: `${fn} ${ln}`,
-            email: `${fn.toLowerCase()}.${ln.toLowerCase().replace(/'/g,'')}@email.it`,
-            phone: `+39 3${Math.floor(Math.random()*10)}${Math.floor(Math.random()*10)} ${Math.floor(1000000+Math.random()*9000000)}`,
-            enrollDate: enrollDate.toISOString().split('T')[0],
-            courseId: courseRef ? courseRef.id : null,
-            shopifyOrder: `#SSA-${10000 + i}`,
-            paid: Math.random() > 0.05,
-            initials: `${fn[0]}${ln[0]}`
-        };
-    }
-    return students;
-}
-
-const STUDENTS = generateStudents();
-
-// --- SAKE from Airtable ---
-const SAKE_CATALOG = [
-    { code: "AK006-0720", name: "Kakurei Honjozo", sakagura: "", type: "Honjozo", size: 720 },
-    { code: "S092-0720", name: "I-Sake", sakagura: "", type: "Honjozo", size: 720 },
-    { code: "S121-0720", name: "Manzairaku Umeshu", sakagura: "Kobori Shuzoten", type: "Fruit Sake", size: 720 },
-    { code: "SH06-0720", name: "Tensonkourin 25%", sakagura: "Kagura Shuzo", type: "Spirit", size: 720 },
-    { code: "S034-0720", name: "Kikuisami Umeshu", sakagura: "Kikuisami", type: "Fruit Sake", size: 720 },
-    { code: "S187-0720", name: "Sohomare Kimoto Tokubetsu Junmai", sakagura: "Souhomare Shuzo", type: "Junmai", size: 720 },
-    { code: "S181-0720", name: "Yonetsuru Pink Kappa", sakagura: "Yonetsuru Shuzo", type: "Junmai", size: 720 },
-    { code: "S171-0300", name: "Ninki Sparkling", sakagura: "Ninki Shuzo", type: "Junmai", size: 300 },
-    { code: "S235-0720", name: "Ryusei OMACHI", sakagura: "Fujii Shuzo", type: "Junmai", size: 720 },
-    { code: "S019-0220", name: "Rokkasen Hitotoki Rose", sakagura: "Rokkasen", type: "Junmai", size: 220 },
-    { code: "S088-0720", name: "Urakasumi Kiippon", sakagura: "Saura", type: "", size: 720 },
-    { code: "S194-0720", name: "Hatsumago Kimoto Ginjo", sakagura: "Tohokumeijo", type: "Ginjo", size: 720 },
-    { code: "S056-0720", name: "Aratama Kairyo", sakagura: "Wada Shuzo", type: "Junmai Daiginjo", size: 720 },
-    { code: "S206-0180", name: "Chiyokotobuki Tora-chan Cup", sakagura: "", type: "Futsushu", size: 180 },
-    { code: "S224-0130", name: "Honjozo Honzobishu", sakagura: "", type: "", size: 130 },
-    { code: "RS08-0350", name: "HARMONIAE Nigori", sakagura: "", type: "", size: 350 },
-    { code: "HS1003E", name: "Heaven Sake Baby!", sakagura: "", type: "Junmai", size: 300 },
-    { code: "C010-0720", name: "Koikawa Kameji Kojitsu", sakagura: "Koikawa Shuzo", type: "Junmai Ginjo", size: 720 },
-    { code: "SKWR-0006", name: "Taru botte sake", sakagura: "", type: "", size: null }
-];
 
 // =============================================
 // UTILITY FUNCTIONS
 // =============================================
 
-const BASE_URL = "https://corsi.sakesommelierassociation.it";
+function formatCurrency(n) {
+    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
+}
 
 function getTotalCosts(course) {
-    if (course.costs) {
-        return (course.costs.location || 0) + (course.costs.educator || 0) + (course.costs.food || 0) + (course.costs.sake || 0) + (course.costs.adv || 0);
-    }
-    // Fallback for old format
-    return (course.costsFixed || 0) + (course.students.length * (course.costsPerStudent || 0));
+    if (!course.costs) return 0;
+    return (course.costs.location || 0) + (course.costs.educator || 0) +
+           (course.costs.food || 0) + (course.costs.sake || 0) + (course.costs.adv || 0);
 }
 
 function getCourseSustainability(course) {
-    const revenue = course.students.length * course.price;
+    const revenue = course.revenue || (course.students.length * course.price);
     const costs = getTotalCosts(course);
     const ratio = costs > 0 ? revenue / costs : 0;
     const profit = revenue - costs;
-    const minRevenue = course.minStudents * course.price;
 
     if (course.students.length >= course.minStudents && ratio >= 1.3) {
         return { status: 'sustainable', label: 'Sostenibile', ratio, profit, revenue, costs };
@@ -1334,18 +938,6 @@ function getCourseSustainability(course) {
     }
 }
 
-function generateEducatorLink(educator) {
-    return `${BASE_URL}/educator/${educator.id}?token=${btoa(educator.email).replace(/=/g,'')}`;
-}
-
-function generateCourseLink(course) {
-    return `${BASE_URL}/corso/${course.id}`;
-}
-
-function generateStudentLink(student) {
-    return `${BASE_URL}/corsista/${student.id}`;
-}
-
 function showToast(msg) {
     const t = document.getElementById('toast');
     document.getElementById('toastMsg').textContent = msg;
@@ -1354,22 +946,11 @@ function showToast(msg) {
 }
 
 function copyLink(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        showToast('Link copiato negli appunti!');
-    }).catch(() => {
-        // fallback
-        const inp = document.createElement('textarea');
-        inp.value = text;
-        document.body.appendChild(inp);
-        inp.select();
-        document.execCommand('copy');
-        document.body.removeChild(inp);
-        showToast('Link copiato!');
-    });
+    navigator.clipboard.writeText(text).then(() => showToast('Link copiato!')).catch(() => showToast('Errore'));
 }
 
-function formatCurrency(n) {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
+function getInitials(name) {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
 // =============================================
@@ -1381,8 +962,7 @@ let currentPage = 'dashboard';
 document.getElementById('mainNav').addEventListener('click', (e) => {
     const btn = e.target.closest('button');
     if (!btn) return;
-    const page = btn.dataset.page;
-    navigateTo(page);
+    navigateTo(btn.dataset.page);
 });
 
 function navigateTo(page) {
@@ -1392,7 +972,6 @@ function navigateTo(page) {
     document.querySelectorAll('[id^="page-"]').forEach(p => p.classList.add('page-hidden'));
     document.getElementById(`page-${page}`).classList.remove('page-hidden');
 
-    // Render page content
     if (page === 'corsi') renderCorsiPage();
     if (page === 'corsisti') renderCorsistiPage();
     if (page === 'educator') renderEducatorPage();
@@ -1400,19 +979,28 @@ function navigateTo(page) {
 }
 
 // =============================================
-// DASHBOARD RENDER
+// DASHBOARD
 // =============================================
 
 function renderDashboard() {
+    if (COURSES.length === 0 && !apiStatus.courses) {
+        document.getElementById('dashCoursesGrid').innerHTML =
+            '<div class="loading-spinner"><i class="fas fa-circle-notch"></i> Caricamento corsi da Shopify...</div>';
+        return;
+    }
+
+    if (COURSES.length === 0) {
+        document.getElementById('dashCoursesGrid').innerHTML =
+            '<div class="empty-state"><i class="fas fa-calendar-times"></i><h3>Nessun corso futuro trovato</h3><p>Non ci sono corsi con date successive ad oggi su Shopify.</p></div>';
+    }
+
     // Stats
-    const activeCount = COURSES.filter(c => c.status === 'active').length;
-    const plannedCount = COURSES.filter(c => c.status === 'planned').length;
-    const totalStudents = Object.keys(STUDENTS).length;
-    const totalRevenue = COURSES.reduce((sum, c) => sum + c.students.length * c.price, 0);
+    const totalStudents = COURSES.reduce((sum, c) => sum + c.students.length, 0);
+    const totalRevenue = COURSES.reduce((sum, c) => sum + c.revenue, 0);
     const riskCount = COURSES.filter(c => getCourseSustainability(c).status === 'critical').length;
 
-    document.getElementById('totalCorsi').textContent = activeCount;
-    document.querySelector('#totalCorsi + .stat-sub').textContent = `${plannedCount} in programma`;
+    document.getElementById('totalCorsi').textContent = COURSES.length;
+    document.getElementById('totalCorsiSub').textContent = `con date future`;
     document.getElementById('totalCorsisti').textContent = totalStudents;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('totalRisk').textContent = riskCount;
@@ -1425,14 +1013,18 @@ function renderDashboard() {
         const fillClass = s.status === 'sustainable' ? 'green' : s.status === 'warning' ? 'yellow' : 'red';
         return `
         <div class="course-card" onclick="openCourseDetail('${c.id}')">
-            <div class="course-banner ${s.status}"></div>
+            <div class="course-banner ${c.courseType.color}"></div>
             <div class="course-content">
                 <div class="course-top">
                     <div>
                         <div class="course-title">${c.name}</div>
-                        <div class="course-dates"><i class="far fa-calendar-alt"></i> ${c.dates}</div>
+                        <div class="course-dates">
+                            <i class="far fa-calendar-alt"></i> ${c.dates}
+                            &bull; <i class="fas fa-map-marker-alt"></i> ${c.city}
+                            &bull; <i class="fas fa-chalkboard-teacher"></i> ${c.educator.name}
+                        </div>
                     </div>
-                    <span class="badge ${s.status}">${s.label}</span>
+                    <span class="badge ${c.courseType.color}">${c.courseType.label}</span>
                 </div>
                 <div class="course-stats">
                     <div class="course-stat">
@@ -1440,18 +1032,20 @@ function renderDashboard() {
                         <div class="lbl">Iscritti</div>
                     </div>
                     <div class="course-stat">
-                        <div class="val">${formatCurrency(s.revenue)}</div>
+                        <div class="val">${formatCurrency(c.revenue)}</div>
                         <div class="lbl">Ricavo</div>
                     </div>
                     <div class="course-stat">
                         <div class="val" style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(s.profit)}</div>
-                        <div class="lbl">Profitto</div>
+                        <div class="lbl">Margine</div>
                     </div>
                 </div>
                 <div class="sustainability-bar">
                     <div class="fill ${fillClass}" style="width: ${pct}%"></div>
                 </div>
-                <div style="text-align: right; margin-top: 4px; font-size: 11px; color: var(--text-light);">${c.students.length}/${c.maxStudents} posti &bull; Min. ${c.minStudents}</div>
+                <div style="text-align: right; margin-top: 4px; font-size: 11px; color: var(--text-light);">
+                    ${c.students.length}/${c.maxStudents} posti &bull; Min. ${c.minStudents}
+                </div>
             </div>
         </div>`;
     }).join('');
@@ -1459,27 +1053,35 @@ function renderDashboard() {
     // Educator table
     const edTable = document.querySelector('#dashEducatorTable tbody');
     edTable.innerHTML = EDUCATORS.map(ed => {
-        const edCourses = COURSES.filter(c => c.educator === ed.id);
-        const edStudents = edCourses.reduce((sum, c) => sum + c.students.length, 0);
         return `<tr>
-            <td><div class="name-cell"><span class="avatar">${ed.initials}</span><div class="name-info"><div class="name">${ed.name}</div><div class="email">${ed.role}</div></div></div></td>
-            <td>${edCourses.length}</td>
-            <td><strong>${edStudents}</strong></td>
-            <td><button class="link-btn sm" onclick="event.stopPropagation(); copyLink('${generateEducatorLink(ed)}')"><i class="fas fa-link"></i> Link</button></td>
+            <td><div class="name-cell"><span class="avatar">${ed.initials}</span><div class="name-info"><div class="name">${ed.name}</div><div class="email">${ed.region}</div></div></div></td>
+            <td>${ed.courses.length}</td>
+            <td><strong>${ed.totalStudents}</strong></td>
         </tr>`;
     }).join('');
 
-    // Recent enrollments
+    if (EDUCATORS.length === 0) {
+        edTable.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-light); padding: 24px;">Nessun educator assegnato</td></tr>';
+    }
+
+    // Recent enrollments from ALL courses
+    const allStudents = COURSES.flatMap(c =>
+        c.students.map(st => ({ ...st, courseName: c.name, courseCity: c.city }))
+    ).sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || '')).slice(0, 8);
+
     const recentTable = document.querySelector('#dashRecentTable tbody');
-    const allStudents = Object.values(STUDENTS).sort((a, b) => b.enrollDate.localeCompare(a.enrollDate)).slice(0, 8);
     recentTable.innerHTML = allStudents.map(st => {
-        const course = COURSES.find(c => c.id === st.courseId);
+        const initials = getInitials(st.name || 'NN');
         return `<tr>
-            <td><div class="name-cell"><span class="avatar">${st.initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email}</div></div></div></td>
-            <td>${course ? course.name.replace('SSA ','') : '-'}</td>
-            <td>${new Date(st.enrollDate).toLocaleDateString('it-IT')}</td>
+            <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email}</div></div></div></td>
+            <td>${st.courseCity || st.courseName}</td>
+            <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
         </tr>`;
     }).join('');
+
+    if (allStudents.length === 0) {
+        recentTable.innerHTML = '<tr><td colspan="3" style="text-align:center; color: var(--text-light); padding: 24px;">Nessuna iscrizione recente</td></tr>';
+    }
 }
 
 // =============================================
@@ -1487,38 +1089,41 @@ function renderDashboard() {
 // =============================================
 
 function renderCorsiPage() {
-    const search = document.getElementById('corsiSearch').value.toLowerCase();
+    const search = (document.getElementById('corsiSearch').value || '').toLowerCase();
     const filter = document.getElementById('corsiFilter').value;
 
     let filtered = COURSES.filter(c => {
-        if (search && !c.name.toLowerCase().includes(search) && !c.city.toLowerCase().includes(search)) return false;
-        if (filter !== 'all') {
-            const s = getCourseSustainability(c);
-            if (s.status !== filter) return false;
-        }
+        if (search && !c.name.toLowerCase().includes(search) && !c.city.toLowerCase().includes(search) && !c.educator.name.toLowerCase().includes(search)) return false;
+        if (filter !== 'all' && c.courseType.type !== filter) return false;
         return true;
     });
 
     const grid = document.getElementById('corsiGrid');
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun corso trovato</h3><p>Prova a cambiare i filtri di ricerca.</p></div>';
+        return;
+    }
+
     grid.innerHTML = filtered.map(c => {
         const s = getCourseSustainability(c);
-        const ed = EDUCATORS.find(e => e.id === c.educator);
         const pct = Math.min(100, Math.round((c.students.length / c.maxStudents) * 100));
         const fillClass = s.status === 'sustainable' ? 'green' : s.status === 'warning' ? 'yellow' : 'red';
-        const sakeCount = c.sakeIds.length;
         return `
         <div class="course-card" onclick="openCourseDetail('${c.id}')">
-            <div class="course-banner ${s.status}"></div>
+            <div class="course-banner ${c.courseType.color}"></div>
             <div class="course-content">
                 <div class="course-top">
                     <div>
                         <div class="course-title">${c.name}</div>
-                        <div class="course-dates"><i class="far fa-calendar-alt"></i> ${c.dates} &bull; <i class="fas fa-chalkboard-teacher"></i> ${ed ? ed.name : '-'}</div>
+                        <div class="course-dates">
+                            <i class="far fa-calendar-alt"></i> ${c.dates}
+                            &bull; <i class="fas fa-chalkboard-teacher"></i> ${c.educator.name}
+                        </div>
                     </div>
-                    <span class="badge ${s.status}">${s.label}</span>
+                    <span class="badge ${c.courseType.color}">${c.courseType.label}</span>
                 </div>
                 <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 12px; color: var(--text-light);">
-                    <span><i class="fas fa-wine-glass-alt" style="color: var(--accent);"></i> ${sakeCount} sake</span>
+                    <span><i class="fas fa-map-marker-alt" style="color: var(--accent);"></i> ${c.city}</span>
                     <span><i class="fas fa-euro-sign"></i> ${formatCurrency(c.price)}/persona</span>
                     <span><i class="fab fa-shopify" style="color: #5e8e3e;"></i> Shopify</span>
                 </div>
@@ -1528,7 +1133,7 @@ function renderCorsiPage() {
                         <div class="lbl">Iscritti</div>
                     </div>
                     <div class="course-stat">
-                        <div class="val">${formatCurrency(s.revenue)}</div>
+                        <div class="val">${formatCurrency(c.revenue)}</div>
                         <div class="lbl">Ricavo</div>
                     </div>
                     <div class="course-stat">
@@ -1556,40 +1161,46 @@ function openCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
     const s = getCourseSustainability(c);
-    const ed = EDUCATORS.find(e => e.id === c.educator);
-    const courseStudents = c.students.map(sid => STUDENTS[sid]).filter(Boolean);
-    const sakes = c.sakeIds.map(sid => SAKE_CATALOG.find(sk => sk.code === sid)).filter(Boolean);
 
     document.getElementById('detailTitle').textContent = c.name;
     const body = document.getElementById('detailBody');
 
     body.innerHTML = `
         <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-            <span class="badge ${s.status}" style="font-size: 13px; padding: 6px 16px;">${s.label}</span>
-            <span class="badge active" style="font-size: 13px; padding: 6px 16px;">${c.level}</span>
-            <span class="integration-badge shopify" style="font-size: 11px;"><i class="fab fa-shopify"></i> ${c.shopifyProductId}</span>
+            <span class="badge ${c.courseType.color}" style="font-size: 13px; padding: 6px 16px;">${c.courseType.label}</span>
+            <span class="badge active" style="font-size: 13px; padding: 6px 16px;"><i class="fas fa-map-marker-alt"></i> ${c.city}</span>
+            <span class="integration-badge shopify" style="font-size: 11px;"><i class="fab fa-shopify"></i> ID: ${c.shopifyId}</span>
         </div>
 
+        <!-- Info box -->
+        <div style="background: #faf8f5; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div><strong>Date:</strong> ${c.dates}</div>
+            <div><strong>Location:</strong> ${c.location}</div>
+            <div><strong>Educator:</strong> ${c.educator.name} (${c.educator.region})</div>
+            <div><strong>Prezzo:</strong> ${formatCurrency(c.price)}/persona</div>
+        </div>
+
+        <!-- Stats -->
         <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
             <div class="stat-card gold"><div class="stat-label">Iscritti</div><div class="stat-value">${c.students.length}/${c.maxStudents}</div><div class="stat-sub">Min. ${c.minStudents}</div></div>
             <div class="stat-card green"><div class="stat-label">Ricavo</div><div class="stat-value">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
-            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value">${formatCurrency(s.costs)}</div><div class="stat-sub">${c.costs ? '5 voci' : 'Fissi + var.'}</div></div>
+            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value">${formatCurrency(s.costs)}</div><div class="stat-sub">5 voci</div></div>
             <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: ${s.ratio.toFixed(2)}x</div></div>
         </div>
 
-        <div class="section-title"><i class="fas fa-coins"></i> Costi del Corso</div>
+        <!-- Cost breakdown -->
+        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico</div>
         <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px;">
             ${(() => {
-                const costs = c.costs || { location: 0, educator: 0, food: 0, sake: 0, adv: 0 };
+                const costs = c.costs || {};
                 const labels = { location: 'Location', educator: 'Educator', food: 'Food', sake: 'Sake', adv: 'ADV' };
                 const icons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
                 const colors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
                 return Object.keys(labels).map(key => `
-                    <div style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; ${costs[key] === 0 ? 'opacity: 0.5; border-style: dashed;' : ''}">
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; ${!costs[key] ? 'opacity: 0.5; border-style: dashed;' : ''}">
                         <div style="font-size: 18px; color: ${colors[key]}; margin-bottom: 6px;"><i class="fas ${icons[key]}"></i></div>
                         <div style="font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${labels[key]}</div>
-                        <div style="font-size: 18px; font-weight: 700; color: var(--text);">${costs[key] > 0 ? formatCurrency(costs[key]) : '\u2014'}</div>
-                        ${costs[key] === 0 ? '<div style="font-size: 10px; color: var(--danger); margin-top: 4px;">Da inserire</div>' : ''}
+                        <div style="font-size: 18px; font-weight: 700;">${costs[key] ? formatCurrency(costs[key]) : '\u2014'}</div>
                     </div>
                 `).join('');
             })()}
@@ -1600,47 +1211,52 @@ function openCourseDetail(courseId) {
             <span style="color: var(--text-light);">Margine/iscritto: <strong style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${c.students.length > 0 ? formatCurrency(s.profit / c.students.length) : '\u2014'}</strong></span>
         </div>
 
+        <!-- Educator + Sake -->
         <div class="two-cols" style="margin-bottom: 24px;">
             <div>
                 <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator</div>
                 <div class="educator-card" style="margin-bottom: 0;">
                     <div class="educator-top" style="margin-bottom: 0;">
-                        <div class="educator-avatar">${ed ? ed.initials : '?'}</div>
+                        <div class="educator-avatar">${c.educator.initials}</div>
                         <div>
-                            <div class="educator-name">${ed ? ed.name : '-'}</div>
-                            <div class="educator-role">${ed ? ed.email : ''}</div>
+                            <div class="educator-name">${c.educator.name}</div>
+                            <div class="educator-role">${c.educator.region}</div>
                         </div>
                     </div>
                 </div>
             </div>
             <div>
-                <div class="section-title"><i class="fas fa-wine-glass-alt"></i> Sake per il Corso (${sakes.length})</div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                    ${sakes.map(sk => `<div class="sake-item" style="flex: 1 1 200px;">
-                        <div class="sake-icon"><i class="fas fa-wine-bottle"></i></div>
-                        <div><div class="sake-name">${sk.name}</div><div class="sake-type">${sk.type || 'Sake'} &bull; ${sk.size}ml</div></div>
-                    </div>`).join('')}
+                <div class="section-title"><i class="fas fa-wine-glass-alt"></i> Prodotti da Usare</div>
+                <div style="color: var(--text-light); font-size: 13px; padding: 12px; background: #faf8f5; border-radius: 8px;">
+                    <i class="fas fa-info-circle"></i> I prodotti per questo corso verranno assegnati dal catalogo Airtable.
                 </div>
             </div>
         </div>
 
-        <div class="section-title"><i class="fas fa-users"></i> Corsisti Iscritti (${courseStudents.length})</div>
-        <div style="margin-bottom: 12px;">
-            <button class="link-btn" onclick="copyLink('${generateCourseLink(c)}')"><i class="fas fa-link"></i> Copia Link Corso</button>
-        </div>
+        <!-- Students -->
+        <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
+        ${c.students.length > 0 ? `
         <table class="data-table">
-            <thead><tr><th>Corsista</th><th>Email</th><th>Data Iscrizione</th><th>Pagamento</th><th>Ordine Shopify</th><th>Link</th></tr></thead>
+            <thead><tr><th>Corsista</th><th>Email</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine Shopify</th></tr></thead>
             <tbody>
-                ${courseStudents.map(st => `<tr>
-                    <td><div class="name-cell"><span class="avatar">${st.initials}</span><div class="name-info"><div class="name">${st.name}</div></div></div></td>
-                    <td style="font-size: 12px;">${st.email}</td>
-                    <td>${new Date(st.enrollDate).toLocaleDateString('it-IT')}</td>
-                    <td><span class="badge ${st.paid ? 'sustainable' : 'critical'}">${st.paid ? 'Pagato' : 'In attesa'}</span></td>
-                    <td style="font-family: monospace; font-size: 12px;">${st.shopifyOrder}</td>
-                    <td><button class="link-btn sm" onclick="event.stopPropagation(); copyLink('${generateStudentLink(st)}')"><i class="fas fa-external-link-alt"></i></button></td>
-                </tr>`).join('')}
+                ${c.students.map(st => {
+                    const initials = getInitials(st.name || 'NN');
+                    const isPaid = st.financialStatus === 'paid';
+                    return `<tr>
+                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div></div></div></td>
+                        <td style="font-size: 12px;">${st.email || '-'}</td>
+                        <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
+                        <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
+                        <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
+                    </tr>`;
+                }).join('')}
             </tbody>
-        </table>
+        </table>` : `
+        <div class="empty-state" style="padding: 24px;">
+            <i class="fas fa-user-clock" style="font-size: 32px;"></i>
+            <h3 style="font-size: 15px;">Nessun iscritto</h3>
+            <p>Non ci sono ancora iscrizioni per questo corso su Shopify.</p>
+        </div>`}
     `;
 
     document.getElementById('detailOverlay').classList.add('show');
@@ -1654,54 +1270,76 @@ document.getElementById('detailOverlay').addEventListener('click', (e) => {
     if (e.target === document.getElementById('detailOverlay')) closeDetail();
 });
 
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDetail();
+});
+
 // =============================================
 // CORSISTI PAGE
 // =============================================
 
 function renderCorsistiPage() {
-    // Populate course filter
+    // Populate course filter dropdown
     const courseFilter = document.getElementById('corsistiCourseFilter');
     if (courseFilter.options.length <= 1) {
         COURSES.forEach(c => {
             const opt = document.createElement('option');
             opt.value = c.id;
-            opt.textContent = c.name;
+            opt.textContent = `${c.city} - ${c.dates}`;
             courseFilter.appendChild(opt);
         });
     }
 
-    const search = document.getElementById('corsistiSearch').value.toLowerCase();
+    const search = (document.getElementById('corsistiSearch').value || '').toLowerCase();
     const courseF = document.getElementById('corsistiCourseFilter').value;
 
-    let students = Object.values(STUDENTS).filter(st => {
-        if (search && !st.name.toLowerCase().includes(search) && !st.email.toLowerCase().includes(search)) return false;
+    // Gather all students from all courses
+    let allStudents = COURSES.flatMap(c =>
+        c.students.map(st => ({
+            ...st,
+            courseId: c.id,
+            courseName: c.name,
+            courseCity: c.city,
+            courseDates: c.dates
+        }))
+    );
+
+    // Apply filters
+    allStudents = allStudents.filter(st => {
+        if (search && !(st.name || '').toLowerCase().includes(search) && !(st.email || '').toLowerCase().includes(search)) return false;
         if (courseF !== 'all' && st.courseId !== courseF) return false;
         return true;
-    }).sort((a, b) => b.enrollDate.localeCompare(a.enrollDate));
+    }).sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
 
     const tbody = document.querySelector('#corsistiTable tbody');
-    tbody.innerHTML = students.map(st => {
-        const course = COURSES.find(c => c.id === st.courseId);
+    if (allStudents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-light); padding: 40px;">Nessun corsista trovato</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = allStudents.map(st => {
+        const initials = getInitials(st.name || 'NN');
+        const isPaid = st.financialStatus === 'paid';
         return `<tr>
-            <td><div class="name-cell"><span class="avatar">${st.initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email}</div></div></div></td>
-            <td>${course ? course.name.replace('SSA ','') : '-'}</td>
-            <td>${new Date(st.enrollDate).toLocaleDateString('it-IT')}</td>
-            <td><span class="badge ${st.paid ? 'sustainable' : 'critical'}">${st.paid ? 'Pagato' : 'In attesa'}</span></td>
-            <td style="font-family: monospace; font-size: 12px;">${st.shopifyOrder}</td>
-            <td>
-                <button class="link-btn sm" onclick="copyLink('${generateStudentLink(st)}')"><i class="fas fa-link"></i> Copia</button>
-            </td>
+            <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email || ''}</div></div></div></td>
+            <td>${st.courseCity} - ${st.courseDates}</td>
+            <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
+            <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
+            <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
         </tr>`;
     }).join('');
 }
 
 function exportCorsisti() {
-    const students = Object.values(STUDENTS);
-    let csv = "Nome,Email,Telefono,Corso,Data Iscrizione,Pagamento,Ordine Shopify,Link\n";
-    students.forEach(st => {
-        const course = COURSES.find(c => c.id === st.courseId);
-        csv += `"${st.name}","${st.email}","${st.phone}","${course ? course.name : ''}","${st.enrollDate}","${st.paid ? 'Pagato' : 'In attesa'}","${st.shopifyOrder}","${generateStudentLink(st)}"\n`;
+    const allStudents = COURSES.flatMap(c =>
+        c.students.map(st => ({ ...st, courseName: c.name, courseCity: c.city, courseDates: c.dates }))
+    );
+
+    let csv = "Nome,Email,Telefono,Corso,Citta,Date,Data Ordine,Pagamento,Ordine Shopify\n";
+    allStudents.forEach(st => {
+        csv += `"${st.name || ''}","${st.email || ''}","${st.phone || ''}","${st.courseName}","${st.courseCity}","${st.courseDates}","${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : ''}","${st.financialStatus || ''}","${st.orderNumber || ''}"\n`;
     });
+
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1717,28 +1355,30 @@ function exportCorsisti() {
 
 function renderEducatorPage() {
     const grid = document.getElementById('educatorGrid');
-    grid.innerHTML = EDUCATORS.map(ed => {
-        const edCourses = COURSES.filter(c => c.educator === ed.id);
-        const totalStudents = edCourses.reduce((sum, c) => sum + c.students.length, 0);
-        const eduLink = generateEducatorLink(ed);
 
+    if (EDUCATORS.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-chalkboard-teacher"></i><h3>Nessun educator</h3><p>Gli educator verranno mostrati quando i corsi saranno caricati.</p></div>';
+        return;
+    }
+
+    grid.innerHTML = EDUCATORS.map(ed => {
         return `
         <div class="educator-card">
             <div class="educator-top">
                 <div class="educator-avatar">${ed.initials}</div>
                 <div>
                     <div class="educator-name">${ed.name}</div>
-                    <div class="educator-role">${ed.role} &bull; ${totalStudents} corsisti totali</div>
+                    <div class="educator-role">${ed.region} &bull; ${ed.totalStudents} corsisti totali</div>
                 </div>
             </div>
 
             <div class="section-title" style="margin-bottom: 8px; font-size: 11px;"><i class="fas fa-graduation-cap"></i> Corsi Assegnati</div>
             <ul class="educator-courses">
-                ${edCourses.map(c => {
+                ${ed.courses.map(c => {
                     const s = getCourseSustainability(c);
                     return `<li>
                         <div>
-                            <span class="course-name">${c.name}</span>
+                            <span class="course-name">${c.city} - ${c.courseType.label}</span>
                             <div style="font-size: 11px; color: var(--text-light);">${c.dates}</div>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1748,15 +1388,6 @@ function renderEducatorPage() {
                     </li>`;
                 }).join('')}
             </ul>
-
-            <div class="share-link-box">
-                <i class="fas fa-link" style="color: var(--accent);"></i>
-                <input type="text" value="${eduLink}" readonly onclick="this.select()">
-                <button onclick="copyLink('${eduLink}')">Copia Link</button>
-            </div>
-            <div style="margin-top: 8px; font-size: 11px; color: var(--text-light);">
-                <i class="fas fa-info-circle"></i> Questo link permette all'educator di visualizzare i suoi corsi e il numero di iscritti in tempo reale.
-            </div>
         </div>`;
     }).join('');
 }
@@ -1766,86 +1397,51 @@ function renderEducatorPage() {
 // =============================================
 
 function renderSakePage() {
-    const search = document.getElementById('sakeSearch').value.toLowerCase();
-    const typeFilter = document.getElementById('sakeTypeFilter').value;
+    const search = (document.getElementById('sakeSearch').value || '').toLowerCase();
 
-    // Populate type filter
-    if (document.getElementById('sakeTypeFilter').options.length <= 1) {
-        const types = [...new Set(SAKE_CATALOG.map(s => s.type).filter(Boolean))].sort();
-        types.forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t;
-            opt.textContent = t;
-            document.getElementById('sakeTypeFilter').appendChild(opt);
-        });
-    }
-
-    // Sake assignments to courses
-    const assignDiv = document.getElementById('sakeAssignments');
-    assignDiv.innerHTML = COURSES.filter(c => c.status === 'active').map(c => {
-        const sakes = c.sakeIds.map(sid => SAKE_CATALOG.find(sk => sk.code === sid)).filter(Boolean);
-        return `<div style="margin-bottom: 16px;">
-            <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">${c.name} <span style="color: var(--text-light); font-weight: 400; font-size: 12px;">(${c.students.length} corsisti)</span></div>
-            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
-                ${sakes.map(sk => `<span style="background: #faf8f5; border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 12px;">
-                    <i class="fas fa-wine-bottle" style="color: var(--accent); margin-right: 4px;"></i>${sk.name} <span style="color: var(--text-light);">(${sk.size}ml)</span>
-                </span>`).join('')}
-            </div>
-        </div>`;
-    }).join('');
-
-    // Full catalog
-    let filtered = SAKE_CATALOG.filter(s => {
-        if (search && !s.name.toLowerCase().includes(search) && !s.code.toLowerCase().includes(search) && !(s.sakagura || '').toLowerCase().includes(search)) return false;
-        if (typeFilter !== 'all' && s.type !== typeFilter) return false;
-        return true;
+    const filtered = SAKE_CATALOG.filter(s => {
+        if (!search) return true;
+        return (s.name || '').toLowerCase().includes(search) ||
+               (s.code || '').toLowerCase().includes(search) ||
+               (s.type || '').toLowerCase().includes(search) ||
+               (s.sakagura || '').toLowerCase().includes(search);
     });
 
     const grid = document.getElementById('sakeGrid');
-    grid.innerHTML = filtered.map(sk => {
-        const usedIn = COURSES.filter(c => c.sakeIds.includes(sk.code));
+    if (filtered.length === 0 && !apiStatus.airtable) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-wine-glass-alt"></i><h3>Catalogo non disponibile</h3><p>Connessione Airtable non attiva.</p></div>';
+        return;
+    }
+
+    if (filtered.length === 0) {
+        grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun sake trovato</h3></div>';
+        return;
+    }
+
+    grid.innerHTML = filtered.slice(0, 100).map(sk => {
         return `<div class="sake-item">
             <div class="sake-icon"><i class="fas fa-wine-bottle"></i></div>
             <div>
                 <div class="sake-name">${sk.name}</div>
                 <div class="sake-type">${sk.type || 'Sake'}${sk.sakagura ? ' &bull; ' + sk.sakagura : ''}</div>
-                <div class="sake-size">${sk.size ? sk.size + 'ml' : '-'} ${usedIn.length > 0 ? '&bull; <span style="color: var(--success);">' + usedIn.length + ' corsi</span>' : ''}</div>
+                <div class="sake-size">${sk.size || ''}</div>
             </div>
         </div>`;
     }).join('');
+
+    if (filtered.length > 100) {
+        grid.innerHTML += `<div style="grid-column: 1/-1; text-align: center; padding: 16px; color: var(--text-light); font-size: 13px;">Mostrati 100 di ${filtered.length} prodotti. Usa la ricerca per filtrare.</div>`;
+    }
 }
 
 // =============================================
 // INIT
 // =============================================
 
-document.addEventListener('DOMContentLoaded', () => {
-    renderDashboard();
-});
-
-// Handle escape to close modal
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeDetail();
-});
-
-
-// =============================================
-// INITIALIZATION
-// =============================================
-
-// Load real data when page loads
 window.addEventListener('load', () => {
     loadApiData();
-    renderDashboard();
 });
 
-// Also load on manual trigger
-async function refreshData() {
-    await loadApiData();
-    renderDashboard();
-}
-
 </script>
-
 </body>
 </html>
