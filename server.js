@@ -61,6 +61,55 @@ async function shopifyFetch(endpoint, options = {}) {
   return await response.json();
 }
 
+// Fetch ALL Shopify products with pagination
+async function fetchAllShopifyProducts() {
+  const cacheKey = 'shopify_all_products';
+  let cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  let allProducts = [];
+  let url = `/products.json?limit=250`;
+
+  while (url) {
+    const response = await shopifyFetch(url);
+    const products = response.products || [];
+    allProducts = allProducts.concat(products);
+
+    // Check for pagination (Shopify link header not available via this method)
+    // For now, if we got less than 250, we've got them all
+    if (products.length < 250) break;
+
+    // Simple pagination using since_id
+    const lastId = products[products.length - 1].id;
+    url = `/products.json?limit=250&since_id=${lastId}`;
+  }
+
+  setCache(cacheKey, allProducts, 300);
+  return allProducts;
+}
+
+// Fetch ALL Shopify orders with pagination
+async function fetchAllShopifyOrders() {
+  const cacheKey = 'shopify_all_orders';
+  let cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  let allOrders = [];
+  let url = `/orders.json?limit=250&status=any`;
+
+  while (url) {
+    const response = await shopifyFetch(url);
+    const orders = response.orders || [];
+    allOrders = allOrders.concat(orders);
+    if (orders.length < 250) break;
+    const lastId = orders[orders.length - 1].id;
+    url = `/orders.json?limit=250&status=any&since_id=${lastId}`;
+  }
+
+  setCache(cacheKey, allOrders, 300);
+  return allOrders;
+}
+
 // ============================================================================
 // AIRTABLE API UTILITIES
 // ============================================================================
@@ -90,6 +139,30 @@ async function airtableFetch(endpoint, options = {}) {
 }
 
 // ============================================================================
+// COURSE HANDLE PATTERNS (to filter out non-course products)
+// ============================================================================
+const COURSE_HANDLE_PATTERNS = [
+  'certificato',
+  'introduttivo',
+  'shochu',
+  'masterclass',
+  'mixology',
+  'bartending',
+  'spirits-of-japan'
+];
+
+function isCourseProduct(product) {
+  const handle = (product.handle || '').toLowerCase();
+  // Exclude known non-course products
+  if (handle.startsWith('canvas-') || handle.startsWith('poster-') || handle.startsWith('puzzle-') ||
+      handle.startsWith('bottiglia-') || handle.startsWith('gift-card') || handle.startsWith('guida-') ||
+      handle === 'corsi-ed-eventi-2024-25' || handle.startsWith('copy-of-')) {
+    return false;
+  }
+  return COURSE_HANDLE_PATTERNS.some(pattern => handle.includes(pattern));
+}
+
+// ============================================================================
 // HEALTH CHECK
 // ============================================================================
 app.get('/api/health', (req, res) => {
@@ -105,13 +178,7 @@ app.get('/api/health', (req, res) => {
 // ============================================================================
 app.get('/api/shopify/products', async (req, res) => {
   try {
-    const cacheKey = 'shopify_products';
-    let data = getCache(cacheKey);
-    if (!data) {
-      const response = await shopifyFetch('/products.json', { headers: { 'limit': '250' } });
-      data = response.products || [];
-      setCache(cacheKey, data, 300);
-    }
+    const data = await fetchAllShopifyProducts();
     res.json({ success: true, count: data.length, data });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -120,13 +187,7 @@ app.get('/api/shopify/products', async (req, res) => {
 
 app.get('/api/shopify/orders', async (req, res) => {
   try {
-    const cacheKey = 'shopify_orders';
-    let data = getCache(cacheKey);
-    if (!data) {
-      const response = await shopifyFetch('/orders.json', { headers: { 'status': 'any', 'limit': '250' } });
-      data = response.orders || [];
-      setCache(cacheKey, data, 300);
-    }
+    const data = await fetchAllShopifyOrders();
     res.json({ success: true, count: data.length, data });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -138,7 +199,7 @@ app.get('/api/shopify/customers', async (req, res) => {
     const cacheKey = 'shopify_customers';
     let data = getCache(cacheKey);
     if (!data) {
-      const response = await shopifyFetch('/customers.json', { headers: { 'limit': '250' } });
+      const response = await shopifyFetch('/customers.json?limit=250');
       data = response.customers || [];
       setCache(cacheKey, data, 300);
     }
@@ -167,57 +228,84 @@ app.get('/api/airtable/sake', async (req, res) => {
 });
 
 // ============================================================================
-// INTERNAL ROUTES
+// COURSES API - Returns ONLY actual courses with FULL Shopify data + orders
 // ============================================================================
 app.get('/api/courses', async (req, res) => {
   try {
-    const productsResponse = await shopifyFetch('/products.json');
-    const products = productsResponse.products || [];
-    const ordersResponse = await shopifyFetch('/orders.json');
-    const orders = ordersResponse.orders || [];
+    const products = await fetchAllShopifyProducts();
+    const orders = await fetchAllShopifyOrders();
+
+    // Filter to only course products
+    const courseProducts = products.filter(isCourseProduct);
+
+    // Build enrollment data from orders
     const courseMap = new Map();
-    products.forEach(product => {
+    courseProducts.forEach(product => {
       courseMap.set(product.id, {
-        id: product.id, name: product.title, handle: product.handle,
-        description: product.body_html, variants: product.variants,
-        enrollmentCount: 0, revenue: 0, students: [],
-        sustainability: {
-          organic: product.tags?.includes('organic') || false,
-          fairtrade: product.tags?.includes('fair-trade') || false,
-          biodynamic: product.tags?.includes('biodynamic') || false
+        // Pass through ALL Shopify data
+        shopifyId: product.id,
+        title: product.title,
+        handle: product.handle,
+        body_html: product.body_html,
+        product_type: product.product_type,
+        tags: product.tags,
+        status: product.status,
+        created_at: product.created_at,
+        updated_at: product.updated_at,
+        published_at: product.published_at,
+        variants: product.variants,
+        images: product.images,
+        // Enrollment data
+        enrollmentCount: 0,
+        revenue: 0,
+        students: []
+      });
+    });
+
+    // Match orders to courses
+    orders.forEach(order => {
+      if (!order.line_items) return;
+      order.line_items.forEach(item => {
+        if (courseMap.has(item.product_id)) {
+          const course = courseMap.get(item.product_id);
+          course.enrollmentCount += item.quantity;
+          course.revenue += parseFloat(item.price || 0) * item.quantity;
+
+          const customerName = order.customer
+            ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
+            : 'Sconosciuto';
+
+          course.students.push({
+            name: customerName,
+            email: order.customer?.email || '',
+            phone: order.customer?.phone || '',
+            orderId: order.id,
+            orderNumber: order.name || `#${order.order_number}`,
+            orderDate: order.created_at,
+            financialStatus: order.financial_status,
+            amount: parseFloat(item.price || 0) * item.quantity,
+            variantTitle: item.variant_title || ''
+          });
         }
       });
     });
-    orders.forEach(order => {
-      if (order.line_items && order.line_items.length > 0) {
-        order.line_items.forEach(item => {
-          if (courseMap.has(item.product_id)) {
-            const course = courseMap.get(item.product_id);
-            course.enrollmentCount += item.quantity;
-            course.revenue += parseFloat(item.total_price) || 0;
-            course.students.push({
-              name: order.customer?.first_name + ' ' + order.customer?.last_name || 'Unknown',
-              email: order.customer?.email || 'N/A',
-              orderId: order.id, orderDate: order.created_at, quantity: item.quantity
-            });
-          }
-        });
-      }
-    });
+
     const courses = Array.from(courseMap.values());
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
+    console.error('Error in /api/courses:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// ============================================================================
+// EDUCATOR ROUTE
+// ============================================================================
 app.get('/api/educator/:id', async (req, res) => {
   try {
     const educatorId = req.params.id;
-    const productsResponse = await shopifyFetch('/products.json');
-    const products = productsResponse.products || [];
-    const ordersResponse = await shopifyFetch('/orders.json');
-    const orders = ordersResponse.orders || [];
+    const products = await fetchAllShopifyProducts();
+    const orders = await fetchAllShopifyOrders();
     const educatorCourses = products.filter(product =>
       product.vendor?.toLowerCase() === educatorId.toLowerCase() ||
       product.tags?.includes(`educator:${educatorId}`)
@@ -230,9 +318,9 @@ app.get('/api/educator/:id', async (req, res) => {
         order.line_items?.forEach(item => {
           if (item.product_id === product.id) {
             course.enrollmentCount += item.quantity;
-            course.revenue += parseFloat(item.total_price) || 0;
+            course.revenue += parseFloat(item.price || 0) * item.quantity;
             if (order.customer?.email) {
-              studentSet.add(JSON.stringify({ name: order.customer.first_name + ' ' + order.customer.last_name, email: order.customer.email }));
+              studentSet.add(JSON.stringify({ name: `${order.customer.first_name} ${order.customer.last_name}`, email: order.customer.email }));
             }
           }
         });
@@ -246,20 +334,23 @@ app.get('/api/educator/:id', async (req, res) => {
   }
 });
 
+// ============================================================================
+// EXPORT CSV
+// ============================================================================
 app.get('/api/export/corsisti', async (req, res) => {
   try {
-    const customersResponse = await shopifyFetch('/customers.json');
-    const customers = customersResponse.customers || [];
+    const response = await shopifyFetch('/customers.json?limit=250');
+    const customers = response.customers || [];
     let csv = 'ID,First Name,Last Name,Email,Phone,City,State,Country,Total Orders,Total Spent\n';
     customers.forEach(customer => {
       const id = customer.id;
-      const firstName = customer.first_name?.replace(/"/g, '""') || '';
-      const lastName = customer.last_name?.replace(/"/g, '""') || '';
+      const firstName = (customer.first_name || '').replace(/"/g, '""');
+      const lastName = (customer.last_name || '').replace(/"/g, '""');
       const email = customer.email || '';
       const phone = customer.phone || '';
-      const city = customer.default_address?.city?.replace(/"/g, '""') || '';
-      const state = customer.default_address?.province?.replace(/"/g, '""') || '';
-      const country = customer.default_address?.country?.replace(/"/g, '""') || '';
+      const city = (customer.default_address?.city || '').replace(/"/g, '""');
+      const state = (customer.default_address?.province || '').replace(/"/g, '""');
+      const country = (customer.default_address?.country || '').replace(/"/g, '""');
       const totalOrders = customer.orders_count || 0;
       const totalSpent = customer.total_spent || 0;
       csv += `"${id}","${firstName}","${lastName}","${email}","${phone}","${city}","${state}","${country}",${totalOrders},${totalSpent}\n`;
