@@ -2,6 +2,29 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+
+// Course costs persistent storage
+const COSTS_FILE = path.join(__dirname, 'data', 'course-costs.json');
+
+function loadCosts() {
+  try {
+    if (fs.existsSync(COSTS_FILE)) {
+      return JSON.parse(fs.readFileSync(COSTS_FILE, 'utf8'));
+    }
+  } catch (e) { console.error('Error loading costs:', e); }
+  return {};
+}
+
+function saveCostsToFile(costs) {
+  try {
+    const dir = path.dirname(COSTS_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(COSTS_FILE, JSON.stringify(costs, null, 2));
+  } catch (e) { console.error('Error saving costs:', e); }
+}
+
+const courseCosts = loadCosts();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -381,6 +404,32 @@ app.use((err, req, res, next) => {
     success: false, error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined
   });
+});
+
+// ============================================================================
+// COURSE COSTS API
+// ============================================================================
+app.get('/api/costs', (req, res) => {
+  res.json(courseCosts);
+});
+
+app.get('/api/costs/:courseId', (req, res) => {
+  const costs = courseCosts[req.params.courseId] || null;
+  res.json(costs);
+});
+
+app.post('/api/costs/:courseId', (req, res) => {
+  const { courseId } = req.params;
+  const { location, educator, food, sake, adv } = req.body;
+  courseCosts[courseId] = {
+    location: parseFloat(location) || 0,
+    educator: parseFloat(educator) || 0,
+    food: parseFloat(food) || 0,
+    sake: parseFloat(sake) || 0,
+    adv: parseFloat(adv) || 0
+  };
+  saveCostsToFile(courseCosts);
+  res.json({ success: true, costs: courseCosts[courseId] });
 });
 
 // ============================================================================
