@@ -1045,26 +1045,50 @@ function updateConnectionStatus() {
 // =============================================
 
 async function loadApiData() {
-    // Try to load courses from API
+    // 1. Check Shopify connection via /api/shopify/products
     try {
-        const response = await fetch('/api/courses', { timeout: 3000 });
+        const shopifyResp = await fetch('/api/shopify/products');
+        if (shopifyResp.ok) {
+            const shopifyData = await shopifyResp.json();
+            if (shopifyData.success) {
+                apiStatus.shopify = true;
+            }
+        }
+    } catch (e) {
+        console.log('Shopify connection check failed', e);
+    }
+
+    // 2. Check Airtable connection via /api/airtable/sake
+    try {
+        const airtableResp = await fetch('/api/airtable/sake');
+        if (airtableResp.ok) {
+            const airtableData = await airtableResp.json();
+            if (airtableData.success) {
+                apiStatus.airtable = true;
+            }
+        }
+    } catch (e) {
+        console.log('Airtable connection check failed', e);
+    }
+
+    // 3. Load courses from aggregated API endpoint
+    try {
+        const response = await fetch('/api/courses');
         if (response.ok) {
             const data = await response.json();
             if (data.success && data.data && Array.isArray(data.data)) {
-                // Map API data to our course format
                 const apiCourses = data.data.map(course => ({
                     id: course.handle || course.id,
                     name: course.name || course.title,
-                    city: 'API', // Would need additional mapping
-                    level: 'API',
-                    dates: course.created_at ? new Date(course.created_at).toLocaleDateString() : '',
+                    city: extractCity(course.title || course.name || ''),
+                    level: extractLevel(course.title || course.name || ''),
+                    dates: course.created_at ? new Date(course.created_at).toLocaleDateString('it-IT') : '',
                     startDate: course.created_at ? course.created_at.split('T')[0] : '',
-                    educator: 'api-' + (course.vendor || '0'),
-                    price: course.variants && course.variants[0] ? course.variants[0].price : 0,
+                    educator: 'edu-01',
+                    price: course.variants && course.variants[0] ? parseFloat(course.variants[0].price) : 0,
                     minStudents: 5,
                     maxStudents: 20,
-                    costsFixed: 1500,
-                    costsPerStudent: 65,
+                    costs: { location: 0, educator: 800, food: 0, sake: 300, adv: 0 },
                     sakeIds: [],
                     students: [],
                     enrollmentCount: course.enrollmentCount || 0,
@@ -1084,6 +1108,26 @@ async function loadApiData() {
     }
     
     updateConnectionStatus();
+}
+
+// Helper: extract city from course title (e.g. "SSA Livello 1 - Milano" -> "Milano")
+function extractCity(title) {
+    const parts = title.split(' - ');
+    if (parts.length > 1) return parts[parts.length - 1].trim();
+    const cities = ['Milano', 'Roma', 'Torino', 'Firenze', 'Bologna', 'Napoli', 'Venezia', 'Palermo', 'Genova', 'Catania'];
+    for (const city of cities) {
+        if (title.includes(city)) return city;
+    }
+    return '';
+}
+
+// Helper: extract level from course title (e.g. "SSA Livello 1" -> "Livello 1")
+function extractLevel(title) {
+    const match = title.match(/Livello\s*\d+/i);
+    if (match) return match[0];
+    if (title.toLowerCase().includes('master')) return 'Master';
+    if (title.toLowerCase().includes('intro')) return 'Introduzione';
+    return '';
 }
 
 // =============================================
@@ -1108,8 +1152,7 @@ let COURSES = [
         price: 450,
         minStudents: 8,
         maxStudents: 20,
-        costsFixed: 1800,  // venue, materials
-        costsPerStudent: 65, // sake kit per student
+        costs: { location: 500, educator: 800, food: 300, sake: 300, adv: 200 }
         sakeIds: ["AK006-0720", "S088-0720", "S056-0720", "S194-0720", "S187-0720", "S181-0720"],
         students: ["st-01","st-02","st-03","st-04","st-05","st-06","st-07","st-08","st-09","st-10","st-11","st-12","st-13","st-14","st-15"],
         shopifyProductId: "gid://shopify/Product/8012345678",
@@ -1126,8 +1169,7 @@ let COURSES = [
         price: 450,
         minStudents: 8,
         maxStudents: 18,
-        costsFixed: 1600,
-        costsPerStudent: 65,
+        costs: { location: 400, educator: 800, food: 250, sake: 300, adv: 150 },
         sakeIds: ["AK006-0720", "S088-0720", "S056-0720", "S019-0220", "S171-0300"],
         students: ["st-16","st-17","st-18","st-19","st-20","st-21","st-22","st-23","st-24","st-25","st-26"],
         shopifyProductId: "gid://shopify/Product/8012345679",
@@ -1144,8 +1186,7 @@ let COURSES = [
         price: 650,
         minStudents: 6,
         maxStudents: 15,
-        costsFixed: 2200,
-        costsPerStudent: 95,
+        costs: { location: 600, educator: 1000, food: 400, sake: 500, adv: 200 },
         sakeIds: ["S056-0720", "S194-0720", "S187-0720", "S181-0720", "S235-0720", "S088-0720", "S019-0220", "S171-0300"],
         students: ["st-27","st-28","st-29","st-30","st-31","st-32","st-33","st-34","st-35","st-36","st-37","st-38","st-39"],
         shopifyProductId: "gid://shopify/Product/8012345680",
@@ -1162,8 +1203,7 @@ let COURSES = [
         price: 450,
         minStudents: 8,
         maxStudents: 16,
-        costsFixed: 1500,
-        costsPerStudent: 65,
+        costs: { location: 350, educator: 800, food: 200, sake: 300, adv: 100 },
         sakeIds: ["AK006-0720", "S088-0720", "S194-0720", "S181-0720"],
         students: ["st-40","st-41","st-42","st-43","st-44","st-45","st-46","st-47","st-48","st-49","st-50","st-51","st-52","st-53","st-54","st-55","st-56","st-57"],
         shopifyProductId: "gid://shopify/Product/8012345681",
@@ -1180,8 +1220,7 @@ let COURSES = [
         price: 650,
         minStudents: 6,
         maxStudents: 14,
-        costsFixed: 2000,
-        costsPerStudent: 95,
+        costs: { location: 450, educator: 1000, food: 350, sake: 500, adv: 150 },
         sakeIds: ["S056-0720", "S194-0720", "S235-0720", "S181-0720", "S088-0720", "S171-0300", "S019-0220"],
         students: ["st-58","st-59","st-60","st-61","st-62"],
         shopifyProductId: "gid://shopify/Product/8012345682",
@@ -1198,8 +1237,7 @@ let COURSES = [
         price: 900,
         minStudents: 5,
         maxStudents: 12,
-        costsFixed: 3000,
-        costsPerStudent: 140,
+        costs: { location: 700, educator: 1200, food: 500, sake: 700, adv: 300 },
         sakeIds: ["S056-0720", "S194-0720", "S235-0720", "S181-0720", "S088-0720", "S171-0300", "S019-0220", "AK006-0720", "S187-0720"],
         students: ["st-63","st-64","st-65","st-66","st-67","st-68","st-69","st-70","st-71","st-72","st-73","st-74","st-75","st-76","st-77","st-78","st-79","st-80","st-81","st-82","st-83","st-84","st-85","st-86","st-87"],
         shopifyProductId: "gid://shopify/Product/8012345683",
@@ -1272,10 +1310,18 @@ const SAKE_CATALOG = [
 
 const BASE_URL = "https://corsi.sakesommelierassociation.it";
 
+function getTotalCosts(course) {
+    if (course.costs) {
+        return (course.costs.location || 0) + (course.costs.educator || 0) + (course.costs.food || 0) + (course.costs.sake || 0) + (course.costs.adv || 0);
+    }
+    // Fallback for old format
+    return (course.costsFixed || 0) + (course.students.length * (course.costsPerStudent || 0));
+}
+
 function getCourseSustainability(course) {
     const revenue = course.students.length * course.price;
-    const costs = course.costsFixed + (course.students.length * course.costsPerStudent);
-    const ratio = revenue / costs;
+    const costs = getTotalCosts(course);
+    const ratio = costs > 0 ? revenue / costs : 0;
     const profit = revenue - costs;
     const minRevenue = course.minStudents * course.price;
 
@@ -1527,8 +1573,31 @@ function openCourseDetail(courseId) {
         <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
             <div class="stat-card gold"><div class="stat-label">Iscritti</div><div class="stat-value">${c.students.length}/${c.maxStudents}</div><div class="stat-sub">Min. ${c.minStudents}</div></div>
             <div class="stat-card green"><div class="stat-label">Ricavo</div><div class="stat-value">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
-            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value">${formatCurrency(s.costs)}</div><div class="stat-sub">Fissi: ${formatCurrency(c.costsFixed)}</div></div>
+            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value">${formatCurrency(s.costs)}</div><div class="stat-sub">${c.costs ? '5 voci' : 'Fissi + var.'}</div></div>
             <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: ${s.ratio.toFixed(2)}x</div></div>
+        </div>
+
+        <div class="section-title"><i class="fas fa-coins"></i> Costi del Corso</div>
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px;">
+            ${(() => {
+                const costs = c.costs || { location: 0, educator: 0, food: 0, sake: 0, adv: 0 };
+                const labels = { location: 'Location', educator: 'Educator', food: 'Food', sake: 'Sake', adv: 'ADV' };
+                const icons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
+                const colors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
+                return Object.keys(labels).map(key => `
+                    <div style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; ${costs[key] === 0 ? 'opacity: 0.5; border-style: dashed;' : ''}">
+                        <div style="font-size: 18px; color: ${colors[key]}; margin-bottom: 6px;"><i class="fas ${icons[key]}"></i></div>
+                        <div style="font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${labels[key]}</div>
+                        <div style="font-size: 18px; font-weight: 700; color: var(--text);">${costs[key] > 0 ? formatCurrency(costs[key]) : '\u2014'}</div>
+                        ${costs[key] === 0 ? '<div style="font-size: 10px; color: var(--danger); margin-top: 4px;">Da inserire</div>' : ''}
+                    </div>
+                `).join('');
+            })()}
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg); border-radius: 8px; margin-bottom: 24px; font-size: 13px;">
+            <span style="color: var(--text-light);">Totale costi: <strong style="color: var(--text);">${formatCurrency(s.costs)}</strong></span>
+            <span style="color: var(--text-light);">Break-even: <strong style="color: var(--text);">${c.price > 0 ? Math.ceil(s.costs / c.price) : '\u2014'} iscritti</strong></span>
+            <span style="color: var(--text-light);">Margine/iscritto: <strong style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${c.students.length > 0 ? formatCurrency(s.profit / c.students.length) : '\u2014'}</strong></span>
         </div>
 
         <div class="two-cols" style="margin-bottom: 24px;">
