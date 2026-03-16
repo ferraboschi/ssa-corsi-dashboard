@@ -1030,13 +1030,13 @@ function updateConnectionStatus() {
     
     const allConnected = apiStatus.shopify && apiStatus.airtable && apiStatus.courses;
     if (allConnected) {
-        indicator.innerHTML = '<span style="color: #2d8a4e;">â Connesso</span>';
+        indicator.innerHTML = '<span style="color: #2d8a4e;">Ã¢ÂÂ Connesso</span>';
     } else {
         const status = [];
         if (!apiStatus.shopify) status.push('Shopify');
         if (!apiStatus.airtable) status.push('Airtable');
         if (!apiStatus.courses) status.push('Corsi');
-        indicator.innerHTML = '<span style="color: #e6a817;">â  Demo mode (' + status.join(', ') + ' offline)</span>';
+        indicator.innerHTML = '<span style="color: #e6a817;">Ã¢ÂÂ  Demo mode (' + status.join(', ') + ' offline)</span>';
     }
 }
 
@@ -1096,7 +1096,7 @@ async function loadApiData() {
 // =============================================
 
 // --- COURSES (simulated from Shopify + internal) ---
-const COURSES = [
+let COURSES = [
     {
         id: "SSA-L1-MI-2026-04",
         name: "SSA Livello 1 - Milano",
