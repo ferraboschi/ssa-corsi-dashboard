@@ -675,7 +675,10 @@ app.get('/api/shared/:token', async (req, res) => {
     };
 
     // Get educator info from tags or vendor
-    const educatorTag = courseProduct.tags?.find(tag => tag.startsWith('educator:'));
+    const tagsArray = typeof courseProduct.tags === 'string'
+      ? courseProduct.tags.split(',').map(t => t.trim())
+      : (Array.isArray(courseProduct.tags) ? courseProduct.tags : []);
+    const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
     course.educator = educatorTag ? educatorTag.replace('educator:', '') : courseProduct.vendor || '';
 
     // Get program info from costs (stored by handle)
