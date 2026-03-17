@@ -664,31 +664,36 @@ app.get('/api/shared/:token', async (req, res) => {
       return res.status(404).json({ success: false, error: 'Course not found' });
     }
 
-    // Build course data without financial info
+    // Parse tags
+    const tagsArray = typeof courseProduct.tags === 'string'
+      ? courseProduct.tags.split(',').map(t => t.trim())
+      : (Array.isArray(courseProduct.tags) ? courseProduct.tags : []);
+
+    // Build rich course data (same as main API but no financial margins)
     const course = {
       id: courseProduct.id,
       title: courseProduct.title,
       handle: courseProduct.handle,
       body_html: courseProduct.body_html,
       images: courseProduct.images,
-      students: []
+      tags: tagsArray,
+      product_type: courseProduct.product_type,
+      variants: courseProduct.variants,
+      students: [],
+      enrollmentCount: 0
     };
 
-    // Get educator info from tags or vendor
-    const tagsArray = typeof courseProduct.tags === 'string'
-      ? courseProduct.tags.split(',').map(t => t.trim())
-      : (Array.isArray(courseProduct.tags) ? courseProduct.tags : []);
+    // Educator
     const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
     course.educator = educatorTag ? educatorTag.replace('educator:', '') : courseProduct.vendor || '';
 
-    // Get program info from costs (stored by handle)
+    // Program & costs (no financial details, only program structure)
     const costs = courseCosts[courseProduct.handle];
     if (costs && costs.program) {
       course.program = costs.program;
     }
 
-    // Get student names only (no financial data)
-    const studentSet = new Set();
+    // Get full student data (name, email, phone, order date) - no financial amounts
     orders.forEach(order => {
       if (!order.line_items) return;
       order.line_items.forEach(item => {
@@ -696,14 +701,23 @@ app.get('/api/shared/:token', async (req, res) => {
           const customerName = order.customer
             ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
             : 'Sconosciuto';
-          if (customerName) {
-            studentSet.add(customerName);
-          }
+
+          let phone = order.customer?.phone || '';
+          if (!phone && order.shipping_address?.phone) phone = order.shipping_address.phone;
+          if (!phone && order.billing_address?.phone) phone = order.billing_address.phone;
+          if (!phone && order.customer?.default_address?.phone) phone = order.customer.default_address.phone;
+
+          course.students.push({
+            name: customerName,
+            email: order.customer?.email || '',
+            phone: phone,
+            orderDate: order.created_at,
+            orderNumber: order.name || `#${order.order_number}`
+          });
+          course.enrollmentCount += item.quantity;
         }
       });
     });
-
-    course.students = Array.from(studentSet).map(name => ({ name }));
 
     res.json({ success: true, data: course });
   } catch (error) {
@@ -723,299 +737,185 @@ app.get('/share/:token', (req, res) => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSA - Course Share</title>
+  <title>SSA - Dettaglio Corso</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     :root {
-      --color-primary: #2a5f3f;
-      --color-secondary: #d4a574;
-      --color-accent: #8b4513;
-      --color-light: #f5f1ed;
-      --color-text: #333;
-      --color-border: #ddd;
-      --font-serif: Georgia, serif;
-      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --primary: #0D5CAB;
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --text: #1a1a1a;
+      --text-light: #6b7280;
+      --border: #e5e7eb;
+      --success: #16a34a;
     }
-    body {
-      font-family: var(--font-sans);
-      color: var(--color-text);
-      background-color: var(--color-light);
-      line-height: 1.6;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 2rem;
-    }
-    .header {
-      text-align: center;
-      margin-bottom: 3rem;
-      border-bottom: 2px solid var(--color-secondary);
-      padding-bottom: 2rem;
-    }
-    .header h1 {
-      font-family: var(--font-serif);
-      color: var(--color-primary);
-      font-size: 2.5rem;
-      margin-bottom: 0.5rem;
-    }
-    .header .ssa-brand {
-      font-size: 0.9rem;
-      color: var(--color-secondary);
-      font-weight: 600;
-      letter-spacing: 2px;
-    }
-    .status-error {
-      background-color: #fee;
-      border: 1px solid #fcc;
-      color: #c33;
-      padding: 1rem;
-      border-radius: 4px;
-      text-align: center;
-      margin-bottom: 2rem;
-    }
-    .status-expired {
-      background-color: #ffeaa7;
-      border: 1px solid #ffc107;
-      color: #856404;
-      padding: 1.5rem;
-      border-radius: 4px;
-      text-align: center;
-      font-size: 1.1rem;
-      margin: 2rem 0;
-    }
-    .course-info {
-      background: white;
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 2rem;
-      margin-bottom: 2rem;
-    }
-    .course-title {
-      font-family: var(--font-serif);
-      font-size: 2rem;
-      color: var(--color-primary);
-      margin-bottom: 1rem;
-    }
-    .course-description {
-      color: #666;
-      margin-bottom: 1.5rem;
-      line-height: 1.8;
-    }
-    .info-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 0.75rem 0;
-      border-bottom: 1px solid var(--color-border);
-    }
-    .info-row:last-child {
-      border-bottom: none;
-    }
-    .info-label {
-      font-weight: 600;
-      color: var(--color-primary);
-      min-width: 150px;
-    }
-    .info-value {
-      text-align: right;
-    }
-    .educator-section {
-      background: white;
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 2rem;
-      margin-bottom: 2rem;
-    }
-    .educator-title {
-      font-family: var(--font-serif);
-      font-size: 1.3rem;
-      color: var(--color-primary);
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--color-secondary);
-      padding-bottom: 0.5rem;
-    }
-    .educator-info {
-      color: #666;
-      line-height: 1.8;
-    }
-    .program-section {
-      background: white;
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 2rem;
-      margin-bottom: 2rem;
-    }
-    .program-title {
-      font-family: var(--font-serif);
-      font-size: 1.3rem;
-      color: var(--color-primary);
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--color-secondary);
-      padding-bottom: 0.5rem;
-    }
-    .program-content {
-      color: #666;
-    }
-    .sake-group {
-      background-color: #fafafa;
-      border-left: 4px solid var(--color-secondary);
-      padding: 1rem;
-      margin-bottom: 1rem;
-      border-radius: 4px;
-    }
-    .sake-group-name {
-      font-weight: 600;
-      color: var(--color-primary);
-      margin-bottom: 0.5rem;
-    }
-    .sake-item {
-      color: #666;
-      margin-bottom: 0.3rem;
-      padding-left: 1rem;
-    }
-    .students-section {
-      background: white;
-      border: 1px solid var(--color-border);
-      border-radius: 8px;
-      padding: 2rem;
-    }
-    .students-title {
-      font-family: var(--font-serif);
-      font-size: 1.3rem;
-      color: var(--color-primary);
-      margin-bottom: 1rem;
-      border-bottom: 2px solid var(--color-secondary);
-      padding-bottom: 0.5rem;
-    }
-    .student-list {
-      list-style: none;
-      columns: 2;
-      gap: 2rem;
-    }
-    .student-list li {
-      padding: 0.5rem 0;
-      color: #666;
-      break-inside: avoid;
-    }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .header { background: #fff; border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+    .header img { width: 36px; height: 36px; border-radius: 50%; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header .sub { font-size: 11px; color: var(--text-light); }
+    .main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+    .course-title-bar { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+    .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .badge { display: inline-flex; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge.blue { background: #dbeafe; color: #1e40af; }
+    .badge.green { background: #dcfce7; color: #166534; }
+    .badge.cyan { background: #cffafe; color: #0e7490; }
+    .info-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .info-grid .item { font-size: 13px; }
+    .info-grid .item strong { color: var(--text); }
+    .info-grid .item span { color: var(--text-light); }
+    .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; position: relative; overflow: hidden; }
+    .stat-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--primary); }
+    .stat-box.green::before { background: var(--success); }
+    .stat-box .label { font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+    .stat-box .value { font-size: 22px; font-weight: 700; }
+    .stat-box .sub { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+    .section-title i { color: var(--primary); }
+    .student-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .student-table th { text-align: left; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); background: #f9fafb; border-bottom: 1px solid var(--border); font-weight: 600; }
+    .student-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .student-table tr:last-child td { border-bottom: none; }
+    .student-table .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; margin-right: 8px; vertical-align: middle; }
+    .student-table .email { color: var(--text-light); font-size: 12px; }
+    .student-table .wa-link { color: #25D366; text-decoration: none; }
+    .program-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; }
+    .program-day { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px; color: var(--primary); }
+    .program-group { font-size: 13px; color: var(--text); margin-bottom: 4px; }
+    .sake-item { font-size: 12px; color: var(--text-light); padding-left: 16px; margin-bottom: 2px; }
+    .status-error { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; padding: 16px; border-radius: 8px; text-align: center; }
+    .status-expired { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: 20px; border-radius: 8px; text-align: center; font-size: 15px; }
+    .loading { text-align: center; padding: 3rem; color: var(--text-light); }
+    .spinner { border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; width: 36px; height: 36px; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--text-light); }
     @media (max-width: 600px) {
-      .container { padding: 1rem; }
-      .header h1 { font-size: 1.6rem; }
-      .course-title { font-size: 1.4rem; }
-      .info-row { flex-direction: column; gap: 4px; }
-      .info-label { min-width: auto; }
-      .info-value { text-align: left; }
-      .student-list { columns: 1; }
-      .course-info, .educator-section, .program-section, .students-section { padding: 1rem; }
-    }
-    .loading {
-      text-align: center;
-      padding: 2rem;
-      color: #666;
-    }
-    .spinner {
-      border: 4px solid var(--color-light);
-      border-top: 4px solid var(--color-primary);
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 1rem auto;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      .main { padding: 12px; }
+      .info-grid { grid-template-columns: 1fr; }
+      .stat-row { grid-template-columns: 1fr; }
+      .stat-box .value { font-size: 18px; }
+      .info-card, .program-card { padding: 14px 16px; }
+      .student-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .student-table { min-width: 500px; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="ssa-brand">SAKE SOMMELIER ASSOCIATION</div>
-      <h1>Course Information</h1>
-    </div>
+  <div class="header">
+    <img src="/ssa-logo.png" alt="SSA">
+    <div><h1>SSA Gestione Corsi</h1><div class="sub">Sake Sommelier Association</div></div>
+  </div>
+  <div class="main">
     <div id="content">
-      <div class="loading">
-        <div class="spinner"></div>
-        <p>Loading course information...</p>
-      </div>
+      <div class="loading"><div class="spinner"></div><p>Caricamento corso...</p></div>
     </div>
   </div>
+  <div class="footer">Sake Sommelier Association &copy; 2026 &mdash; Link condiviso, sola lettura</div>
 
   <script>
+    function parseTitle(title) {
+      const months = { 'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04', 'maggio': '05', 'giugno': '06',
+        'luglio': '07', 'agosto': '08', 'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12' };
+      let city = '', dateStr = '';
+      const cityMatch = title.match(/,\\s*([A-Za-zÀ-ú\\s]+)$/);
+      if (cityMatch) city = cityMatch[1].trim();
+      const dateMatch = title.match(/(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\\s+(\\d{4})/i);
+      if (dateMatch) dateStr = dateMatch[1] + ' ' + dateMatch[2];
+      return { city, dateStr };
+    }
+
+    function formatDate(d) {
+      if (!d) return '-';
+      const dt = new Date(d);
+      return dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
     async function loadCourseData() {
       try {
         const response = await fetch('/api/shared/${token}');
         const result = await response.json();
-
         if (!response.ok) {
           if (response.status === 401) {
-            document.getElementById('content').innerHTML = '<div class="status-expired">Link scaduto</div>';
+            document.getElementById('content').innerHTML = '<div class="status-expired"><i class="fas fa-clock"></i> Questo link è scaduto. Richiedi un nuovo link di accesso.</div>';
           } else {
-            document.getElementById('content').innerHTML = '<div class="status-error">Errore: ' + (result.error || 'Course not found') + '</div>';
+            document.getElementById('content').innerHTML = '<div class="status-error">Errore: ' + (result.error || 'Corso non trovato') + '</div>';
           }
           return;
         }
+        const c = result.data;
+        const parsed = parseTitle(c.title);
+        const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price).toLocaleString('it-IT', {minimumFractionDigits: 2}) + ' €' : '';
+        const maxStudents = c.variants && c.variants[0] && c.variants[0].inventory_quantity != null ? (c.enrollmentCount + (c.variants[0].inventory_quantity || 0)) : 20;
+        const tags = c.tags || [];
+        const isOnline = tags.some(t => t.toLowerCase().includes('online'));
+        const isCertificato = tags.some(t => t.toLowerCase().includes('certificato')) || c.title.toLowerCase().includes('certificato');
 
-        const course = result.data;
         let html = '';
 
-        // Course info
-        html += '<div class="course-info">';
-        html += '<div class="course-title">' + (course.title || 'Untitled') + '</div>';
-        if (course.body_html) {
-          html += '<div class="course-description">' + course.body_html + '</div>';
-        }
+        // Title + badges
+        html += '<div class="course-title-bar">' + c.title + '</div>';
+        html += '<div class="badges">';
+        if (isCertificato) html += '<span class="badge blue">IN PRESENZA CERTIFICATO</span>';
+        if (isOnline) html += '<span class="badge cyan">ONLINE</span>';
+        if (parsed.city) html += '<span class="badge green"><i class="fas fa-map-marker-alt"></i>&nbsp;' + parsed.city + '</span>';
         html += '</div>';
 
-        // Educator
-        if (course.educator) {
-          html += '<div class="educator-section">';
-          html += '<div class="educator-title">Educator</div>';
-          html += '<div class="educator-info">' + course.educator + '</div>';
-          html += '</div>';
-        }
+        // Info card
+        html += '<div class="info-card"><div class="info-grid">';
+        if (parsed.dateStr) html += '<div class="item"><strong>Periodo:</strong> ' + parsed.dateStr + '</div>';
+        if (c.educator) html += '<div class="item"><strong>Educator:</strong> ' + c.educator + '</div>';
+        if (parsed.city && !isOnline) html += '<div class="item"><strong>Città:</strong> ' + parsed.city + '</div>';
+        if (price) html += '<div class="item"><strong>Prezzo:</strong> ' + price + '/persona</div>';
+        html += '</div></div>';
 
-        // Program (sake details)
-        if (course.program && Array.isArray(course.program)) {
-          html += '<div class="program-section">';
-          html += '<div class="program-title">Program</div>';
-          html += '<div class="program-content">';
-          course.program.forEach(group => {
-            html += '<div class="sake-group">';
-            html += '<div class="sake-group-name">' + (group.name || 'Group') + '</div>';
-            if (Array.isArray(group.sakes)) {
-              group.sakes.forEach(sake => {
-                html += '<div class="sake-item">' + (sake.name || 'Unknown') + '</div>';
+        // Stats
+        html += '<div class="stat-row">';
+        html += '<div class="stat-box"><div class="label">Iscritti</div><div class="value">' + c.enrollmentCount + '/' + maxStudents + '</div><div class="sub">Min. 6</div></div>';
+        html += '<div class="stat-box green"><div class="label">Posti disponibili</div><div class="value">' + Math.max(0, maxStudents - c.enrollmentCount) + '</div></div>';
+        html += '</div>';
+
+        // Program
+        if (c.program && Array.isArray(c.program) && c.program.length > 0) {
+          html += '<div class="section-title"><i class="fas fa-book"></i> Programma</div>';
+          c.program.forEach((group, i) => {
+            html += '<div class="program-card">';
+            html += '<div class="program-day">Giorno ' + (group.day || (i+1)) + '</div>';
+            html += '<div class="program-group">' + (group.name || '') + '</div>';
+            if (Array.isArray(group.sakes) && group.sakes.length > 0) {
+              group.sakes.forEach(s => {
+                html += '<div class="sake-item">• ' + (s.name || '') + (s.size ? ' (' + s.size + ')' : '') + '</div>';
               });
             }
             html += '</div>';
           });
-          html += '</div>';
-          html += '</div>';
         }
 
-        // Students
-        if (course.students && Array.isArray(course.students) && course.students.length > 0) {
-          html += '<div class="students-section">';
-          html += '<div class="students-title">Students (' + course.students.length + ')</div>';
-          html += '<ul class="student-list">';
-          course.students.forEach(student => {
-            html += '<li>' + (student.name || 'Unknown') + '</li>';
+        // Students table
+        if (c.students && c.students.length > 0) {
+          html += '<div class="section-title" style="margin-top:20px;"><i class="fas fa-users"></i> Iscritti (' + c.students.length + ')</div>';
+          html += '<div class="student-table-wrap"><table class="student-table"><thead><tr><th>Corsista</th><th>Telefono</th><th>Data Iscrizione</th></tr></thead><tbody>';
+          c.students.forEach(st => {
+            const initials = st.name ? st.name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase() : '?';
+            const cleanPhone = st.phone ? st.phone.replace(/[^\\d+]/g, '') : '';
+            const waPhone = cleanPhone.replace(/^\\+/, '');
+            html += '<tr>';
+            html += '<td><span class="avatar">' + initials + '</span><span>' + (st.name || '-') + '</span><br><span class="email">' + (st.email || '') + '</span></td>';
+            html += '<td>' + (cleanPhone ? '<a href="https://wa.me/' + waPhone + '" target="_blank" class="wa-link"><i class="fab fa-whatsapp"></i></a> ' + st.phone : '-') + '</td>';
+            html += '<td>' + formatDate(st.orderDate) + '</td>';
+            html += '</tr>';
           });
-          html += '</ul>';
-          html += '</div>';
+          html += '</tbody></table></div>';
         }
 
         document.getElementById('content').innerHTML = html;
       } catch (error) {
-        document.getElementById('content').innerHTML = '<div class="status-error">Error loading course: ' + error.message + '</div>';
+        document.getElementById('content').innerHTML = '<div class="status-error">Errore nel caricamento: ' + error.message + '</div>';
       }
     }
-
     loadCourseData();
   </script>
 </body>
