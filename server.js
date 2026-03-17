@@ -5,16 +5,16 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 
-// Course costs persistent storage
+// Course costs persistent storage (file-based + Airtable for deploy persistence)
 const COSTS_FILE = path.join(__dirname, 'data', 'course-costs.json');
 const SHARE_FILE = path.join(__dirname, 'data', 'share-tokens.json');
 
-function loadCosts() {
+function loadCostsFromFile() {
   try {
     if (fs.existsSync(COSTS_FILE)) {
       return JSON.parse(fs.readFileSync(COSTS_FILE, 'utf8'));
     }
-  } catch (e) { console.error('Error loading costs:', e); }
+  } catch (e) { console.error('Error loading costs from file:', e); }
   return {};
 }
 
@@ -23,16 +23,19 @@ function saveCostsToFile(costs) {
     const dir = path.dirname(COSTS_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(COSTS_FILE, JSON.stringify(costs, null, 2));
-  } catch (e) { console.error('Error saving costs:', e); }
+  } catch (e) { console.error('Error saving costs to file:', e); }
+  // Also persist to Airtable (async, fire-and-forget)
+  airtableConfigSet('course_costs', costs).catch(e =>
+    console.error('Airtable costs save failed:', e.message)
+  );
 }
 
-// Share tokens persistent storage
-function loadShareTokens() {
+function loadShareTokensFromFile() {
   try {
     if (fs.existsSync(SHARE_FILE)) {
       return JSON.parse(fs.readFileSync(SHARE_FILE, 'utf8'));
     }
-  } catch (e) { console.error('Error loading share tokens:', e); }
+  } catch (e) { console.error('Error loading share tokens from file:', e); }
   return {};
 }
 
@@ -41,15 +44,163 @@ function saveShareTokensToFile(tokens) {
     const dir = path.dirname(SHARE_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(SHARE_FILE, JSON.stringify(tokens, null, 2));
-  } catch (e) { console.error('Error saving share tokens:', e); }
+  } catch (e) { console.error('Error saving share tokens to file:', e); }
+  // Also persist to Airtable (async, fire-and-forget)
+  airtableConfigSet('share_tokens', tokens).catch(e =>
+    console.error('Airtable tokens save failed:', e.message)
+  );
 }
 
 function generateShareToken() {
   return crypto.randomUUID();
 }
 
-const courseCosts = loadCosts();
-let shareTokens = loadShareTokens();
+// In-memory state (loaded from file first, then enriched from Airtable on startup)
+const courseCosts = loadCostsFromFile();
+let shareTokens = loadShareTokensFromFile();
+
+// ============================================================================
+// AIRTABLE-BASED PERSISTENCE (survives Render ephemeral filesystem wipes)
+// ============================================================================
+const CONFIG_TABLE_NAME = 'SSA_CourseConfig';
+let configTableId = null;
+
+async function initConfigTable() {
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  if (!apiKey) {
+    console.log('Airtable persistence: DISABLED (no API key)');
+    return;
+  }
+  try {
+    // Check if table already exists via metadata API
+    const metaResp = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (metaResp.ok) {
+      const metaData = await metaResp.json();
+      const existing = (metaData.tables || []).find(t => t.name === CONFIG_TABLE_NAME);
+      if (existing) {
+        configTableId = existing.id;
+        console.log(`Airtable persistence: ACTIVE (table ${configTableId})`);
+        return;
+      }
+    }
+    // Try to create the table
+    const createResp = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        name: CONFIG_TABLE_NAME,
+        fields: [
+          { name: 'Key', type: 'singleLineText' },
+          { name: 'Value', type: 'multilineText' }
+        ]
+      })
+    });
+    if (createResp.ok) {
+      const created = await createResp.json();
+      configTableId = created.id;
+      console.log(`Airtable persistence: CREATED table ${configTableId}`);
+    } else {
+      const errText = await createResp.text();
+      console.log(`Airtable persistence: DISABLED (cannot create table: ${createResp.status} ${errText})`);
+    }
+  } catch (e) {
+    console.error('Airtable persistence init failed:', e.message);
+  }
+}
+
+async function airtableConfigGet(key) {
+  if (!configTableId) return null;
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  try {
+    const formula = encodeURIComponent(`{Key}="${key}"`);
+    const resp = await fetch(
+      `https://api.airtable.com/v0/${baseId}/${configTableId}?filterByFormula=${formula}`,
+      { headers: { 'Authorization': `Bearer ${apiKey}` } }
+    );
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data.records && data.records.length > 0) {
+      const val = data.records[0].fields.Value;
+      return val ? JSON.parse(val) : null;
+    }
+  } catch (e) {
+    console.error(`Airtable config get '${key}' failed:`, e.message);
+  }
+  return null;
+}
+
+async function airtableConfigSet(key, value) {
+  if (!configTableId) return;
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  try {
+    const formula = encodeURIComponent(`{Key}="${key}"`);
+    const resp = await fetch(
+      `https://api.airtable.com/v0/${baseId}/${configTableId}?filterByFormula=${formula}`,
+      { headers: { 'Authorization': `Bearer ${apiKey}` } }
+    );
+    const data = resp.ok ? await resp.json() : { records: [] };
+    const jsonValue = JSON.stringify(value);
+
+    if (data.records && data.records.length > 0) {
+      // Update existing record
+      await fetch(`https://api.airtable.com/v0/${baseId}/${configTableId}/${data.records[0].id}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fields: { Value: jsonValue } })
+      });
+    } else {
+      // Create new record
+      await fetch(`https://api.airtable.com/v0/${baseId}/${configTableId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ fields: { Key: key, Value: jsonValue } })
+      });
+    }
+  } catch (e) {
+    console.error(`Airtable config set '${key}' failed:`, e.message);
+  }
+}
+
+async function loadFromAirtable() {
+  if (!configTableId) return;
+  try {
+    const costsData = await airtableConfigGet('course_costs');
+    if (costsData && Object.keys(costsData).length > 0) {
+      // Merge Airtable data into in-memory state (Airtable wins over empty file)
+      Object.keys(costsData).forEach(k => {
+        if (!courseCosts[k] || Object.keys(courseCosts[k]).length === 0) {
+          courseCosts[k] = costsData[k];
+        }
+      });
+      console.log(`Loaded ${Object.keys(costsData).length} course costs from Airtable`);
+    }
+    const tokensData = await airtableConfigGet('share_tokens');
+    if (tokensData && Object.keys(tokensData).length > 0) {
+      Object.keys(tokensData).forEach(k => {
+        if (!shareTokens[k]) {
+          shareTokens[k] = tokensData[k];
+        }
+      });
+      console.log(`Loaded ${Object.keys(tokensData).length} share tokens from Airtable`);
+    }
+  } catch (e) {
+    console.error('Failed to load from Airtable:', e.message);
+  }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1127,11 +1278,26 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================================
-// START SERVER
+// START SERVER (with Airtable persistence init)
 // ============================================================================
-app.listen(PORT, () => {
-  console.log(`SSA Backend Server running on http://localhost:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Shopify Store: ${SHOPIFY_STORE}`);
-  console.log(`Airtable Base: ${AIRTABLE_BASE_ID}`);
+async function startServer() {
+  // Initialize Airtable persistence before accepting requests
+  await initConfigTable();
+  await loadFromAirtable();
+
+  app.listen(PORT, () => {
+    console.log(`SSA Backend Server running on http://localhost:${PORT}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Shopify Store: ${SHOPIFY_STORE}`);
+    console.log(`Airtable Base: ${AIRTABLE_BASE_ID}`);
+    console.log(`Airtable Persistence: ${configTableId ? 'ACTIVE' : 'DISABLED (file-only)'}`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('Failed to start server:', err);
+  // Fallback: start without Airtable persistence
+  app.listen(PORT, () => {
+    console.log(`SSA Backend Server running on http://localhost:${PORT} (without Airtable persistence)`);
+  });
 });

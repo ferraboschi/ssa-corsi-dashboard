@@ -1485,29 +1485,7 @@ const CONFIG = {
             bio: 'Lavora nel settore ristorazione con specializzazione in cucina giapponese'
         }
     },
-    EDUCATOR_MAP: {
-        'corso-di-sake-sommelier-certificato-marzo-2026-torino': {
-            name: 'Brunella Bettati', region: 'Piemonte', initials: 'BB'
-        },
-        'corso-introduttivo-al-sake-marzo-2026-online': {
-            name: 'Gabriele Merlo', region: 'Lombardia', initials: 'GM'
-        },
-        'corso-di-sake-sommelier-certificato-aprile-2026-vercelli': {
-            name: 'Brunella Bettati', region: 'Piemonte', initials: 'BB'
-        },
-        'corso-di-sake-sommelier-certificato-aprile-2026-napoli': {
-            name: 'Stefania Battiloro', region: 'Campania', initials: 'SB'
-        },
-        'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': {
-            name: 'Da confermare', region: 'Trentino-Alto Adige', initials: '?'
-        },
-        'corso-di-sake-sommelier-certificato-maggio-2026-milano': {
-            name: 'Lorenzo Ferraboschi', region: 'Lombardia', initials: 'LF'
-        },
-        'corso-di-sake-sommelier-certificato-maggio-2025-roma': {
-            name: 'Camilla Bonnannini', region: 'Lazio', initials: 'CB'
-        }
-    },
+    // EDUCATOR_MAP removed — educator is now read dynamically from Shopify product tags (educator:Name)
 
     LOCATION_MAP: {
         'corso-di-sake-sommelier-certificato-marzo-2026-torino': 'To-working, Corso Regina Margherita 226, Torino',
@@ -1902,8 +1880,8 @@ async function loadApiData() {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
-            // Read educator from Shopify tags first, fallback to hardcoded map
-            let educatorBase = CONFIG.EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            // Read educator ONLY from Shopify product tags (educator:Name)
+            let educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
             if (c.tags) {
                 const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
                 const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
@@ -1911,7 +1889,7 @@ async function loadApiData() {
                     const tagName = educatorTag.replace('educator:', '').trim();
                     if (tagName) {
                         const initials = tagName.split(' ').map(w => w[0]).join('').toUpperCase();
-                        educatorBase = { name: tagName, region: educatorBase.region || '', initials };
+                        educatorBase = { name: tagName, region: '', initials };
                     }
                 }
             }
@@ -1988,16 +1966,28 @@ async function loadApiData() {
     EDUCATORS = Array.from(educatorMap.values());
 
     // Build student course count map for repeat indicator
-    // Count distinct courses per email (not duplicate orders within same course)
-    window.STUDENT_COURSE_COUNT = {};
+    // Count distinct courses per email AND per normalized name (handles different emails for same person)
+    window.STUDENT_COURSE_COUNT = {};  // email -> count
+    window.STUDENT_NAME_COUNT = {};    // normalized name -> count
+    window.STUDENT_NAME_TO_EMAILS = {}; // normalized name -> Set of emails (to link them)
     COURSES.forEach(c => {
-        const seenInCourse = new Set();
+        const seenEmailInCourse = new Set();
+        const seenNameInCourse = new Set();
         c.students.forEach(st => {
             if (st.email) {
-                const emailLower = st.email.toLowerCase();
-                if (!seenInCourse.has(emailLower)) {
-                    seenInCourse.add(emailLower);
+                const emailLower = st.email.toLowerCase().trim();
+                if (!seenEmailInCourse.has(emailLower)) {
+                    seenEmailInCourse.add(emailLower);
                     window.STUDENT_COURSE_COUNT[emailLower] = (window.STUDENT_COURSE_COUNT[emailLower] || 0) + 1;
+                }
+            }
+            if (st.name) {
+                const nameKey = st.name.toLowerCase().trim().replace(/\s+/g, ' ');
+                if (!seenNameInCourse.has(nameKey)) {
+                    seenNameInCourse.add(nameKey);
+                    window.STUDENT_NAME_COUNT[nameKey] = (window.STUDENT_NAME_COUNT[nameKey] || 0) + 1;
+                    if (!window.STUDENT_NAME_TO_EMAILS[nameKey]) window.STUDENT_NAME_TO_EMAILS[nameKey] = new Set();
+                    if (st.email) window.STUDENT_NAME_TO_EMAILS[nameKey].add(st.email.toLowerCase().trim());
                 }
             }
         });
@@ -2324,10 +2314,14 @@ function renderCourseDetailPage() {
 
     // Ensure diploma_fee line exists (after ssa_fee, position 3)
     // Only count NEW participants (not repeat students who already have a diploma)
+    // Check by email AND by name (same person may use different emails)
     const diplomaCostPerPerson = isCertificato ? 20 : 10;
     const newStudentsCount = c.students.filter(st => {
-        if (!st.email) return true; // can't verify, count as new
-        return !(window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[st.email.toLowerCase()] > 1);
+        const ek = st.email ? st.email.toLowerCase().trim() : '';
+        const nk = st.name ? st.name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
+        if (ek && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[ek] > 1) return false;
+        if (nk && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nk] > 1) return false;
+        return true;
     }).length;
     const diplomaTotal = newStudentsCount * diplomaCostPerPerson;
     let diplomaFeeIdx = c.costs.lines.findIndex(l => l.key === 'diploma_fee');
@@ -2469,7 +2463,11 @@ function renderCourseDetailPage() {
                     const initials = getInitials(st.name);
                     const isPaid = st.financialStatus === 'paid';
                     const cleanPhone = st.phone ? st.phone.replace(/\D/g, '') : '';
-                    const isRepeat = st.email && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[st.email.toLowerCase()] > 1;
+                    // Check repeat by email OR by name (handles same person with different emails)
+                    const emailKey = st.email ? st.email.toLowerCase().trim() : '';
+                    const nameKey = st.name ? st.name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
+                    const isRepeat = (emailKey && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[emailKey] > 1) ||
+                                     (nameKey && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nameKey] > 1);
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="fab fa-whatsapp" style="font-size: 10px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
