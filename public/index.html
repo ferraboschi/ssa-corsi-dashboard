@@ -521,6 +521,300 @@
         .load-more-btn:hover { background: var(--accent); }
 
         /* ========================================
+           PROGRAMMA & PRODOTTI SECTION
+           ======================================== */
+        .program-section {
+            background: white;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .program-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: #faf8f5;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-light);
+            margin-bottom: 16px;
+        }
+
+        .program-day-header {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 20px 0 12px 0;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .program-day-header:first-child {
+            margin-top: 0;
+            border-top: none;
+            padding-top: 0;
+        }
+
+        .program-group-card {
+            background: #faf8f5;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .program-group-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .program-group-name {
+            flex: 1;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .program-group-day {
+            min-width: 90px;
+        }
+
+        .program-group-day select {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+        }
+
+        .program-group-delete {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: 1px solid var(--danger);
+            background: white;
+            color: var(--danger);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .program-group-delete:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .program-sake {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .program-sake-name {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+
+        .program-sake-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .program-sake-row.inline {
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .program-sake-price {
+            flex: 1;
+        }
+
+        .program-sake-qty {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .program-sake-qty input {
+            width: 50px;
+            padding: 4px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 11px;
+            text-align: center;
+        }
+
+        .program-sake-note {
+            width: 100%;
+            padding: 4px 6px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: inherit;
+        }
+
+        .program-sake-note::placeholder {
+            color: var(--border);
+        }
+
+        .program-sake-delete {
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            border: 1px solid var(--danger);
+            background: white;
+            color: var(--danger);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .program-sake-delete:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .program-sake-search {
+            position: relative;
+        }
+
+        .program-sake-search-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        .program-sake-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid var(--border);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .program-sake-dropdown-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.1s;
+        }
+
+        .program-sake-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .program-sake-dropdown-item:hover {
+            background: #faf8f5;
+        }
+
+        .program-sake-dropdown-item strong {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .program-sake-dropdown-item small {
+            color: var(--text-light);
+            display: block;
+        }
+
+        .program-group-buttons {
+            display: flex;
+            gap: 8px;
+            padding-top: 8px;
+        }
+
+        .program-add-sake-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--accent);
+            background: white;
+            color: var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .program-add-sake-btn:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .program-group-subtotal {
+            text-align: right;
+            font-weight: 600;
+            color: var(--accent);
+            font-size: 12px;
+            padding: 8px 0;
+        }
+
+        .program-add-group-btn {
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed var(--accent);
+            background: white;
+            color: var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+            margin-top: 12px;
+        }
+
+        .program-add-group-btn:hover {
+            background: #faf8f5;
+        }
+
+        .program-total {
+            border-top: 2px solid var(--border);
+            padding-top: 12px;
+            margin-top: 16px;
+            text-align: right;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        /* ========================================
            RESPONSIVE
            ======================================== */
         @media (max-width: 768px) {
@@ -793,6 +1087,13 @@ const CONFIG = {
         'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': { start: '2026-04-20', end: '2026-04-22', display: '20-22 Apr 2026' },
         'corso-di-sake-sommelier-certificato-maggio-2026-milano': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' },
         'corso-di-sake-sommelier-certificato-maggio-2025-roma': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' }
+    },
+
+    COURSE_TEMPLATES: {
+        certificato: { days: 3, defaultGroups: ['Assaggi', 'Temperature, Food Pairing e Finiture', 'Shochu e Cocktail'] },
+        introduttivo: { days: 1, defaultGroups: ['Assaggi e Introduzione'] },
+        shochu: { days: 2, defaultGroups: ['Assaggi', 'Food Pairing'] },
+        masterclass: { days: 1, defaultGroups: ['Masterclass'] }
     }
 };
 
@@ -1234,6 +1535,7 @@ async function loadApiData() {
                         type: record.fields?.['Tipologia'] || record.fields?.['Type'] || record.fields?.['Sake Type'] || '',
                         sakagura: record.fields?.['Sakagura'] || record.fields?.['Producer'] || '',
                         size: record.fields?.['Formato'] || record.fields?.['Size'] || record.fields?.['ML'] || '',
+                        price: parseFloat(record.fields?.['SC Network price from ITA stock']) || 0,
                         fields: record.fields
                     }));
                     setCache('sake', SAKE_CATALOG);
@@ -1484,6 +1786,16 @@ function renderCourseDetailPage() {
             </button>
         </div>
 
+        <div class="section-title"><i class="fas fa-clipboard-list"></i> Programma &amp; Prodotti</div>
+        <div class="program-section" id="programSection">
+            <div class="program-hint">
+                <i class="fas fa-info-circle"></i> Stima: 1 bottiglia ogni 15 partecipanti
+            </div>
+            <div id="programContainer"></div>
+            <button class="program-add-group-btn" onclick="addProgramGroup()"><i class="fas fa-plus"></i> Nuovo Gruppo</button>
+            <div class="program-total" id="programTotal">Totale Sake Programma: €0.00</div>
+        </div>
+
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg); border-radius: 8px; margin-bottom: 24px; font-size: 13px;">
             <span style="color: var(--text-light);">Totale costi: <strong id="costiSummaryTotal" style="color: var(--text);">${formatCurrency(s.costs)}</strong></span>
             <span style="color: var(--text-light);">Break-even: <strong style="color: var(--text);">${c.price > 0 ? Math.ceil(s.costs / c.price) : '\u2014'} iscritti</strong></span>
@@ -1543,6 +1855,9 @@ function renderCourseDetailPage() {
             input.addEventListener('input', updateCostsSummary);
         }
     });
+
+    // Initialize and render program section
+    initializeProgram();
 }
 
 function updateCostsSummary() {
@@ -1582,29 +1897,366 @@ async function saveCourseDetail(courseId) {
         adv: parseFloat(document.getElementById('cost-adv').value) || 0
     };
 
+    // Collect program data from UI
+    const program = collectProgramData();
+
+    const payload = {
+        ...newCosts,
+        program: program
+    };
+
     try {
         const response = await fetch(`/api/costs/${c.handle}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newCosts)
+            body: JSON.stringify(payload)
         });
 
         if (response.ok) {
             // Update local cache
-            COURSE_COSTS[c.handle] = newCosts;
+            COURSE_COSTS[c.handle] = payload;
 
             // Update course object
             c.costs = newCosts;
             c.totalCosts = getTotalCosts(newCosts);
             c.sustainability = computeSustainability(c);
 
-            showToast('Costi salvati con successo');
+            showToast('Costi e programma salvati con successo');
         } else {
             showError('Errore nel salvataggio dei costi');
         }
     } catch (e) {
         console.error('Save costs error:', e);
         showError('Errore di connessione');
+    }
+}
+
+function initializeProgram() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    // Initialize program if it doesn't exist
+    if (!COURSE_COSTS[c.handle]) {
+        COURSE_COSTS[c.handle] = {};
+    }
+
+    if (!COURSE_COSTS[c.handle].program) {
+        const typeKey = c.courseType.type.split('-')[0]; // e.g., "certificato" from "certificato-presenza"
+        const template = CONFIG.COURSE_TEMPLATES[typeKey] || CONFIG.COURSE_TEMPLATES.certificato;
+
+        COURSE_COSTS[c.handle].program = template.defaultGroups.map((groupName, idx) => ({
+            name: groupName,
+            day: 1,
+            sakes: []
+        }));
+    }
+
+    renderProgram();
+}
+
+function renderProgram() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const typeKey = c.courseType.type.split('-')[0];
+    const template = CONFIG.COURSE_TEMPLATES[typeKey] || CONFIG.COURSE_TEMPLATES.certificato;
+    const maxDays = template.days;
+
+    // Group by day
+    const groupsByDay = {};
+    for (let d = 1; d <= maxDays; d++) {
+        groupsByDay[d] = program.filter(g => g.day === d);
+    }
+
+    let html = '';
+    for (let day = 1; day <= maxDays; day++) {
+        const groups = groupsByDay[day] || [];
+        if (groups.length > 0) {
+            html += `<div class="program-day-header">Giorno ${day}</div>`;
+            html += groups.map((group, idx) => renderProgramGroup(group, day, maxDays, program.indexOf(group))).join('');
+        }
+    }
+
+    document.getElementById('programContainer').innerHTML = html;
+    updateProgramTotal();
+
+    // Attach event listeners
+    program.forEach((group, groupIdx) => {
+        const input = document.getElementById(`program-group-name-${groupIdx}`);
+        if (input) {
+            input.addEventListener('change', () => {
+                group.name = input.value;
+                updateProgramUI();
+            });
+        }
+
+        const daySelect = document.getElementById(`program-group-day-${groupIdx}`);
+        if (daySelect) {
+            daySelect.addEventListener('change', () => {
+                group.day = parseInt(daySelect.value);
+                renderProgram();
+            });
+        }
+
+        const deleteBtn = document.getElementById(`program-group-delete-${groupIdx}`);
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', () => deleteProgramGroup(groupIdx));
+        }
+
+        // Sake delete buttons and quantity inputs
+        group.sakes.forEach((sake, sakeIdx) => {
+            const qtyInput = document.getElementById(`program-sake-qty-${groupIdx}-${sakeIdx}`);
+            if (qtyInput) {
+                qtyInput.addEventListener('change', () => {
+                    sake.qty = Math.max(0, parseInt(qtyInput.value) || 1);
+                    updateProgramUI();
+                });
+            }
+
+            const noteInput = document.getElementById(`program-sake-note-${groupIdx}-${sakeIdx}`);
+            if (noteInput) {
+                noteInput.addEventListener('change', () => {
+                    sake.note = noteInput.value;
+                });
+            }
+
+            const deleteBtn = document.getElementById(`program-sake-delete-${groupIdx}-${sakeIdx}`);
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => deleteProgramSake(groupIdx, sakeIdx));
+            }
+        });
+
+        // Add sake button
+        const addSakeBtn = document.getElementById(`program-add-sake-${groupIdx}`);
+        if (addSakeBtn) {
+            addSakeBtn.addEventListener('click', () => showSakeSearch(groupIdx));
+        }
+    });
+}
+
+function renderProgramGroup(group, day, maxDays, groupIdx) {
+    const program = COURSE_COSTS[window.currentCourseId && COURSES.find(x => x.id === window.currentCourseId)?.handle]?.program || [];
+
+    let html = `
+        <div class="program-group-card">
+            <div class="program-group-header">
+                <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Group name">
+                <div class="program-group-day">
+                    <select id="program-group-day-${groupIdx}">
+    `;
+
+    const typeKey = COURSES.find(x => x.id === window.currentCourseId)?.courseType.type.split('-')[0];
+    const template = CONFIG.COURSE_TEMPLATES[typeKey] || CONFIG.COURSE_TEMPLATES.certificato;
+    for (let d = 1; d <= template.days; d++) {
+        html += `<option value="${d}" ${group.day === d ? 'selected' : ''}>Giorno ${d}</option>`;
+    }
+
+    html += `
+                    </select>
+                </div>
+                <button class="program-group-delete" id="program-group-delete-${groupIdx}" title="Delete group"><i class="fas fa-trash"></i></button>
+            </div>
+    `;
+
+    // Sakes
+    group.sakes.forEach((sake, sakeIdx) => {
+        const subtotal = sake.cost * sake.qty;
+        html += `
+            <div class="program-sake">
+                <div class="program-sake-name">🍶 ${sake.name} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</div>
+                <div class="program-sake-row">
+                    <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
+                        <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999">
+                    </span> = ${formatCurrency(subtotal)}</span>
+                    <button class="program-sake-delete" id="program-sake-delete-${groupIdx}-${sakeIdx}" title="Remove sake"><i class="fas fa-times"></i></button>
+                </div>
+                <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}">
+            </div>
+        `;
+    });
+
+    const subtotal = group.sakes.reduce((sum, sake) => sum + (sake.cost * sake.qty), 0);
+    html += `
+            <div class="program-group-buttons">
+                <button class="program-add-sake-btn" id="program-add-sake-${groupIdx}"><i class="fas fa-plus"></i> Aggiungi Sake</button>
+            </div>
+            <div class="program-group-subtotal">Subtotale: ${formatCurrency(subtotal)}</div>
+        </div>
+    `;
+
+    return html;
+}
+
+function showSakeSearch(groupIdx) {
+    const program = COURSE_COSTS[COURSES.find(x => x.id === window.currentCourseId)?.handle]?.program || [];
+    const group = program[groupIdx];
+    if (!group) return;
+
+    // Show search input
+    const container = document.getElementById('programContainer');
+    const existingSearch = container.querySelector('.program-sake-search');
+    if (existingSearch) existingSearch.remove();
+
+    const searchDiv = document.createElement('div');
+    searchDiv.className = 'program-sake-search';
+    searchDiv.style.marginBottom = '12px';
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'program-sake-search-input';
+    input.placeholder = 'Cerca sake (min 2 caratteri)...';
+
+    let debounceTimer;
+    input.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        if (e.target.value.length < 2) {
+            searchDiv.querySelector('.program-sake-dropdown')?.remove();
+            return;
+        }
+        debounceTimer = setTimeout(() => {
+            showSakeDropdown(searchDiv, e.target.value, groupIdx);
+        }, 300);
+    });
+
+    searchDiv.appendChild(input);
+    container.insertBefore(searchDiv, container.firstChild);
+    input.focus();
+
+    window.currentSakeSearchGroupIdx = groupIdx;
+}
+
+function showSakeDropdown(searchDiv, query, groupIdx) {
+    // Remove existing dropdown
+    searchDiv.querySelector('.program-sake-dropdown')?.remove();
+
+    const filtered = SAKE_CATALOG.filter(sake => {
+        const q = query.toLowerCase();
+        return sake.name.toLowerCase().includes(q) ||
+               sake.code.toLowerCase().includes(q) ||
+               sake.sakagura.toLowerCase().includes(q) ||
+               sake.type.toLowerCase().includes(q);
+    }).slice(0, 8);
+
+    if (filtered.length === 0) return;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'program-sake-dropdown';
+
+    filtered.forEach(sake => {
+        const item = document.createElement('div');
+        item.className = 'program-sake-dropdown-item';
+        item.innerHTML = `
+            <strong>${sake.name}</strong>
+            <small>${sake.type} · ${sake.sakagura} · ${sake.size}ml · ${formatCurrency(sake.price)}</small>
+        `;
+        item.addEventListener('click', () => {
+            addSakeToProgramGroup(groupIdx, sake);
+            searchDiv.remove();
+        });
+        dropdown.appendChild(item);
+    });
+
+    searchDiv.appendChild(dropdown);
+}
+
+function addSakeToProgramGroup(groupIdx, sake) {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const group = program[groupIdx];
+    if (!group) return;
+
+    group.sakes.push({
+        id: sake.id,
+        code: sake.code,
+        name: sake.name,
+        type: sake.type,
+        sakagura: sake.sakagura,
+        size: sake.size,
+        cost: sake.price,
+        qty: 1,
+        note: ''
+    });
+
+    renderProgram();
+}
+
+function deleteProgramSake(groupIdx, sakeIdx) {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const group = program[groupIdx];
+    if (!group) return;
+
+    group.sakes.splice(sakeIdx, 1);
+    renderProgram();
+}
+
+function deleteProgramGroup(groupIdx) {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    program.splice(groupIdx, 1);
+    renderProgram();
+}
+
+function addProgramGroup() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    program.push({
+        name: `Nuovo Gruppo ${program.length + 1}`,
+        day: 1,
+        sakes: []
+    });
+
+    renderProgram();
+}
+
+function collectProgramData() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return [];
+
+    return COURSE_COSTS[c.handle]?.program || [];
+}
+
+function updateProgramUI() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    renderProgram();
+}
+
+function updateProgramTotal() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const total = program.reduce((sum, group) => {
+        return sum + group.sakes.reduce((groupSum, sake) => groupSum + (sake.cost * sake.qty), 0);
+    }, 0);
+
+    document.getElementById('programTotal').textContent = `Totale Sake Programma: ${formatCurrency(total)}`;
+
+    // Update the sake cost input
+    const sakeInput = document.getElementById('cost-sake');
+    if (sakeInput) {
+        sakeInput.value = total;
+        sakeInput.dispatchEvent(new Event('input'));
     }
 }
 

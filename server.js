@@ -420,7 +420,7 @@ app.get('/api/costs/:courseId', (req, res) => {
 
 app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
-  const { location, educator, food, sake, adv } = req.body;
+  const { location, educator, food, sake, adv, program } = req.body;
   courseCosts[courseId] = {
     location: parseFloat(location) || 0,
     educator: parseFloat(educator) || 0,
@@ -428,6 +428,10 @@ app.post('/api/costs/:courseId', (req, res) => {
     sake: parseFloat(sake) || 0,
     adv: parseFloat(adv) || 0
   };
+  // Save program (groups with sakes) if provided
+  if (program !== undefined) {
+    courseCosts[courseId].program = program;
+  }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
 });
