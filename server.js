@@ -347,6 +347,18 @@ app.get('/api/courses', async (req, res) => {
             phone = order.customer.default_address.phone;
           }
 
+          // Extract discount reason from order's discount_applications
+          let discountCode = '';
+          if (item.discount_allocations && item.discount_allocations.length > 0) {
+            const discApps = order.discount_applications || [];
+            const reasons = item.discount_allocations.map(da => {
+              const app = discApps[da.discount_application_index];
+              if (app) return app.title || app.description || app.code || '';
+              return '';
+            }).filter(Boolean);
+            discountCode = [...new Set(reasons)].join(', ');
+          }
+
           course.students.push({
             name: customerName,
             email: order.customer?.email || '',
@@ -356,6 +368,8 @@ app.get('/api/courses', async (req, res) => {
             orderDate: order.created_at,
             financialStatus: order.financial_status,
             amount: actualAmount,
+            grossAmount: parseFloat(item.price || 0) * item.quantity,
+            discountCode: discountCode,
             variantTitle: item.variant_title || ''
           });
         }
