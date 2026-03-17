@@ -772,13 +772,45 @@
             color: var(--border);
         }
 
+        .program-sake-actions {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+        }
+
+        .program-sake:hover .program-sake-actions {
+            opacity: 1;
+        }
+
+        .program-sake-move {
+            height: 22px;
+            padding: 0 6px;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-light);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .program-sake-move:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
         .program-sake-delete {
             width: 22px;
             height: 22px;
             padding: 0;
-            border: none;
-            background: transparent;
-            color: var(--border);
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-light);
             border-radius: 4px;
             cursor: pointer;
             font-size: 11px;
@@ -787,16 +819,12 @@
             justify-content: center;
             transition: all 0.2s;
             flex-shrink: 0;
-            opacity: 0;
-        }
-
-        .program-sake:hover .program-sake-delete {
-            opacity: 1;
         }
 
         .program-sake-delete:hover {
             background: var(--danger);
             color: white;
+            border-color: var(--danger);
         }
 
         .program-empty-placeholder {
@@ -2249,7 +2277,12 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
                     <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
                         <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999" onchange="updateSakeQty(${groupIdx}, ${sakeIdx}, this.value)">
                     </span> = ${formatCurrency(subtotal)}</span>
-                    <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Rimuovi"><i class="fas fa-times"></i></button>
+                    <div class="program-sake-actions">
+                        ${Array.from({length: maxDays}, (_, i) => i + 1).filter(d => d !== day).map(d =>
+                            `<button class="program-sake-move" onclick="moveSakeTo(${groupIdx}, ${sakeIdx}, ${d})" title="Sposta a Giorno ${d}">G${d}</button>`
+                        ).join('')}
+                        <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Cestina"><i class="fas fa-trash"></i></button>
+                    </div>
                 </div>
                 <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}" onchange="updateSakeNote(${groupIdx}, ${sakeIdx}, this.value)">
             </div>
@@ -2389,6 +2422,30 @@ function deleteProgramSake(groupIdx, sakeIdx) {
     if (!group) return;
 
     group.sakes.splice(sakeIdx, 1);
+    renderProgram();
+}
+
+function moveSakeTo(groupIdx, sakeIdx, targetDay) {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const sourceGroup = program[groupIdx];
+    if (!sourceGroup?.sakes[sakeIdx]) return;
+
+    // Remove sake from source group
+    const sake = sourceGroup.sakes.splice(sakeIdx, 1)[0];
+
+    // Find first group in target day, or create one
+    let targetGroup = program.find(g => g.day === targetDay);
+    if (!targetGroup) {
+        targetGroup = { name: 'Assaggi', day: targetDay, sakes: [] };
+        program.push(targetGroup);
+    }
+
+    // Add sake to target group
+    targetGroup.sakes.push(sake);
     renderProgram();
 }
 
