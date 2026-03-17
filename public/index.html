@@ -631,6 +631,17 @@
             font-weight: 600;
             margin-bottom: 6px;
             color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .program-sake-img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            border-radius: 4px;
+            flex-shrink: 0;
         }
 
         .program-sake-row {
@@ -733,6 +744,24 @@
             cursor: pointer;
             font-size: 12px;
             transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sake-dropdown-img {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .sake-dropdown-icon {
+            width: 36px;
+            text-align: center;
+            flex-shrink: 0;
+            font-size: 20px;
         }
 
         .program-sake-dropdown-item:last-child {
@@ -862,7 +891,6 @@
             <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
             <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
             <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
-            <button data-page="sake"><i class="fas fa-wine-glass-alt"></i> Sake</button>
         </nav>
         <div class="header-actions">
             <span class="integration-badge shopify"><i class="fab fa-shopify"></i> Shopify</span>
@@ -887,7 +915,7 @@
     <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
     <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
     <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
-    <button data-page="sake"><i class="fas fa-wine-glass-alt"></i> Sake</button>
+
 </div>
 
 <!-- Toast -->
@@ -1005,23 +1033,6 @@
         <div class="educator-grid" id="educatorGrid"></div>
     </div>
 
-    <!-- SAKE PAGE -->
-    <div id="page-sake" class="page-hidden">
-        <div class="card">
-            <div class="card-header">
-                <h2><i class="fas fa-wine-glass-alt"></i> Catalogo Sake &mdash; API Airtable</h2>
-                <span class="integration-badge airtable"><i class="fas fa-table"></i> Live da Airtable</span>
-            </div>
-            <div class="card-body">
-                <div class="filter-bar" style="margin-bottom: 16px;">
-                    <input type="text" id="sakeSearch" placeholder="Cerca sake..." aria-label="Cerca sake">
-                </div>
-                <div class="sake-grid" id="sakeGrid"></div>
-                <button class="load-more-btn" id="sakeLoadMore" style="display:none;">Carica altri sake...</button>
-            </div>
-        </div>
-    </div>
-
     <!-- COURSE DETAIL PAGE -->
     <div id="page-course-detail" class="page-hidden">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
@@ -1098,13 +1109,18 @@ const CONFIG = {
 };
 
 // =============================================
+// B2B PRICING (from Dropbox Excel - Column W "B2B Price no VAT")
+// Updated: 2025-11-11
+// =============================================
+const B2B_PRICES = {"C010-0720":24.92,"C025-0720":20.98,"C026-0720":18.36,"C027-0720":20.98,"D001-0720":23.5,"D002-0720":23.5,"D003-0720":23.5,"D004-0700":60.0,"D008-0720":24.0,"D009-0720":24.5,"D013-0720":23.5,"D014-0720":24.5,"D015-0720":56.0,"D016-0720":27.5,"D017-0720":23.0,"D023-0720":21.5,"GS01-0700":31.48,"GS02-0700":66.23,"GS03-0700":32.13,"HS1005E":74.9,"HS1001E":38.8,"HS1002E":26.9,"HS1003E":13.9,"HS1004E":54.43,"RS01-0375":10.9,"RS01-0750":18.9,"RS02-0375":8.5,"RS02-0700":67.54,"RS02-0750":14.9,"RS03-0375":8.9,"RS03-0750":14.8,"RS04-0375":10.9,"RS04-0750":18.9,"RS05-0750":18.36,"RS06-0750":24.0,"RS07-0375":8.0,"RS08-0350":8.0,"RS09-0375":9.8,"RS09-0750":16.5,"S002-0300":8.85,"S003-0300":8.2,"S005-0300":6.56,"S005-1800":34.75,"S006-0300":7.87,"S006-0500":11.8,"S006-1800":36.72,"S009-0300":6.56,"S011-0300":6.56,"S011-1800":32.13,"S012-0300":7.54,"S012-0720":18.36,"S012-1800":36.75,"S013-0300":7.6,"S013-1800":38.03,"S014-0300":9.18,"S014-0720":19.67,"S014-1800":39.34,"S017-0720":19.67,"S017-1800":29.5,"S018-0220":9.84,"S018-0720":25.57,"S019-0220":9.84,"S019-0720":25.57,"S023-0720":15.4,"S023-1800":31.9,"S024-0300":6.4,"S024-0720":14.43,"S024-1800":32.4,"S033-0500":24.92,"S034-0720":21.64,"S035-0500":18.36,"S036-0720":32.13,"S037-0720":25.57,"S038-0720":25.57,"S039-0720":25.57,"S040-0720":25.57,"S041-0720":19.02,"S042-0720":21.64,"S047-0300":6.56,"S047-1800":31.48,"S048-0300":9.84,"S048-1800":43.28,"S050-0300":8.52,"S052-0300":6.89,"S052-1800":34.1,"S054-0720":47.21,"S056-0720":44.59,"S056-1800":76.7,"S057-0720":40.0,"S060-0720":20.33,"S063-0720":21.64,"S064-0720":23.61,"S068-0720":38.69,"S068-1800":73.44,"S069-0720":24.92,"S069-1800":38.69,"S072-0720":49.18,"S073-0500":14.4,"S075-0720":14.43,"S075-1800":32.79,"S082-0300":5.9,"S082-0720":11.8,"S082-1800":27.54,"S083-0300":6.56,"S083-1800":27.5,"S084-0720":17.7,"S085-0720":19.67,"S086-0300":11.8,"S088-0180":4.59,"S088-0720":17.05,"S088-1800":34.1,"S089-0720":24.26,"S090-0720":18.9,"S091-0720":17.35,"S091-1800":30.82,"S092-0720":19.67,"S093-0720":15.8,"S093-1800":33.8,"S097-0720":25.57,"S098-0180":18.36,"S101-0720":15.8,"S101-1800":32.6,"S104-0720":17.7,"S106-0720":22.95,"S107-0720":22.3,"S108-0300":9.84,"S108-0720":22.3,"S110-0720":24.26,"S114-0720":41.3,"S115-0720":15.8,"S116-0720":20.33,"S117-0500":21.64,"S119-0720":15.74,"S120-0720":19.02,"S121-0720":23.61,"S122-0095":3.93,"S123-0720":39.34,"S124-0720":20.33,"S126-0300":9.8,"S126-0720":21.6,"S126-1800":56.9,"S127-0720":70.16,"S128-0720":13.11,"S129-0300":6.56,"S131-0720":29.51,"S132-0720":24.26,"S133-0720":20.98,"S134-0720":14.43,"S135-0180":4.83,"S135-0900":18.9,"S136-0720":18.36,"S136-1800":29.51,"S137-0720":32.79,"S155-0720":14.9,"S157-0700":29.51,"S158-0720":17.05,"S159-0720":11.8,"S161-0720":13.77,"S162-0720":15.74,"S163-0900":17.3,"S164-0720":52.46,"S165-0720":16.39,"S166-0180":4.1,"S167-0720":21.64,"S168-0720":19.67,"S169-0720":14.42,"S170-0720":11.61,"S171-0300":8.8,"S171-0720":8.8,"S172-0360":11.67,"S173-0720":15.74,"S174-0720":11.38,"S175-0720":20.6,"S176-0720":17.05,"S177-0720":27.54,"S178-0720":29.51,"S179-0720":21.64,"S180-0720":21.64,"S181-0720":19.67,"S182-0720":15.8,"S183-0180":4.13,"S184-0720":31.48,"S185-0720":34.75,"S186-0720":17.9,"S187-0720":19.02,"S188-0720":17.8,"S189-0500":15.74,"S190-0500":18.05,"S191-0500":18.05,"S192-0720":38.03,"S193-0500":13.2,"S194-0720":19.02,"S194-1800":39.69,"S195-0300":8.52,"S196-0720":39.34,"S197-0720":43.28,"S198-0750":39.9,"S199-0720":24.59,"S200-0300":15.74,"S200-0720":30.82,"S201-0300":28.2,"S202-0720":25.57,"S203-0720":20.33,"S204-0180":3.99,"S205-0180":4.49,"S206-0180":3.99,"S207-0720":22.3,"S209-0720":41.31,"S210-0720":31.3,"S211-0720":22.95,"S212-0720":23.61,"S213-0720":30.82,"S214-0720":21.64,"S215-0720":19.67,"S216-0720":20.98,"S217-0720":17.9,"S219-0720":18.36,"S220-0180":3.99,"S221-0180":4.69,"S222-0180":3.99,"S223-0180":3.99,"S224-0130":3.99,"S225-0130":5.39,"S226-0180":3.99,"S227-0180":6.39,"S228-0180":4.49,"SK01-0500":32.79,"SK02-0500":24.92,"SK04-0040":4.59,"SK05-0020":7.21,"WS01-0700":34.75,"WS02-0720":53.11,"S229-0720":26.23,"S230-0720":19.67,"WS03-0700":179.0,"S231-0720":66.89,"S232-0300":8.45,"S233-0720":22.95,"S234-0720":17.05,"S235-0720":24.92,"S236-0720":22.95,"S237-0720":22.95,"S238-0720":20.98,"S239-0720":19.8,"S240-0180":3.99,"S241-0180":3.99,"S242-0720":13.77,"S243-0720":19.02,"S244-0500":16.39,"S245-0720":22.3,"WS04-0700":181.64,"S246-0720":49.89,"S247-0720":31.0,"S248-0720":23.0,"S249-0720":18.6,"S250-0720":19.67,"S251-0720":17.05,"S252-0720":17.7,"S253-0720":22.95,"S254-0720":18.36,"WS05-0700":47.21,"WS06-0700":55.74,"VS01-0700":29.51,"S255-0720":20.33,"S256-0720":19.02,"S257-0720":1385.0,"S258-0720":168.35,"S259-0720":48.52,"SR01-0500":32.1,"SH01-0900":19.67,"SH02-0720":36.07,"SH03-0720":20.98,"SH04-0720":20.98,"GS04-0700":49.18,"GS05-0700":49.18,"SH05-0720":19.02,"SH06-0720":19.02,"S260-0200":4.19,"AW01-0720":26.23,"C028-0750":36.07,"S261-0300":8.85,"S261-0720":17.7,"S262-0300":7.87,"S262-0720":16.39,"S263-0300":8.85,"S263-0720":16.39,"S264-0720":278.0,"S265-0720":19.7,"WS07-0700":49.9,"S266-0720":99.8,"S267-0720":15.74,"S268-0720":19.8,"WS08-0700":152.79,"WS09-0700":179.14,"S269-0300":6.56,"S270-0300":7.54,"S270-0720":14.89,"S270-1800":29.81,"S271-0720":17.7,"S272-0300":12.3,"S272-0720":24.92,"S272-1800":45.25,"SG003-0720":19.67,"SG004-0720":16.39,"SG005-0720":15.08,"SG006-0720":17.05,"SG007-0720":15.74,"GS07-0700":37.9,"GS08-0700":37.9,"GS09-0700":37.9,"S273-0720":27.5,"S274-0720":21.64,"S275-0720":25.57,"S276-0700":44.9,"WS10-0700":40.9,"S277-0720":19.4,"S278-0720":349.5,"S279-0720":15.9,"S281-0300":8.5,"S281-0720":17.7,"GS06-0700":29.9,"C034-0720":29.8,"S283-0720":392.0,"S284-0720":48.52,"S286-0720":22.4,"S289-0750":78.0,"S290-0720":25.57,"S291-0720":22.3,"S292-0720":18.36,"S293-0500":21.64,"S294-0720":21.5,"WS11-0700":169.0,"C030-0720":22.95,"C031-0500":22.3,"C032-0720":18.36,"C033-0720":20.98,"S282-0720":23.9,"S287-0720":29.51,"S288-0720":22.95,"SM01-0720":14.43,"SM02-0720":14.43,"SM03-0720":13.77,"SM04-0720":22.3,"SM05-0720":22.3,"KH001-720":13.77,"S295-0720":18.4,"S297-0720":29.51,"S300-1800":40.0,"S301-0720":17.7,"S302-0720":21.64,"S303-0720":21.64,"S304-0720":22.3,"S305-0720":20.33,"S306-0720":22.95,"S307-0720":27.54,"S308-0720":26.23,"S309-0300":8.52,"S309-0720":14.43,"S309-1800":28.85,"S310-1800":26.2,"S311-0720":15.1,"WS12-0200":43.28,"RS10-0750":21.6,"RS11-0750":20.4,"W001-0750":26.6,"W002-0750":27.8,"W003-0750":31.9,"W004-0750":28.2,"W005-0750":23.8,"W006-0750":23.8,"HS1006E":850.0,"WS13-0700":16.39,"WS14-0700":21.64,"B001-0330":2.99,"B002-0330":3.09,"B003-0330":3.49,"B004-0330":3.59,"B011-0330":2.89,"B013-0330":2.89,"B014-0330":2.25,"B015-0330":2.4,"B016-0330":2.4,"B017-0330":2.4,"K001-0330":2.7,"K002-0330":2.9,"RSP2-0750":29.5};
+
+// =============================================
 // GLOBAL STATE
 // =============================================
 let COURSES = [];
 let EDUCATORS = [];
 let SAKE_CATALOG = [];
 let COURSE_COSTS = {}; // Store costs per course handle
-let sakeDisplayCount = CONFIG.SAKE_PAGE_SIZE;
 let apiStatus = { shopify: false, airtable: false, courses: false };
 let currentPage = 'dashboard';
 let previousPage = 'dashboard'; // Track previous page for course detail navigation
@@ -1528,16 +1544,23 @@ async function loadApiData() {
                 const airtableData = await airtableResp.json();
                 if (airtableData.success && Array.isArray(airtableData.data)) {
                     apiStatus.airtable = true;
-                    SAKE_CATALOG = airtableData.data.map(record => ({
-                        id: record.id,
-                        code: record.fields?.['Codice Prodotto'] || record.fields?.['Code'] || record.id,
-                        name: record.fields?.['Nome Prodotto'] || record.fields?.['Name'] || record.fields?.['Sake Name'] || 'Sake',
-                        type: record.fields?.['Tipologia'] || record.fields?.['Type'] || record.fields?.['Sake Type'] || '',
-                        sakagura: record.fields?.['Sakagura'] || record.fields?.['Producer'] || '',
-                        size: record.fields?.['Formato'] || record.fields?.['Size'] || record.fields?.['ML'] || '',
-                        price: parseFloat(record.fields?.['SC Network price from ITA stock']) || 0,
-                        fields: record.fields
-                    }));
+                    SAKE_CATALOG = airtableData.data.map(record => {
+                        const code = record.fields?.['Codice Prodotto'] || record.fields?.['Code'] || record.id;
+                        const airtablePrice = parseFloat(record.fields?.['SC Network price from ITA stock']) || 0;
+                        const b2bPrice = B2B_PRICES[code] || 0;
+                        return {
+                            id: record.id,
+                            code,
+                            name: record.fields?.['Nome Prodotto'] || record.fields?.['Name'] || record.fields?.['Sake Name'] || 'Sake',
+                            type: record.fields?.['Tipologia'] || record.fields?.['Type'] || record.fields?.['Sake Type'] || '',
+                            sakagura: record.fields?.['Sakagura'] || record.fields?.['Producer'] || '',
+                            size: record.fields?.['Formato'] || record.fields?.['Size'] || record.fields?.['ML'] || '',
+                            price: b2bPrice || airtablePrice, // B2B price preferred, Airtable as fallback
+                            b2bPrice,
+                            airtablePrice,
+                            fields: record.fields
+                        };
+                    });
                     setCache('sake', SAKE_CATALOG);
                 }
             } else {
@@ -1547,6 +1570,26 @@ async function loadApiData() {
     } catch (e) {
         console.error('Airtable connection failed:', e);
         // Not fatal — just show sake as unavailable
+    }
+
+    // Load Sake Company product images (match by SKU/code)
+    try {
+        const scResp = await fetch('/api/sakecompany/products');
+        if (scResp.ok) {
+            const scData = await scResp.json();
+            if (scData.success && scData.skuImageMap) {
+                const imgMap = scData.skuImageMap;
+                SAKE_CATALOG.forEach(sake => {
+                    if (imgMap[sake.code]) {
+                        sake.image = imgMap[sake.code];
+                    }
+                });
+                console.log(`Sake Company images: matched ${SAKE_CATALOG.filter(s => s.image).length}/${SAKE_CATALOG.length} products`);
+            }
+        }
+    } catch (e) {
+        console.error('Sake Company images failed:', e);
+        // Not fatal — just no images
     }
 
     // Load course costs from API
@@ -1619,7 +1662,6 @@ function renderCurrentPage() {
     else if (currentPage === 'corsi') renderCorsiPage();
     else if (currentPage === 'corsisti') renderCorsistiPage();
     else if (currentPage === 'educator') renderEducatorPage();
-    else if (currentPage === 'sake') renderSakePage();
     else if (currentPage === 'course-detail') renderCourseDetailPage();
 }
 
@@ -2066,7 +2108,7 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
         const subtotal = sake.cost * sake.qty;
         html += `
             <div class="program-sake">
-                <div class="program-sake-name">🍶 ${sake.name} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</div>
+                <div class="program-sake-name">${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : '🍶'} ${sake.name} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</div>
                 <div class="program-sake-row">
                     <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
                         <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999">
@@ -2149,8 +2191,9 @@ function showSakeDropdown(searchDiv, query, groupIdx) {
         const item = document.createElement('div');
         item.className = 'program-sake-dropdown-item';
         item.innerHTML = `
-            <strong>${sake.name}</strong>
-            <small>${sake.type} · ${sake.sakagura} · ${sake.size}ml · ${formatCurrency(sake.price)}</small>
+            ${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="sake-dropdown-img">` : '<span class="sake-dropdown-icon">🍶</span>'}
+            <div><strong>${sake.name}</strong>
+            <small>${sake.type} · ${sake.sakagura} · ${sake.size}ml · ${formatCurrency(sake.price)}</small></div>
         `;
         item.addEventListener('click', () => {
             addSakeToProgramGroup(groupIdx, sake);
@@ -2180,7 +2223,8 @@ function addSakeToProgramGroup(groupIdx, sake) {
         size: sake.size,
         cost: sake.price,
         qty: 1,
-        note: ''
+        note: '',
+        image: sake.image || ''
     });
 
     renderProgram();
@@ -2389,49 +2433,6 @@ function renderEducatorPage() {
 }
 
 // =============================================
-// SAKE PAGE (with load more)
-// =============================================
-
-function renderSakePage() {
-    const search = (document.getElementById('sakeSearch').value || '').toLowerCase();
-
-    const filtered = SAKE_CATALOG.filter(s => {
-        if (!search) return true;
-        return (s.name || '').toLowerCase().includes(search) ||
-               (s.code || '').toLowerCase().includes(search) ||
-               (s.type || '').toLowerCase().includes(search) ||
-               (s.sakagura || '').toLowerCase().includes(search);
-    });
-
-    const grid = document.getElementById('sakeGrid');
-    const loadMoreBtn = document.getElementById('sakeLoadMore');
-
-    if (filtered.length === 0 && !apiStatus.airtable) {
-        grid.innerHTML = '<div class="empty-state"><i class="fas fa-wine-glass-alt"></i><h3>Catalogo non disponibile</h3><p>Connessione Airtable non attiva.</p></div>';
-        loadMoreBtn.style.display = 'none';
-        return;
-    }
-
-    if (filtered.length === 0) {
-        grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun sake trovato</h3></div>';
-        loadMoreBtn.style.display = 'none';
-        return;
-    }
-
-    const visible = filtered.slice(0, sakeDisplayCount);
-    grid.innerHTML = visible.map(sk => `<div class="sake-item">
-        <div class="sake-icon"><i class="fas fa-wine-bottle"></i></div>
-        <div>
-            <div class="sake-name">${sk.name}</div>
-            <div class="sake-type">${sk.type || 'Sake'}${sk.sakagura ? ' &bull; ' + sk.sakagura : ''}</div>
-            <div class="sake-size">${sk.size || ''}</div>
-        </div>
-    </div>`).join('');
-
-    loadMoreBtn.style.display = sakeDisplayCount < filtered.length ? 'block' : 'none';
-}
-
-// =============================================
 // MOBILE NAV
 // =============================================
 
@@ -2478,13 +2479,11 @@ function closeMobileNav() {
     // Debounced search inputs
     const debouncedCorsi = debounce(() => renderCorsiPage(), CONFIG.DEBOUNCE_MS);
     const debouncedCorsisti = debounce(() => renderCorsistiPage(), CONFIG.DEBOUNCE_MS);
-    const debouncedSake = debounce(() => { sakeDisplayCount = CONFIG.SAKE_PAGE_SIZE; renderSakePage(); }, CONFIG.DEBOUNCE_MS);
 
     document.getElementById('corsiSearch').addEventListener('input', debouncedCorsi);
     document.getElementById('corsiFilter').addEventListener('change', debouncedCorsi);
     document.getElementById('corsistiSearch').addEventListener('input', debouncedCorsisti);
     document.getElementById('corsistiCourseFilter').addEventListener('change', debouncedCorsisti);
-    document.getElementById('sakeSearch').addEventListener('input', debouncedSake);
 
     // Corsisti column sorting
     document.querySelectorAll('#corsistiTable th.sortable').forEach(th => {
@@ -2498,12 +2497,6 @@ function closeMobileNav() {
             }
             renderCorsistiPage();
         });
-    });
-
-    // Sake load more
-    document.getElementById('sakeLoadMore').addEventListener('click', () => {
-        sakeDisplayCount += CONFIG.SAKE_PAGE_SIZE;
-        renderSakePage();
     });
 
     // Course card keyboard accessibility

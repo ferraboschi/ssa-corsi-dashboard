@@ -387,26 +387,6 @@ app.get('/api/export/corsisti', async (req, res) => {
 });
 
 // ============================================================================
-// STATIC FILES & FALLBACK
-// ============================================================================
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
-    if (err) { res.status(404).json({ success: false, error: 'Not found' }); }
-  });
-});
-
-// ============================================================================
-// ERROR HANDLING
-// ============================================================================
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({
-    success: false, error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
-  });
-});
-
-// ============================================================================
 // COURSE COSTS API
 // ============================================================================
 app.get('/api/costs', (req, res) => {
@@ -434,6 +414,138 @@ app.post('/api/costs/:courseId', (req, res) => {
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
+});
+
+// ============================================================================
+// SAKE COMPANY SHOPIFY (Storefront API - product images)
+// ============================================================================
+const SAKE_COMPANY_STORE = process.env.SAKE_COMPANY_STORE || 'sake-company.myshopify.com';
+const SAKE_COMPANY_STOREFRONT_TOKEN = process.env.SAKE_COMPANY_STOREFRONT_TOKEN || '0ce8a134410b855b96fd6367301785cb';
+
+async function fetchSakeCompanyProducts() {
+  const cacheKey = 'sake_company_products';
+  let cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  const allProducts = [];
+  let hasNextPage = true;
+  let cursor = null;
+
+  while (hasNextPage) {
+    const query = `{
+      products(first: 250${cursor ? `, after: "${cursor}"` : ''}) {
+        edges {
+          node {
+            id
+            title
+            handle
+            variants(first: 10) {
+              edges {
+                node {
+                  sku
+                  title
+                }
+              }
+            }
+            images(first: 3) {
+              edges {
+                node {
+                  url
+                  altText
+                }
+              }
+            }
+          }
+          cursor
+        }
+        pageInfo {
+          hasNextPage
+        }
+      }
+    }`;
+
+    const url = `https://${SAKE_COMPANY_STORE}/api/2024-01/graphql.json`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Storefront-Access-Token': SAKE_COMPANY_STOREFRONT_TOKEN,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ query })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Sake Company Storefront API Error (${response.status}): ${error}`);
+    }
+
+    const data = await response.json();
+    const edges = data?.data?.products?.edges || [];
+    edges.forEach(edge => {
+      const node = edge.node;
+      const skus = (node.variants?.edges || []).map(v => v.node.sku).filter(Boolean);
+      const images = (node.images?.edges || []).map(img => img.node.url);
+      allProducts.push({
+        id: node.id,
+        title: node.title,
+        handle: node.handle,
+        skus,
+        image: images[0] || null,
+        images
+      });
+    });
+
+    hasNextPage = data?.data?.products?.pageInfo?.hasNextPage || false;
+    if (edges.length > 0) {
+      cursor = edges[edges.length - 1].cursor;
+    } else {
+      hasNextPage = false;
+    }
+  }
+
+  // Build SKU-to-image lookup map
+  const skuImageMap = {};
+  allProducts.forEach(p => {
+    if (p.image) {
+      p.skus.forEach(sku => {
+        if (!skuImageMap[sku]) skuImageMap[sku] = p.image;
+      });
+    }
+  });
+
+  const result = { products: allProducts, skuImageMap };
+  setCache(cacheKey, result, 600); // 10 min cache
+  return result;
+}
+
+app.get('/api/sakecompany/products', async (req, res) => {
+  try {
+    const data = await fetchSakeCompanyProducts();
+    res.json({ success: true, count: data.products.length, data: data.products, skuImageMap: data.skuImageMap });
+  } catch (error) {
+    console.error('Sake Company API error:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// STATIC FILES & FALLBACK (must be LAST)
+// ============================================================================
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
+    if (err) { res.status(404).json({ success: false, error: 'Not found' }); }
+  });
+});
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    success: false, error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
 });
 
 // ============================================================================
