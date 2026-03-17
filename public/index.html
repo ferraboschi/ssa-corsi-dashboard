@@ -542,21 +542,65 @@
             margin-bottom: 16px;
         }
 
-        .program-day-header {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-light);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin: 20px 0 12px 0;
-            padding-top: 12px;
-            border-top: 1px solid var(--border);
+        .program-day-section {
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
         }
 
-        .program-day-header:first-child {
-            margin-top: 0;
-            border-top: none;
-            padding-top: 0;
+        .program-day-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f0ebe4 0%, #e8e0d6 100%);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            transition: background 0.2s;
+        }
+
+        .program-day-header:hover {
+            background: linear-gradient(135deg, #e8e0d6 0%, #dfd6ca 100%);
+        }
+
+        .program-day-header .day-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .program-day-header .day-toggle {
+            font-size: 11px;
+            color: var(--text-light);
+            transition: transform 0.2s;
+        }
+
+        .program-day-header .day-toggle.collapsed {
+            transform: rotate(-90deg);
+        }
+
+        .program-day-header .day-sake-count {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-light);
+            background: rgba(0,0,0,0.06);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .program-day-content {
+            padding: 14px;
+        }
+
+        .program-day-content.collapsed {
+            display: none;
         }
 
         .program-group-card {
@@ -598,19 +642,24 @@
         }
 
         .program-group-delete {
-            width: 32px;
-            height: 32px;
+            width: 28px;
+            height: 28px;
             padding: 0;
-            border: 1px solid var(--danger);
-            background: white;
-            color: var(--danger);
+            border: none;
+            background: transparent;
+            color: var(--border);
             border-radius: 6px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
+            opacity: 0;
+        }
+
+        .program-group-header:hover .program-group-delete {
+            opacity: 1;
         }
 
         .program-group-delete:hover {
@@ -689,25 +738,48 @@
         }
 
         .program-sake-delete {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
             padding: 0;
-            border: 1px solid var(--danger);
-            background: white;
-            color: var(--danger);
+            border: none;
+            background: transparent;
+            color: var(--border);
             border-radius: 4px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 11px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
             flex-shrink: 0;
+            opacity: 0;
+        }
+
+        .program-sake:hover .program-sake-delete {
+            opacity: 1;
         }
 
         .program-sake-delete:hover {
             background: var(--danger);
             color: white;
+        }
+
+        .program-empty-placeholder {
+            text-align: center;
+            padding: 20px 16px;
+            color: var(--border);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .program-group-sake-count {
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-light);
+            background: rgba(0,0,0,0.05);
+            padding: 1px 7px;
+            border-radius: 8px;
+            margin-left: 4px;
         }
 
         .program-sake-search {
@@ -2016,10 +2088,20 @@ function renderProgram() {
     let html = '';
     for (let day = 1; day <= maxDays; day++) {
         const groups = groupsByDay[day] || [];
+        const totalSakes = groups.reduce((sum, g) => sum + g.sakes.length, 0);
+        const isCollapsed = window._dayCollapsed && window._dayCollapsed[day];
+        html += `<div class="program-day-section">`;
+        html += `<div class="program-day-header" onclick="toggleDay(${day})">
+            <div class="day-label"><i class="fas fa-chevron-down day-toggle ${isCollapsed ? 'collapsed' : ''}"></i> Giorno ${day}</div>
+            <span class="day-sake-count">${groups.length} gruppi · ${totalSakes} sake</span>
+        </div>`;
+        html += `<div class="program-day-content ${isCollapsed ? 'collapsed' : ''}" id="day-content-${day}">`;
         if (groups.length > 0) {
-            html += `<div class="program-day-header">Giorno ${day}</div>`;
             html += groups.map((group, idx) => renderProgramGroup(group, day, maxDays, program.indexOf(group))).join('');
+        } else {
+            html += `<div class="program-empty-placeholder">Nessun gruppo per questo giorno</div>`;
         }
+        html += `</div></div>`;
     }
 
     document.getElementById('programContainer').innerHTML = html;
@@ -2067,13 +2149,27 @@ function updateSakeNote(groupIdx, sakeIdx, value) {
     }
 }
 
+function toggleDay(day) {
+    if (!window._dayCollapsed) window._dayCollapsed = {};
+    window._dayCollapsed[day] = !window._dayCollapsed[day];
+    const content = document.getElementById(`day-content-${day}`);
+    const header = content?.previousElementSibling;
+    if (content) content.classList.toggle('collapsed');
+    if (header) {
+        const toggle = header.querySelector('.day-toggle');
+        if (toggle) toggle.classList.toggle('collapsed');
+    }
+}
+
 function renderProgramGroup(group, day, maxDays, groupIdx) {
     const program = COURSE_COSTS[window.currentCourseId && COURSES.find(x => x.id === window.currentCourseId)?.handle]?.program || [];
 
+    const sakeCount = group.sakes.length;
     let html = `
         <div class="program-group-card">
             <div class="program-group-header">
-                <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Group name" onchange="updateGroupName(${groupIdx}, this.value)">
+                <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Nome gruppo" onchange="updateGroupName(${groupIdx}, this.value)">
+                <span class="program-group-sake-count">${sakeCount}</span>
                 <div class="program-group-day">
                     <select id="program-group-day-${groupIdx}" onchange="updateGroupDay(${groupIdx}, this.value)">
     `;
@@ -2087,9 +2183,14 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     html += `
                     </select>
                 </div>
-                <button class="program-group-delete" onclick="deleteProgramGroup(${groupIdx})" title="Delete group"><i class="fas fa-trash"></i></button>
+                <button class="program-group-delete" onclick="deleteProgramGroup(${groupIdx})" title="Elimina gruppo"><i class="fas fa-trash"></i></button>
             </div>
     `;
+
+    // Empty placeholder
+    if (group.sakes.length === 0) {
+        html += `<div class="program-empty-placeholder">Nessun sake ancora — clicca Aggiungi per iniziare</div>`;
+    }
 
     // Sakes
     group.sakes.forEach((sake, sakeIdx) => {
