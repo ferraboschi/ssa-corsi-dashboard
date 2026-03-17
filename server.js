@@ -435,7 +435,7 @@ app.get('/api/export/corsisti', async (req, res) => {
 // COURSE COSTS API
 // ============================================================================
 app.get('/api/costs', (req, res) => {
-  res.json(courseCosts);
+  res.json({ success: true, data: courseCosts });
 });
 
 app.get('/api/costs/:courseId', (req, res) => {
