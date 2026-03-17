@@ -673,6 +673,9 @@
             border-radius: 6px;
             padding: 10px;
             margin-bottom: 8px;
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
             font-size: 12px;
         }
 
@@ -825,6 +828,142 @@
             background: var(--danger);
             color: white;
             border-color: var(--danger);
+        }
+
+        .program-sake-arrows {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            flex-shrink: 0;
+            margin-right: 4px;
+        }
+        .program-sake:hover .program-sake-arrows {
+            opacity: 1;
+        }
+        .program-sake-arrow {
+            width: 20px;
+            height: 14px;
+            padding: 0;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-light);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .program-sake-arrow:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .program-sake-arrow:disabled {
+            opacity: 0.3;
+            cursor: default;
+            background: white;
+            color: var(--text-light);
+            border-color: var(--border);
+        }
+
+        .program-group-arrows {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .program-group-header:hover .program-group-arrows {
+            opacity: 1;
+        }
+        .program-group-arrow {
+            width: 22px;
+            height: 14px;
+            padding: 0;
+            border: 1px solid var(--border);
+            background: white;
+            color: var(--text-light);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .program-group-arrow:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+        .program-group-arrow:disabled {
+            opacity: 0.3;
+            cursor: default;
+            background: white;
+            color: var(--text-light);
+            border-color: var(--border);
+        }
+
+        .cost-line-custom {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .cost-line-custom input[type="text"] {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .cost-line-custom input[type="number"] {
+            width: 120px;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .cost-line-delete {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: transparent;
+            color: var(--border);
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .cost-line-delete:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .educator-photo {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+        .educator-bio {
+            font-size: 12px;
+            color: var(--text-light);
+            margin-top: 8px;
+            line-height: 1.5;
         }
 
         .program-empty-placeholder {
@@ -1192,6 +1331,48 @@ const CONFIG = {
     DEBOUNCE_MS: 300,
     SAKE_PAGE_SIZE: 50,
 
+    EDUCATOR_PROFILES: {
+        'Brunella Bettati': {
+            region: 'Piemonte', initials: 'BB',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/brunella_bettati.png?v=1719827121&width=200',
+            bio: 'Carriera aziendale seguita da specializzazione in vino, poi sake; ambasciatrice riso Tsuyahime'
+        },
+        'Gabriele Merlo': {
+            region: 'Lombardia', initials: 'GM',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/cf5b88dd-92dd-4ef2-bb94-fdd7c9d15f5b_1.jpg?v=1753710622&width=200',
+            bio: 'Quality Manager alimentare, Sommelier e Relatore, Maestro Assaggiatore di formaggio'
+        },
+        'Stefania Battiloro': {
+            region: 'Campania', initials: 'SB',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/2191cb57-88fc-489a-9579-6a0813f06a47.jpg?v=1753710405&width=200',
+            bio: 'Carriera finanziaria seguita da specializzazione in vino, Sommelier AIS e Degustatrice Ufficiale'
+        },
+        'Camilla Bonnannini': {
+            region: 'Lazio', initials: 'CB',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/WhatsApp_Image_2025-07-28_at_13.19.08.jpg?v=1753707883&width=200',
+            bio: 'Sommelier vino, Top 100 Sommeliers UK, inclusa in Harper\'s "30 Under 30"'
+        },
+        'Lorenzo Ferraboschi': {
+            region: 'Italia', initials: 'LF',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/lore.jpg?v=1689698453&width=200',
+            bio: 'Sake Sommelier e il terzo Sake Educator internazionale certificato dalla SSA'
+        },
+        'Alessandro Izzo': {
+            region: 'Lazio', initials: 'AI',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/ale.png?v=1689698633&width=200',
+            bio: 'Chef di formazione con passione per food & beverage, scopre nel sake il suo autentico amore'
+        },
+        'Francesco Menestrina': {
+            region: 'Trentino-Alto Adige', initials: 'FM',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/francesco_menestrina.png?v=1719863802&width=200',
+            bio: 'Sommelier AIS dal 2016, laureato in Viticoltura ed Enologia nel 2019'
+        },
+        'Roberta Sitzia': {
+            region: 'Lombardia', initials: 'RS',
+            photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/Sake-Educator-Roberta-Sitzia-300x300-2.png?v=1753712438&width=200',
+            bio: 'Lavora nel settore ristorazione con specializzazione in cucina giapponese'
+        }
+    },
     EDUCATOR_MAP: {
         'corso-di-sake-sommelier-certificato-marzo-2026-torino': {
             name: 'Brunella Bettati', region: 'Piemonte', initials: 'BB'
@@ -1425,8 +1606,10 @@ function isFutureCourse(handle) {
 
 function getTotalCosts(costs) {
     if (!costs) return 0;
-    return (costs.location || 0) + (costs.educator || 0) +
+    const base = (costs.location || 0) + (costs.educator || 0) +
            (costs.food || 0) + (costs.sake || 0) + (costs.adv || 0);
+    const custom = (costs.custom || []).reduce((sum, line) => sum + (parseFloat(line.value) || 0), 0);
+    return base + custom;
 }
 
 function computeSustainability(course) {
@@ -1601,7 +1784,9 @@ async function loadApiData() {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
-            const educator = CONFIG.EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            const educatorBase = CONFIG.EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
+            const educator = { ...educatorBase, photo: educatorProfile.photo || '', bio: educatorProfile.bio || '' };
             const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
             const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
 
@@ -1928,6 +2113,9 @@ function renderCourseDetailPage() {
     const costIcons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
     const costColors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
 
+    // Custom cost lines
+    if (!c.costs.custom) c.costs.custom = [];
+
     const costRows = Object.keys(costLabels).map(key => `
         <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
             <div style="font-size: 18px; color: ${costColors[key]}; min-width: 24px;"><i class="fas ${costIcons[key]}"></i></div>
@@ -1935,6 +2123,15 @@ function renderCourseDetailPage() {
                 <div style="font-size: 13px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px;">${costLabels[key]}</div>
             </div>
             <input type="number" id="cost-${key}" class="cost-input" value="${c.costs[key] || 0}" min="0" step="10" style="width: 120px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; text-align: right; font-size: 14px; font-weight: 500;">
+        </div>
+    `).join('');
+
+    const customCostRows = (c.costs.custom || []).map((line, idx) => `
+        <div class="cost-line-custom">
+            <div style="font-size: 18px; color: var(--text-light); min-width: 24px;"><i class="fas fa-tag"></i></div>
+            <input type="text" id="cost-custom-label-${idx}" value="${line.label || ''}" placeholder="Nome voce..." onchange="updateCustomCostLabel(${idx}, this.value)">
+            <input type="number" id="cost-custom-value-${idx}" value="${line.value || 0}" min="0" step="10" onchange="updateCustomCostValue(${idx}, this.value); updateCostsSummary();" oninput="updateCostsSummary();">
+            <button class="cost-line-delete" onclick="deleteCustomCost(${idx})" title="Rimuovi"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
 
@@ -1963,7 +2160,11 @@ function renderCourseDetailPage() {
         <div class="section-title"><i class="fas fa-coins"></i> Conto Economico (Editable)</div>
         <div style="background: white; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
             ${costRows}
-            <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 16px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+            <div id="customCostLines">${customCostRows}</div>
+            <button onclick="addCustomCost('${c.id}')" style="width: 100%; margin-top: 8px; padding: 8px; background: transparent; color: var(--accent); border: 1px dashed var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;">
+                <i class="fas fa-plus"></i> Aggiungi voce di costo
+            </button>
+            <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 12px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
                 <i class="fas fa-save"></i> Salva Costi
             </button>
         </div>
@@ -1984,38 +2185,33 @@ function renderCourseDetailPage() {
             <span style="color: var(--text-light);">Margine/iscritto: <strong style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};" id="costiSummaryPerStudent">${c.students.length > 0 ? formatCurrency(s.profit / c.students.length) : '\u2014'}</strong></span>
         </div>
 
-        <div class="two-cols" style="margin-bottom: 24px;">
-            <div>
-                <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator</div>
-                <div class="educator-card" style="margin-bottom: 0;">
-                    <div class="educator-top" style="margin-bottom: 0;">
-                        <div class="educator-avatar">${c.educator.initials}</div>
-                        <div>
-                            <div class="educator-name">${c.educator.name}</div>
-                            <div class="educator-role">${c.educator.region}</div>
-                        </div>
+        <div style="margin-bottom: 24px;">
+            <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator</div>
+            <div class="educator-card" style="margin-bottom: 0;">
+                <div class="educator-top" style="margin-bottom: ${c.educator.bio ? '12px' : '0'};">
+                    ${c.educator.photo
+                        ? `<img src="${c.educator.photo}" alt="${c.educator.name}" class="educator-photo">`
+                        : `<div class="educator-avatar">${c.educator.initials}</div>`}
+                    <div>
+                        <div class="educator-name">${c.educator.name}</div>
+                        <div class="educator-role">${c.educator.region}</div>
                     </div>
                 </div>
-            </div>
-            <div>
-                <div class="section-title"><i class="fas fa-wine-glass-alt"></i> Prodotti da Usare</div>
-                <div style="color: var(--text-light); font-size: 13px; padding: 12px; background: #faf8f5; border-radius: 8px;">
-                    <i class="fas fa-info-circle"></i> I prodotti per questo corso verranno assegnati dal catalogo Airtable.
-                </div>
+                ${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}
             </div>
         </div>
 
         <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
         ${c.students.length > 0 ? `
         <table class="data-table">
-            <thead><tr><th>Corsista</th><th>Email</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine Shopify</th></tr></thead>
+            <thead><tr><th>Corsista</th><th>Telefono</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine Shopify</th></tr></thead>
             <tbody>
                 ${c.students.map(st => {
                     const initials = getInitials(st.name);
                     const isPaid = st.financialStatus === 'paid';
                     return `<tr>
-                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div></div></div></td>
-                        <td style="font-size: 12px;">${st.email || '-'}</td>
+                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email || ''}</div></div></div></td>
+                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="tel:${st.phone}" style="color: var(--text); text-decoration: none;"><i class="fas fa-phone" style="font-size: 10px; color: var(--accent); margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
                         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
@@ -2052,7 +2248,8 @@ function updateCostsSummary() {
         educator: parseFloat(document.getElementById('cost-educator').value) || 0,
         food: parseFloat(document.getElementById('cost-food').value) || 0,
         sake: parseFloat(document.getElementById('cost-sake').value) || 0,
-        adv: parseFloat(document.getElementById('cost-adv').value) || 0
+        adv: parseFloat(document.getElementById('cost-adv').value) || 0,
+        custom: c.costs.custom || []
     };
 
     const totalCosts = getTotalCosts(newCosts);
@@ -2067,6 +2264,33 @@ function updateCostsSummary() {
     document.getElementById('costiSummaryPerStudent').textContent = c.students.length > 0 ? formatCurrency(profit / c.students.length) : '—';
 }
 
+function addCustomCost(courseId) {
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+    if (!c.costs.custom) c.costs.custom = [];
+    c.costs.custom.push({ label: '', value: 0 });
+    renderCourseDetailPage();
+}
+
+function updateCustomCostLabel(idx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c || !c.costs.custom?.[idx]) return;
+    c.costs.custom[idx].label = value;
+}
+
+function updateCustomCostValue(idx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c || !c.costs.custom?.[idx]) return;
+    c.costs.custom[idx].value = parseFloat(value) || 0;
+}
+
+function deleteCustomCost(idx) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c || !c.costs.custom) return;
+    c.costs.custom.splice(idx, 1);
+    renderCourseDetailPage();
+}
+
 async function saveCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
@@ -2076,7 +2300,8 @@ async function saveCourseDetail(courseId) {
         educator: parseFloat(document.getElementById('cost-educator').value) || 0,
         food: parseFloat(document.getElementById('cost-food').value) || 0,
         sake: parseFloat(document.getElementById('cost-sake').value) || 0,
-        adv: parseFloat(document.getElementById('cost-adv').value) || 0
+        adv: parseFloat(document.getElementById('cost-adv').value) || 0,
+        custom: c.costs.custom || []
     };
 
     // Collect program data from UI
@@ -2165,7 +2390,7 @@ function renderProgram() {
         </div>`;
         html += `<div class="program-day-content ${isCollapsed ? 'collapsed' : ''}" id="day-content-${day}">`;
         if (groups.length > 0) {
-            html += groups.map((group, idx) => renderProgramGroup(group, day, maxDays, program.indexOf(group))).join('');
+            html += groups.map((group, idx) => renderProgramGroup(group, day, maxDays, program.indexOf(group), idx, groups.length)).join('');
         } else {
             html += `<div class="program-empty-placeholder">Nessun gruppo per questo giorno</div>`;
         }
@@ -2229,13 +2454,17 @@ function toggleDay(day) {
     }
 }
 
-function renderProgramGroup(group, day, maxDays, groupIdx) {
+function renderProgramGroup(group, day, maxDays, groupIdx, dayLocalIdx, dayGroupCount) {
     const program = COURSE_COSTS[window.currentCourseId && COURSES.find(x => x.id === window.currentCourseId)?.handle]?.program || [];
 
     const sakeCount = group.sakes.length;
     let html = `
         <div class="program-group-card">
             <div class="program-group-header">
+                <div class="program-group-arrows">
+                    <button class="program-group-arrow" onclick="moveGroupUp(${groupIdx})" title="Sposta su" ${dayLocalIdx === 0 ? 'disabled' : ''}><i class="fas fa-chevron-up"></i></button>
+                    <button class="program-group-arrow" onclick="moveGroupDown(${groupIdx})" title="Sposta giù" ${dayLocalIdx >= dayGroupCount - 1 ? 'disabled' : ''}><i class="fas fa-chevron-down"></i></button>
+                </div>
                 <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Nome gruppo" onchange="updateGroupName(${groupIdx}, this.value)">
                 <span class="program-group-sake-count">${sakeCount}</span>
                 <div class="program-group-day">
@@ -2261,30 +2490,37 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     }
 
     // Sakes
+    const sakeTotal = group.sakes.length;
     group.sakes.forEach((sake, sakeIdx) => {
         const subtotal = sake.cost * sake.qty;
         const jpName = sake.nameJp ? `<span class="program-sake-jp">${sake.nameJp}</span>` : '';
         html += `
             <div class="program-sake">
-                <div class="program-sake-name">
-                    ${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : ''}
-                    <div class="program-sake-info">
-                        <span class="program-sake-title">${sake.name}${jpName}</span>
-                        <span class="program-sake-meta">${sake.code} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</span>
-                    </div>
+                <div class="program-sake-arrows">
+                    <button class="program-sake-arrow" onclick="moveSakeUp(${groupIdx}, ${sakeIdx})" title="Sposta su" ${sakeIdx === 0 ? 'disabled' : ''}><i class="fas fa-chevron-up"></i></button>
+                    <button class="program-sake-arrow" onclick="moveSakeDown(${groupIdx}, ${sakeIdx})" title="Sposta giù" ${sakeIdx === sakeTotal - 1 ? 'disabled' : ''}><i class="fas fa-chevron-down"></i></button>
                 </div>
-                <div class="program-sake-row">
-                    <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
-                        <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999" onchange="updateSakeQty(${groupIdx}, ${sakeIdx}, this.value)">
-                    </span> = ${formatCurrency(subtotal)}</span>
-                    <div class="program-sake-actions">
-                        ${Array.from({length: maxDays}, (_, i) => i + 1).filter(d => d !== day).map(d =>
-                            `<button class="program-sake-move" onclick="moveSakeTo(${groupIdx}, ${sakeIdx}, ${d})" title="Sposta a Giorno ${d}">G${d}</button>`
-                        ).join('')}
-                        <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Cestina"><i class="fas fa-trash"></i></button>
+                <div style="flex: 1; min-width: 0;">
+                    <div class="program-sake-name">
+                        ${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : ''}
+                        <div class="program-sake-info">
+                            <span class="program-sake-title">${sake.name}${jpName}</span>
+                            <span class="program-sake-meta">${sake.code} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</span>
+                        </div>
                     </div>
+                    <div class="program-sake-row">
+                        <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
+                            <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999" onchange="updateSakeQty(${groupIdx}, ${sakeIdx}, this.value)">
+                        </span> = ${formatCurrency(subtotal)}</span>
+                        <div class="program-sake-actions">
+                            ${Array.from({length: maxDays}, (_, i) => i + 1).filter(d => d !== day).map(d =>
+                                `<button class="program-sake-move" onclick="moveSakeTo(${groupIdx}, ${sakeIdx}, ${d})" title="Sposta a Giorno ${d}">G${d}</button>`
+                            ).join('')}
+                            <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Cestina"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}" onchange="updateSakeNote(${groupIdx}, ${sakeIdx}, this.value)">
                 </div>
-                <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}" onchange="updateSakeNote(${groupIdx}, ${sakeIdx}, this.value)">
             </div>
         `;
     });
@@ -2449,6 +2685,60 @@ function moveSakeTo(groupIdx, sakeIdx, targetDay) {
     renderProgram();
 }
 
+function moveSakeUp(groupIdx, sakeIdx) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const sakes = program[groupIdx]?.sakes;
+    if (!sakes || sakeIdx <= 0) return;
+    [sakes[sakeIdx - 1], sakes[sakeIdx]] = [sakes[sakeIdx], sakes[sakeIdx - 1]];
+    renderProgram();
+}
+
+function moveSakeDown(groupIdx, sakeIdx) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const sakes = program[groupIdx]?.sakes;
+    if (!sakes || sakeIdx >= sakes.length - 1) return;
+    [sakes[sakeIdx], sakes[sakeIdx + 1]] = [sakes[sakeIdx + 1], sakes[sakeIdx]];
+    renderProgram();
+}
+
+function moveGroupUp(groupIdx) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const group = program[groupIdx];
+    if (!group) return;
+    // Find the previous group with the same day
+    const sameDay = program.filter(g => g.day === group.day);
+    const localIdx = sameDay.indexOf(group);
+    if (localIdx <= 0) return;
+    const prevGroup = sameDay[localIdx - 1];
+    const prevGlobalIdx = program.indexOf(prevGroup);
+    // Swap in program array
+    program.splice(groupIdx, 1);
+    program.splice(prevGlobalIdx, 0, group);
+    renderProgram();
+}
+
+function moveGroupDown(groupIdx) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    const group = program[groupIdx];
+    if (!group) return;
+    const sameDay = program.filter(g => g.day === group.day);
+    const localIdx = sameDay.indexOf(group);
+    if (localIdx >= sameDay.length - 1) return;
+    const nextGroup = sameDay[localIdx + 1];
+    const nextGlobalIdx = program.indexOf(nextGroup);
+    program.splice(groupIdx, 1);
+    program.splice(nextGlobalIdx, 0, group);
+    renderProgram();
+}
+
 function deleteProgramGroup(groupIdx) {
     const courseId = window.currentCourseId;
     const c = COURSES.find(x => x.id === courseId);
@@ -2610,15 +2900,20 @@ function renderEducatorPage() {
         return;
     }
 
-    grid.innerHTML = EDUCATORS.map(ed => `
+    grid.innerHTML = EDUCATORS.map(ed => {
+        const profile = CONFIG.EDUCATOR_PROFILES[ed.name] || {};
+        return `
     <div class="educator-card">
         <div class="educator-top">
-            <div class="educator-avatar">${ed.initials}</div>
+            ${profile.photo
+                ? `<img src="${profile.photo}" alt="${ed.name}" class="educator-photo">`
+                : `<div class="educator-avatar">${ed.initials}</div>`}
             <div>
                 <div class="educator-name">${ed.name}</div>
                 <div class="educator-role">${ed.region} &bull; ${ed.totalStudents} corsisti totali</div>
             </div>
         </div>
+        ${profile.bio ? `<div class="educator-bio" style="margin-bottom: 12px;">${profile.bio}</div>` : ''}
         <div class="section-title" style="margin-bottom: 8px; font-size: 11px;"><i class="fas fa-graduation-cap"></i> Corsi Assegnati</div>
         <ul class="educator-courses">
             ${ed.courses.map(c => {
@@ -2635,7 +2930,7 @@ function renderEducatorPage() {
                 </li>`;
             }).join('')}
         </ul>
-    </div>`).join('');
+    </div>`}).join('');
 }
 
 // =============================================
