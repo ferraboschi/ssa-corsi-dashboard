@@ -677,20 +677,55 @@
         }
 
         .program-sake-name {
-            font-weight: 600;
             margin-bottom: 6px;
             color: var(--text);
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
 
         .program-sake-img {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             object-fit: contain;
             border-radius: 4px;
             flex-shrink: 0;
+            background: #f8f6f3;
+        }
+
+        .program-sake-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .program-sake-title {
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .program-sake-jp {
+            font-weight: 400;
+            font-size: 11px;
+            color: var(--text-light);
+        }
+
+        .program-sake-meta {
+            font-size: 11px;
+            color: var(--text-light);
+            font-weight: 400;
+        }
+
+        .sake-dropdown-jp {
+            font-size: 11px;
+            color: var(--text-light);
+            font-weight: 400;
+            margin-left: 6px;
         }
 
         .program-sake-row {
@@ -856,15 +891,15 @@
         }
 
         .program-group-buttons {
-            display: flex;
-            gap: 8px;
             padding-top: 8px;
         }
 
         .program-add-sake-btn {
-            flex: 1;
-            padding: 8px 12px;
-            border: 1px solid var(--accent);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 16px;
+            border: 1px dashed var(--accent);
             background: white;
             color: var(--accent);
             border-radius: 6px;
@@ -877,6 +912,7 @@
         .program-add-sake-btn:hover {
             background: var(--accent);
             color: white;
+            border-style: solid;
         }
 
         .program-group-subtotal {
@@ -1503,7 +1539,7 @@ async function loadApiData() {
 
     // Try cache first
     const cachedCourses = getCached('courses');
-    const cachedSake = getCached('sake');
+    const cachedSake = getCached('sake_v2');
 
     // Load courses
     try {
@@ -1624,8 +1660,10 @@ async function loadApiData() {
                             id: record.id,
                             code,
                             name: record.fields?.['Product Name'] || 'Sake',
+                            nameJp: record.fields?.['Product in Japanese'] || '',
                             type: record.fields?.['Product Type'] || '',
                             sakagura: record.fields?.['Sakagura'] || '',
+                            sakaguraJp: record.fields?.['Sakagura in Japanese'] || '',
                             size: record.fields?.['Size'] || '',
                             price: b2bPrice || airtablePrice,
                             b2bPrice,
@@ -1633,7 +1671,6 @@ async function loadApiData() {
                             fields: record.fields
                         };
                     });
-                    setCache('sake', SAKE_CATALOG);
                 }
             } else {
                 throw new Error('Airtable API: ' + airtableResp.status);
@@ -1645,23 +1682,26 @@ async function loadApiData() {
     }
 
     // Load Sake Company product images (match by SKU/code)
-    try {
-        const scResp = await fetch('/api/sakecompany/products');
-        if (scResp.ok) {
-            const scData = await scResp.json();
-            if (scData.success && scData.skuImageMap) {
-                const imgMap = scData.skuImageMap;
-                SAKE_CATALOG.forEach(sake => {
-                    if (imgMap[sake.code]) {
-                        sake.image = imgMap[sake.code];
-                    }
-                });
-                console.log(`Sake Company images: matched ${SAKE_CATALOG.filter(s => s.image).length}/${SAKE_CATALOG.length} products`);
+    if (SAKE_CATALOG.length > 0 && !cachedSake) {
+        try {
+            const scResp = await fetch('/api/sakecompany/products');
+            if (scResp.ok) {
+                const scData = await scResp.json();
+                if (scData.success && scData.skuImageMap) {
+                    const imgMap = scData.skuImageMap;
+                    SAKE_CATALOG.forEach(sake => {
+                        if (imgMap[sake.code]) {
+                            sake.image = imgMap[sake.code];
+                        }
+                    });
+                    console.log(`Sake Company images: matched ${SAKE_CATALOG.filter(s => s.image).length}/${SAKE_CATALOG.length} products`);
+                }
             }
+        } catch (e) {
+            console.error('Sake Company images failed:', e);
         }
-    } catch (e) {
-        console.error('Sake Company images failed:', e);
-        // Not fatal — just no images
+        // Cache AFTER image enrichment so cache includes images
+        setCache('sake_v2', SAKE_CATALOG);
     }
 
     // Load course costs from API
@@ -2195,14 +2235,21 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     // Sakes
     group.sakes.forEach((sake, sakeIdx) => {
         const subtotal = sake.cost * sake.qty;
+        const jpName = sake.nameJp ? `<span class="program-sake-jp">${sake.nameJp}</span>` : '';
         html += `
             <div class="program-sake">
-                <div class="program-sake-name">${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : '🍶'} ${sake.name} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</div>
+                <div class="program-sake-name">
+                    ${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : ''}
+                    <div class="program-sake-info">
+                        <span class="program-sake-title">${sake.name}${jpName}</span>
+                        <span class="program-sake-meta">${sake.code} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</span>
+                    </div>
+                </div>
                 <div class="program-sake-row">
                     <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
                         <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999" onchange="updateSakeQty(${groupIdx}, ${sakeIdx}, this.value)">
                     </span> = ${formatCurrency(subtotal)}</span>
-                    <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Remove sake"><i class="fas fa-times"></i></button>
+                    <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Rimuovi"><i class="fas fa-times"></i></button>
                 </div>
                 <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}" onchange="updateSakeNote(${groupIdx}, ${sakeIdx}, this.value)">
             </div>
@@ -2213,8 +2260,8 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     html += `
             <div class="program-group-buttons">
                 <button class="program-add-sake-btn" onclick="showSakeSearch(${groupIdx})"><i class="fas fa-plus"></i> Aggiungi Sake</button>
-                <div id="program-search-slot-${groupIdx}"></div>
             </div>
+            <div id="program-search-slot-${groupIdx}"></div>
             <div class="program-group-subtotal">Subtotale: ${formatCurrency(subtotal)}</div>
         </div>
     `;
@@ -2271,10 +2318,18 @@ function showSakeDropdown(searchDiv, query, groupIdx) {
         return sake.name.toLowerCase().includes(q) ||
                sake.code.toLowerCase().includes(q) ||
                sake.sakagura.toLowerCase().includes(q) ||
-               sake.type.toLowerCase().includes(q);
-    }).slice(0, 8);
+               sake.type.toLowerCase().includes(q) ||
+               (sake.nameJp && sake.nameJp.includes(query)) ||
+               (sake.sakaguraJp && sake.sakaguraJp.includes(query));
+    }).slice(0, 10);
 
-    if (filtered.length === 0) return;
+    if (filtered.length === 0) {
+        const dropdown = document.createElement('div');
+        dropdown.className = 'program-sake-dropdown';
+        dropdown.innerHTML = '<div class="program-sake-dropdown-item" style="color:var(--text-light);justify-content:center;cursor:default;">Nessun risultato</div>';
+        searchDiv.appendChild(dropdown);
+        return;
+    }
 
     const dropdown = document.createElement('div');
     dropdown.className = 'program-sake-dropdown';
@@ -2282,10 +2337,11 @@ function showSakeDropdown(searchDiv, query, groupIdx) {
     filtered.forEach(sake => {
         const item = document.createElement('div');
         item.className = 'program-sake-dropdown-item';
+        const jpLabel = sake.nameJp ? `<span class="sake-dropdown-jp">${sake.nameJp}</span>` : '';
         item.innerHTML = `
             ${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="sake-dropdown-img">` : '<span class="sake-dropdown-icon">🍶</span>'}
-            <div><strong>${sake.name}</strong>
-            <small>${sake.type} · ${sake.sakagura} · ${sake.size}ml · ${formatCurrency(sake.price)}</small></div>
+            <div><strong>${sake.name}</strong>${jpLabel}
+            <small>${sake.code} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml · ${formatCurrency(sake.price)}</small></div>
         `;
         item.addEventListener('click', () => {
             addSakeToProgramGroup(groupIdx, sake);
@@ -2310,6 +2366,7 @@ function addSakeToProgramGroup(groupIdx, sake) {
         id: sake.id,
         code: sake.code,
         name: sake.name,
+        nameJp: sake.nameJp || '',
         type: sake.type,
         sakagura: sake.sakagura,
         size: sake.size,
