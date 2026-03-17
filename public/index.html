@@ -1545,17 +1545,17 @@ async function loadApiData() {
                 if (airtableData.success && Array.isArray(airtableData.data)) {
                     apiStatus.airtable = true;
                     SAKE_CATALOG = airtableData.data.map(record => {
-                        const code = record.fields?.['Codice Prodotto'] || record.fields?.['Code'] || record.id;
+                        const code = record.fields?.['CODE'] || record.id;
                         const airtablePrice = parseFloat(record.fields?.['SC Network price from ITA stock']) || 0;
                         const b2bPrice = B2B_PRICES[code] || 0;
                         return {
                             id: record.id,
                             code,
-                            name: record.fields?.['Nome Prodotto'] || record.fields?.['Name'] || record.fields?.['Sake Name'] || 'Sake',
-                            type: record.fields?.['Tipologia'] || record.fields?.['Type'] || record.fields?.['Sake Type'] || '',
-                            sakagura: record.fields?.['Sakagura'] || record.fields?.['Producer'] || '',
-                            size: record.fields?.['Formato'] || record.fields?.['Size'] || record.fields?.['ML'] || '',
-                            price: b2bPrice || airtablePrice, // B2B price preferred, Airtable as fallback
+                            name: record.fields?.['Product Name'] || 'Sake',
+                            type: record.fields?.['Product Type'] || '',
+                            sakagura: record.fields?.['Sakagura'] || '',
+                            size: record.fields?.['Size'] || '',
+                            price: b2bPrice || airtablePrice,
                             b2bPrice,
                             airtablePrice,
                             fields: record.fields
@@ -1989,7 +1989,7 @@ function initializeProgram() {
 
         COURSE_COSTS[c.handle].program = template.defaultGroups.map((groupName, idx) => ({
             name: groupName,
-            day: 1,
+            day: Math.min(idx + 1, template.days),
             sakes: []
         }));
     }
@@ -2025,58 +2025,46 @@ function renderProgram() {
     document.getElementById('programContainer').innerHTML = html;
     updateProgramTotal();
 
-    // Attach event listeners
-    program.forEach((group, groupIdx) => {
-        const input = document.getElementById(`program-group-name-${groupIdx}`);
-        if (input) {
-            input.addEventListener('change', () => {
-                group.name = input.value;
-                updateProgramUI();
-            });
-        }
+    // Inline event handler helpers (called from onclick/onchange attributes)
+}
 
-        const daySelect = document.getElementById(`program-group-day-${groupIdx}`);
-        if (daySelect) {
-            daySelect.addEventListener('change', () => {
-                group.day = parseInt(daySelect.value);
-                renderProgram();
-            });
-        }
+function updateGroupName(groupIdx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    if (program[groupIdx]) {
+        program[groupIdx].name = value;
+        updateProgramUI();
+    }
+}
 
-        const deleteBtn = document.getElementById(`program-group-delete-${groupIdx}`);
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', () => deleteProgramGroup(groupIdx));
-        }
+function updateGroupDay(groupIdx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    if (program[groupIdx]) {
+        program[groupIdx].day = parseInt(value);
+        renderProgram();
+    }
+}
 
-        // Sake delete buttons and quantity inputs
-        group.sakes.forEach((sake, sakeIdx) => {
-            const qtyInput = document.getElementById(`program-sake-qty-${groupIdx}-${sakeIdx}`);
-            if (qtyInput) {
-                qtyInput.addEventListener('change', () => {
-                    sake.qty = Math.max(0, parseInt(qtyInput.value) || 1);
-                    updateProgramUI();
-                });
-            }
+function updateSakeQty(groupIdx, sakeIdx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    if (program[groupIdx]?.sakes[sakeIdx]) {
+        program[groupIdx].sakes[sakeIdx].qty = Math.max(0, parseInt(value) || 1);
+        updateProgramUI();
+    }
+}
 
-            const noteInput = document.getElementById(`program-sake-note-${groupIdx}-${sakeIdx}`);
-            if (noteInput) {
-                noteInput.addEventListener('change', () => {
-                    sake.note = noteInput.value;
-                });
-            }
-
-            const deleteBtn = document.getElementById(`program-sake-delete-${groupIdx}-${sakeIdx}`);
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => deleteProgramSake(groupIdx, sakeIdx));
-            }
-        });
-
-        // Add sake button
-        const addSakeBtn = document.getElementById(`program-add-sake-${groupIdx}`);
-        if (addSakeBtn) {
-            addSakeBtn.addEventListener('click', () => showSakeSearch(groupIdx));
-        }
-    });
+function updateSakeNote(groupIdx, sakeIdx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c) return;
+    const program = COURSE_COSTS[c.handle]?.program || [];
+    if (program[groupIdx]?.sakes[sakeIdx]) {
+        program[groupIdx].sakes[sakeIdx].note = value;
+    }
 }
 
 function renderProgramGroup(group, day, maxDays, groupIdx) {
@@ -2085,9 +2073,9 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     let html = `
         <div class="program-group-card">
             <div class="program-group-header">
-                <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Group name">
+                <input type="text" class="program-group-name" id="program-group-name-${groupIdx}" value="${group.name}" placeholder="Group name" onchange="updateGroupName(${groupIdx}, this.value)">
                 <div class="program-group-day">
-                    <select id="program-group-day-${groupIdx}">
+                    <select id="program-group-day-${groupIdx}" onchange="updateGroupDay(${groupIdx}, this.value)">
     `;
 
     const typeKey = COURSES.find(x => x.id === window.currentCourseId)?.courseType.type.split('-')[0];
@@ -2099,7 +2087,7 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     html += `
                     </select>
                 </div>
-                <button class="program-group-delete" id="program-group-delete-${groupIdx}" title="Delete group"><i class="fas fa-trash"></i></button>
+                <button class="program-group-delete" onclick="deleteProgramGroup(${groupIdx})" title="Delete group"><i class="fas fa-trash"></i></button>
             </div>
     `;
 
@@ -2111,11 +2099,11 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
                 <div class="program-sake-name">${sake.image ? `<img src="${sake.image}" alt="${sake.name}" class="program-sake-img">` : '🍶'} ${sake.name} · ${sake.type} · ${sake.sakagura} · ${sake.size}ml</div>
                 <div class="program-sake-row">
                     <span class="program-sake-price">${formatCurrency(sake.cost)} × <span class="program-sake-qty">
-                        <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999">
+                        <input type="number" id="program-sake-qty-${groupIdx}-${sakeIdx}" value="${sake.qty}" min="0" step="1" max="999" onchange="updateSakeQty(${groupIdx}, ${sakeIdx}, this.value)">
                     </span> = ${formatCurrency(subtotal)}</span>
-                    <button class="program-sake-delete" id="program-sake-delete-${groupIdx}-${sakeIdx}" title="Remove sake"><i class="fas fa-times"></i></button>
+                    <button class="program-sake-delete" onclick="deleteProgramSake(${groupIdx}, ${sakeIdx})" title="Remove sake"><i class="fas fa-times"></i></button>
                 </div>
-                <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}">
+                <input type="text" class="program-sake-note" id="program-sake-note-${groupIdx}-${sakeIdx}" placeholder="Note..." value="${sake.note || ''}" onchange="updateSakeNote(${groupIdx}, ${sakeIdx}, this.value)">
             </div>
         `;
     });
@@ -2123,7 +2111,8 @@ function renderProgramGroup(group, day, maxDays, groupIdx) {
     const subtotal = group.sakes.reduce((sum, sake) => sum + (sake.cost * sake.qty), 0);
     html += `
             <div class="program-group-buttons">
-                <button class="program-add-sake-btn" id="program-add-sake-${groupIdx}"><i class="fas fa-plus"></i> Aggiungi Sake</button>
+                <button class="program-add-sake-btn" onclick="showSakeSearch(${groupIdx})"><i class="fas fa-plus"></i> Aggiungi Sake</button>
+                <div id="program-search-slot-${groupIdx}"></div>
             </div>
             <div class="program-group-subtotal">Subtotale: ${formatCurrency(subtotal)}</div>
         </div>
@@ -2137,14 +2126,16 @@ function showSakeSearch(groupIdx) {
     const group = program[groupIdx];
     if (!group) return;
 
-    // Show search input
-    const container = document.getElementById('programContainer');
-    const existingSearch = container.querySelector('.program-sake-search');
-    if (existingSearch) existingSearch.remove();
+    // Remove any existing search inputs
+    document.querySelectorAll('.program-sake-search').forEach(el => el.remove());
+
+    // Insert search inside the group's search slot
+    const slot = document.getElementById(`program-search-slot-${groupIdx}`);
+    if (!slot) return;
 
     const searchDiv = document.createElement('div');
     searchDiv.className = 'program-sake-search';
-    searchDiv.style.marginBottom = '12px';
+    searchDiv.style.marginTop = '8px';
 
     const input = document.createElement('input');
     input.type = 'text';
@@ -2164,7 +2155,7 @@ function showSakeSearch(groupIdx) {
     });
 
     searchDiv.appendChild(input);
-    container.insertBefore(searchDiv, container.firstChild);
+    slot.appendChild(searchDiv);
     input.focus();
 
     window.currentSakeSearchGroupIdx = groupIdx;
