@@ -908,45 +908,79 @@
             border-color: var(--border);
         }
 
-        .cost-line-custom {
+        .cost-line-row {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 12px;
-            background: white;
+            gap: 10px;
+            padding: 10px 12px;
+            background: #faf8f5;
             border: 1px solid var(--border);
             border-radius: 8px;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
-        .cost-line-custom input[type="text"] {
+        .cost-line-icon {
+            font-size: 16px;
+            min-width: 24px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .cost-line-label {
             flex: 1;
-            padding: 8px 12px;
-            border: 1px solid var(--border);
+            padding: 6px 10px;
+            border: 1px solid transparent;
             border-radius: 6px;
             font-size: 13px;
+            font-weight: 500;
+            background: transparent;
+            color: var(--text);
+            transition: border-color 0.2s, background 0.2s;
+            min-width: 0;
         }
-        .cost-line-custom input[type="number"] {
-            width: 120px;
-            padding: 8px 12px;
+        .cost-line-label:hover,
+        .cost-line-label:focus {
+            border-color: var(--border);
+            background: white;
+            outline: none;
+        }
+        .cost-line-amount {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+        .cost-line-euro {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        .cost-line-value {
+            width: 100px;
+            padding: 6px 10px;
             border: 1px solid var(--border);
             border-radius: 6px;
             text-align: right;
             font-size: 14px;
             font-weight: 500;
+            background: white;
+        }
+        .cost-line-value:focus {
+            outline: none;
+            border-color: var(--accent);
         }
         .cost-line-delete {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border: none;
             background: transparent;
             color: var(--border);
             cursor: pointer;
             border-radius: 6px;
-            font-size: 12px;
+            font-size: 11px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
+            flex-shrink: 0;
         }
         .cost-line-delete:hover {
             background: var(--danger);
@@ -1606,6 +1640,11 @@ function isFutureCourse(handle) {
 
 function getTotalCosts(costs) {
     if (!costs) return 0;
+    // New unified lines format
+    if (costs.lines && costs.lines.length > 0) {
+        return costs.lines.reduce((sum, line) => sum + (parseFloat(line.value) || 0), 0);
+    }
+    // Legacy format fallback
     const base = (costs.location || 0) + (costs.educator || 0) +
            (costs.food || 0) + (costs.sake || 0) + (costs.adv || 0);
     const custom = (costs.custom || []).reduce((sum, line) => sum + (parseFloat(line.value) || 0), 0);
@@ -2108,30 +2147,35 @@ function renderCourseDetailPage() {
 
     const s = c.sustainability;
 
-    // Build the costs section with editable fields
-    const costLabels = { location: 'Location (affitto sala)', educator: 'Educator (compenso)', food: 'Food/Catering', sake: 'Sake (prodotti)', adv: 'ADV (pubblicità)' };
-    const costIcons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
-    const costColors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
+    // Build the costs section — all lines are uniform and deletable
+    if (!c.costs.lines) {
+        // Migrate from old format to unified lines format
+        c.costs.lines = [];
+        const defaultLines = [
+            { key: 'location', label: 'Location (affitto sala)', icon: 'fa-map-marker-alt', color: '#e6a817', value: c.costs.location || 0 },
+            { key: 'educator', label: 'Educator (compenso)', icon: 'fa-chalkboard-teacher', color: '#1a1a2e', value: c.costs.educator || 0 },
+            { key: 'food', label: 'Food/Catering', icon: 'fa-utensils', color: '#c4975c', value: c.costs.food || 0 },
+            { key: 'sake', label: 'Sake (prodotti)', icon: 'fa-wine-bottle', color: '#16213e', value: c.costs.sake || 0 },
+            { key: 'adv', label: 'ADV (pubblicità)', icon: 'fa-bullhorn', color: '#2d8a4e', value: c.costs.adv || 0 }
+        ];
+        defaultLines.forEach(d => { if (d.value > 0 || true) c.costs.lines.push(d); });
+        // Append old custom lines if any
+        if (c.costs.custom) {
+            c.costs.custom.forEach(cl => {
+                c.costs.lines.push({ key: 'custom', label: cl.label || '', icon: 'fa-tag', color: 'var(--text-light)', value: cl.value || 0 });
+            });
+        }
+    }
 
-    // Custom cost lines
-    if (!c.costs.custom) c.costs.custom = [];
-
-    const costRows = Object.keys(costLabels).map(key => `
-        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
-            <div style="font-size: 18px; color: ${costColors[key]}; min-width: 24px;"><i class="fas ${costIcons[key]}"></i></div>
-            <div style="flex: 1;">
-                <div style="font-size: 13px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px;">${costLabels[key]}</div>
+    const allCostRows = c.costs.lines.map((line, idx) => `
+        <div class="cost-line-row">
+            <div class="cost-line-icon" style="color: ${line.color || 'var(--text-light)'}"><i class="fas ${line.icon || 'fa-tag'}"></i></div>
+            <input type="text" class="cost-line-label" id="cost-line-label-${idx}" value="${line.label}" onchange="updateCostLineLabel(${idx}, this.value)">
+            <div class="cost-line-amount">
+                <span class="cost-line-euro">€</span>
+                <input type="number" class="cost-line-value" id="cost-line-value-${idx}" value="${line.value || 0}" min="0" step="10" oninput="updateCostLineValue(${idx}, this.value); updateCostsSummary();">
             </div>
-            <input type="number" id="cost-${key}" class="cost-input" value="${c.costs[key] || 0}" min="0" step="10" style="width: 120px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; text-align: right; font-size: 14px; font-weight: 500;">
-        </div>
-    `).join('');
-
-    const customCostRows = (c.costs.custom || []).map((line, idx) => `
-        <div class="cost-line-custom">
-            <div style="font-size: 18px; color: var(--text-light); min-width: 24px;"><i class="fas fa-tag"></i></div>
-            <input type="text" id="cost-custom-label-${idx}" value="${line.label || ''}" placeholder="Nome voce..." onchange="updateCustomCostLabel(${idx}, this.value)">
-            <input type="number" id="cost-custom-value-${idx}" value="${line.value || 0}" min="0" step="10" onchange="updateCustomCostValue(${idx}, this.value); updateCostsSummary();" oninput="updateCostsSummary();">
-            <button class="cost-line-delete" onclick="deleteCustomCost(${idx})" title="Rimuovi"><i class="fas fa-times"></i></button>
+            <button class="cost-line-delete" onclick="deleteCostLine(${idx})" title="Rimuovi"><i class="fas fa-times"></i></button>
         </div>
     `).join('');
 
@@ -2157,11 +2201,10 @@ function renderCourseDetailPage() {
             <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value" id="detailMargin">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: <span id="detailRatio">${s.ratio.toFixed(2)}</span>x</div></div>
         </div>
 
-        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico (Editable)</div>
+        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico</div>
         <div style="background: white; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
-            ${costRows}
-            <div id="customCostLines">${customCostRows}</div>
-            <button onclick="addCustomCost('${c.id}')" style="width: 100%; margin-top: 8px; padding: 8px; background: transparent; color: var(--accent); border: 1px dashed var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;">
+            <div id="costLinesContainer">${allCostRows}</div>
+            <button onclick="addCostLine('${c.id}')" style="width: 100%; margin-top: 8px; padding: 8px; background: transparent; color: var(--accent); border: 1px dashed var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;">
                 <i class="fas fa-plus"></i> Aggiungi voce di costo
             </button>
             <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 12px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
@@ -2226,13 +2269,7 @@ function renderCourseDetailPage() {
         </div>`}
     `;
 
-    // Add event listeners for real-time cost updates
-    ['location', 'educator', 'food', 'sake', 'adv'].forEach(key => {
-        const input = document.getElementById(`cost-${key}`);
-        if (input) {
-            input.addEventListener('input', updateCostsSummary);
-        }
-    });
+    // Cost line event listeners are inline (oninput) — no extra binding needed
 
     // Initialize and render program section
     initializeProgram();
@@ -2243,16 +2280,15 @@ function updateCostsSummary() {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
 
-    const newCosts = {
-        location: parseFloat(document.getElementById('cost-location').value) || 0,
-        educator: parseFloat(document.getElementById('cost-educator').value) || 0,
-        food: parseFloat(document.getElementById('cost-food').value) || 0,
-        sake: parseFloat(document.getElementById('cost-sake').value) || 0,
-        adv: parseFloat(document.getElementById('cost-adv').value) || 0,
-        custom: c.costs.custom || []
-    };
+    // Sync values from UI to data
+    if (c.costs.lines) {
+        c.costs.lines.forEach((line, idx) => {
+            const input = document.getElementById(`cost-line-value-${idx}`);
+            if (input) line.value = parseFloat(input.value) || 0;
+        });
+    }
 
-    const totalCosts = getTotalCosts(newCosts);
+    const totalCosts = getCostLinesTotal(c);
     const revenue = c.students.length * c.price;
     const profit = revenue - totalCosts;
     const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
@@ -2264,30 +2300,45 @@ function updateCostsSummary() {
     document.getElementById('costiSummaryPerStudent').textContent = c.students.length > 0 ? formatCurrency(profit / c.students.length) : '—';
 }
 
-function addCustomCost(courseId) {
+function getCostLinesTotal(c) {
+    if (!c.costs.lines) return getTotalCosts(c.costs);
+    return c.costs.lines.reduce((sum, line) => sum + (parseFloat(line.value) || 0), 0);
+}
+
+function updateCostLineLabel(idx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c?.costs?.lines?.[idx]) return;
+    c.costs.lines[idx].label = value;
+}
+
+function updateCostLineValue(idx, value) {
+    const c = COURSES.find(x => x.id === window.currentCourseId);
+    if (!c?.costs?.lines?.[idx]) return;
+    c.costs.lines[idx].value = parseFloat(value) || 0;
+    // Also sync to old keys for backward compat
+    const line = c.costs.lines[idx];
+    if (line.key && line.key !== 'custom') {
+        c.costs[line.key] = line.value;
+    }
+}
+
+function addCostLine(courseId) {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
-    if (!c.costs.custom) c.costs.custom = [];
-    c.costs.custom.push({ label: '', value: 0 });
+    if (!c.costs.lines) c.costs.lines = [];
+    c.costs.lines.push({ key: 'custom', label: '', icon: 'fa-tag', color: 'var(--text-light)', value: 0 });
     renderCourseDetailPage();
 }
 
-function updateCustomCostLabel(idx, value) {
+function deleteCostLine(idx) {
     const c = COURSES.find(x => x.id === window.currentCourseId);
-    if (!c || !c.costs.custom?.[idx]) return;
-    c.costs.custom[idx].label = value;
-}
-
-function updateCustomCostValue(idx, value) {
-    const c = COURSES.find(x => x.id === window.currentCourseId);
-    if (!c || !c.costs.custom?.[idx]) return;
-    c.costs.custom[idx].value = parseFloat(value) || 0;
-}
-
-function deleteCustomCost(idx) {
-    const c = COURSES.find(x => x.id === window.currentCourseId);
-    if (!c || !c.costs.custom) return;
-    c.costs.custom.splice(idx, 1);
+    if (!c?.costs?.lines) return;
+    const line = c.costs.lines[idx];
+    // Also zero out old key if it's a preset
+    if (line.key && line.key !== 'custom') {
+        c.costs[line.key] = 0;
+    }
+    c.costs.lines.splice(idx, 1);
     renderCourseDetailPage();
 }
 
@@ -2295,13 +2346,24 @@ async function saveCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
 
+    // Sync values from UI inputs to data model
+    if (c.costs.lines) {
+        c.costs.lines.forEach((line, idx) => {
+            const labelInput = document.getElementById(`cost-line-label-${idx}`);
+            const valueInput = document.getElementById(`cost-line-value-${idx}`);
+            if (labelInput) line.label = labelInput.value;
+            if (valueInput) line.value = parseFloat(valueInput.value) || 0;
+            if (line.key && line.key !== 'custom') c.costs[line.key] = line.value;
+        });
+    }
+
     const newCosts = {
-        location: parseFloat(document.getElementById('cost-location').value) || 0,
-        educator: parseFloat(document.getElementById('cost-educator').value) || 0,
-        food: parseFloat(document.getElementById('cost-food').value) || 0,
-        sake: parseFloat(document.getElementById('cost-sake').value) || 0,
-        adv: parseFloat(document.getElementById('cost-adv').value) || 0,
-        custom: c.costs.custom || []
+        location: c.costs.location || 0,
+        educator: c.costs.educator || 0,
+        food: c.costs.food || 0,
+        sake: c.costs.sake || 0,
+        adv: c.costs.adv || 0,
+        lines: c.costs.lines || []
     };
 
     // Collect program data from UI
@@ -2325,7 +2387,7 @@ async function saveCourseDetail(courseId) {
 
             // Update course object
             c.costs = newCosts;
-            c.totalCosts = getTotalCosts(newCosts);
+            c.totalCosts = getCostLinesTotal(c);
             c.sustainability = computeSustainability(c);
 
             showToast('Costi e programma salvati con successo');
