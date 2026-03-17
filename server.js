@@ -61,9 +61,10 @@ let shareTokens = loadShareTokensFromFile();
 
 // ============================================================================
 // AIRTABLE-BASED PERSISTENCE (survives Render ephemeral filesystem wipes)
+// Uses table NAME directly in REST API (no metadata API / schema permissions needed)
 // ============================================================================
 const CONFIG_TABLE_NAME = 'SSA_CourseConfig';
-let configTableId = null;
+let airtablePersistenceActive = false;
 
 async function initConfigTable() {
   const apiKey = process.env.AIRTABLE_API_KEY;
@@ -73,41 +74,17 @@ async function initConfigTable() {
     return;
   }
   try {
-    // Check if table already exists via metadata API
-    const metaResp = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
-    if (metaResp.ok) {
-      const metaData = await metaResp.json();
-      const existing = (metaData.tables || []).find(t => t.name === CONFIG_TABLE_NAME);
-      if (existing) {
-        configTableId = existing.id;
-        console.log(`Airtable persistence: ACTIVE (table ${configTableId})`);
-        return;
-      }
-    }
-    // Try to create the table
-    const createResp = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        name: CONFIG_TABLE_NAME,
-        fields: [
-          { name: 'Key', type: 'singleLineText' },
-          { name: 'Value', type: 'multilineText' }
-        ]
-      })
-    });
-    if (createResp.ok) {
-      const created = await createResp.json();
-      configTableId = created.id;
-      console.log(`Airtable persistence: CREATED table ${configTableId}`);
+    // Test connectivity by querying the table by NAME (no metadata API needed)
+    const testResp = await fetch(
+      `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(CONFIG_TABLE_NAME)}?maxRecords=1`,
+      { headers: { 'Authorization': `Bearer ${apiKey}` } }
+    );
+    if (testResp.ok) {
+      airtablePersistenceActive = true;
+      console.log(`Airtable persistence: ACTIVE (table ${CONFIG_TABLE_NAME})`);
     } else {
-      const errText = await createResp.text();
-      console.log(`Airtable persistence: DISABLED (cannot create table: ${createResp.status} ${errText})`);
+      const errText = await testResp.text();
+      console.log(`Airtable persistence: DISABLED (table not accessible: ${testResp.status} ${errText})`);
     }
   } catch (e) {
     console.error('Airtable persistence init failed:', e.message);
@@ -115,13 +92,14 @@ async function initConfigTable() {
 }
 
 async function airtableConfigGet(key) {
-  if (!configTableId) return null;
+  if (!airtablePersistenceActive) return null;
   const apiKey = process.env.AIRTABLE_API_KEY;
   const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  const tablePath = encodeURIComponent(CONFIG_TABLE_NAME);
   try {
     const formula = encodeURIComponent(`{Key}="${key}"`);
     const resp = await fetch(
-      `https://api.airtable.com/v0/${baseId}/${configTableId}?filterByFormula=${formula}`,
+      `https://api.airtable.com/v0/${baseId}/${tablePath}?filterByFormula=${formula}`,
       { headers: { 'Authorization': `Bearer ${apiKey}` } }
     );
     if (!resp.ok) return null;
@@ -137,13 +115,14 @@ async function airtableConfigGet(key) {
 }
 
 async function airtableConfigSet(key, value) {
-  if (!configTableId) return;
+  if (!airtablePersistenceActive) return;
   const apiKey = process.env.AIRTABLE_API_KEY;
   const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  const tablePath = encodeURIComponent(CONFIG_TABLE_NAME);
   try {
     const formula = encodeURIComponent(`{Key}="${key}"`);
     const resp = await fetch(
-      `https://api.airtable.com/v0/${baseId}/${configTableId}?filterByFormula=${formula}`,
+      `https://api.airtable.com/v0/${baseId}/${tablePath}?filterByFormula=${formula}`,
       { headers: { 'Authorization': `Bearer ${apiKey}` } }
     );
     const data = resp.ok ? await resp.json() : { records: [] };
@@ -151,7 +130,7 @@ async function airtableConfigSet(key, value) {
 
     if (data.records && data.records.length > 0) {
       // Update existing record
-      await fetch(`https://api.airtable.com/v0/${baseId}/${configTableId}/${data.records[0].id}`, {
+      await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}/${data.records[0].id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -161,13 +140,13 @@ async function airtableConfigSet(key, value) {
       });
     } else {
       // Create new record
-      await fetch(`https://api.airtable.com/v0/${baseId}/${configTableId}`, {
+      await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ fields: { Key: key, Value: jsonValue } })
+        body: JSON.stringify({ records: [{ fields: { Key: key, Value: jsonValue } }] })
       });
     }
   } catch (e) {
@@ -176,7 +155,7 @@ async function airtableConfigSet(key, value) {
 }
 
 async function loadFromAirtable() {
-  if (!configTableId) return;
+  if (!airtablePersistenceActive) return;
   try {
     const costsData = await airtableConfigGet('course_costs');
     if (costsData && Object.keys(costsData).length > 0) {
@@ -1290,7 +1269,7 @@ async function startServer() {
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Shopify Store: ${SHOPIFY_STORE}`);
     console.log(`Airtable Base: ${AIRTABLE_BASE_ID}`);
-    console.log(`Airtable Persistence: ${configTableId ? 'ACTIVE' : 'DISABLED (file-only)'}`);
+    console.log(`Airtable Persistence: ${airtablePersistenceActive ? 'ACTIVE' : 'DISABLED (file-only)'}`);
   });
 }
 
