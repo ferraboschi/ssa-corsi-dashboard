@@ -15,18 +15,18 @@
            CSS VARIABLES & RESET
            ======================================== */
         :root {
-            --primary: #0D5CAB;
-            --secondary: #083d73;
-            --accent: #0D5CAB;
-            --accent-light: #3b82f6;
-            --bg: #f7f8fa;
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #c4975c;
+            --accent-light: #d4a76a;
+            --bg: #f5f0eb;
             --card: #ffffff;
-            --text: #1a1a1a;
-            --text-light: #6b7280;
-            --success: #16a34a;
-            --warning: #eab308;
-            --danger: #dc2626;
-            --border: #e5e7eb;
+            --text: #2d2d2d;
+            --text-light: #555555;
+            --success: #2d8a4e;
+            --warning: #e6a817;
+            --danger: #c0392b;
+            --border: #e0d6cc;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -42,14 +42,13 @@
            HEADER & NAVIGATION
            ======================================== */
         .header {
-            background: #ffffff;
-            color: var(--text);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
             padding: 0;
             position: sticky;
             top: 0;
             z-index: 100;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            border-bottom: 1px solid var(--border);
+            box-shadow: 0 2px 20px rgba(0,0,0,0.15);
         }
 
         .header-inner {
@@ -68,24 +67,22 @@
         }
 
         .logo-area .icon {
-            width: 40px; height: 40px;
-            border-radius: 50%;
-            overflow: hidden;
+            width: 44px; height: 44px;
+            background: var(--accent);
+            border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
-        }
-        .logo-area .icon img {
-            width: 100%; height: 100%; object-fit: contain;
+            font-size: 22px;
         }
 
-        .logo-area h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; color: var(--text); }
-        .logo-area .subtitle { font-size: 11px; color: var(--text-light); letter-spacing: 1px; text-transform: uppercase; }
+        .logo-area h1 { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .logo-area .subtitle { font-size: 11px; opacity: 0.7; letter-spacing: 1px; text-transform: uppercase; }
 
         .header-nav { display: flex; gap: 4px; }
 
         .header-nav button {
             background: transparent;
             border: none;
-            color: var(--text-light);
+            color: rgba(255,255,255,0.7);
             padding: 10px 18px;
             border-radius: 8px;
             cursor: pointer;
@@ -97,16 +94,17 @@
             gap: 8px;
         }
 
-        .header-nav button:hover { background: #f3f4f6; color: var(--text); }
-        .header-nav button.active { background: var(--primary); color: white; }
+        .header-nav button:hover,
+        .header-nav button.active { background: rgba(255,255,255,0.12); color: white; }
+        .header-nav button.active { background: var(--accent); }
 
         .header-actions { display: flex; align-items: center; gap: 12px; }
 
         .sync-badge {
             display: flex; align-items: center; gap: 6px;
-            background: #f3f4f6;
+            background: rgba(255,255,255,0.1);
             padding: 6px 14px; border-radius: 20px;
-            font-size: 11px; color: var(--text-light);
+            font-size: 11px; color: rgba(255,255,255,0.8);
         }
 
         .integration-badge {
@@ -121,7 +119,7 @@
         /* Hamburger menu (mobile) */
         .hamburger-btn {
             display: none;
-            background: transparent; border: none; color: var(--text);
+            background: transparent; border: none; color: white;
             font-size: 22px; cursor: pointer; padding: 8px;
         }
 
@@ -133,28 +131,27 @@
 
         .mobile-nav {
             position: fixed; top: 0; left: 0; bottom: 0;
-            width: 280px; background: #ffffff;
+            width: 280px; background: var(--primary);
             z-index: 200; transform: translateX(-100%);
             transition: transform 0.3s ease; padding: 24px;
-            box-shadow: 4px 0 20px rgba(0,0,0,0.1);
         }
         .mobile-nav.show { transform: translateX(0); }
 
         .mobile-nav button {
             display: block; width: 100%; text-align: left;
-            background: transparent; border: none; color: var(--text-light);
+            background: transparent; border: none; color: rgba(255,255,255,0.8);
             padding: 14px 16px; border-radius: 8px; cursor: pointer;
             font-size: 15px; margin-bottom: 4px; transition: all 0.2s;
         }
-        .mobile-nav button:hover { background: #f3f4f6; color: var(--text); }
-        .mobile-nav button.active { background: var(--primary); color: white; }
+        .mobile-nav button:hover,
+        .mobile-nav button.active { background: var(--accent); color: white; }
 
         .mobile-nav .mobile-nav-header {
             display: flex; align-items: center; gap: 12px;
             margin-bottom: 24px; padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid rgba(255,255,255,0.15);
         }
-        .mobile-nav .mobile-nav-header h2 { color: var(--text); font-size: 18px; }
+        .mobile-nav .mobile-nav-header h2 { color: white; font-size: 18px; }
 
         /* ========================================
            MAIN CONTENT
@@ -202,7 +199,7 @@
             position: relative; overflow: hidden;
         }
         .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
-        .stat-card.gold::before { background: var(--primary); }
+        .stat-card.gold::before { background: var(--accent); }
         .stat-card.green::before { background: var(--success); }
         .stat-card.blue::before { background: #3b82f6; }
         .stat-card.red::before { background: var(--danger); }
@@ -235,7 +232,7 @@
         .course-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
 
         .course-banner { height: 6px; }
-        .course-banner.certificato { background: linear-gradient(90deg, var(--primary), #3b82f6); }
+        .course-banner.certificato { background: linear-gradient(90deg, var(--accent), #d4a76a); }
         .course-banner.introduttivo { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
         .course-banner.shochu { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
         .course-banner.masterclass { background: linear-gradient(90deg, var(--success), #34d399); }
@@ -267,7 +264,7 @@
             font-size: 11px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .badge.certificato { background: #dbeafe; color: #1e40af; }
+        .badge.certificato { background: #fef3c7; color: #92400e; }
         .badge.introduttivo { background: #dbeafe; color: #1d4ed8; }
         .badge.shochu { background: #ede9fe; color: #6d28d9; }
         .badge.masterclass { background: #dcfce7; color: var(--success); }
@@ -303,16 +300,16 @@
         .data-table th {
             text-align: left; padding: 12px 16px; font-size: 11px;
             text-transform: uppercase; letter-spacing: 0.5px;
-            color: var(--text-light); background: #f9fafb;
+            color: var(--text-light); background: #faf8f5;
             border-bottom: 1px solid var(--border); font-weight: 600;
         }
         .data-table th.sortable { cursor: pointer; user-select: none; }
-        .data-table th.sortable:hover { background: #f3f4f6; }
+        .data-table th.sortable:hover { background: #f0ece6; }
         .data-table th .sort-icon { font-size: 10px; margin-left: 4px; opacity: 0.4; }
         .data-table th.sorted .sort-icon { opacity: 1; color: var(--accent); }
 
         .data-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        .data-table tr:hover td { background: #f9fafb; }
+        .data-table tr:hover td { background: #faf8f5; }
 
         .data-table .avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -403,7 +400,7 @@
         .sake-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 
         .sake-item {
-            background: #f9fafb; border: 1px solid var(--border);
+            background: #faf8f5; border: 1px solid var(--border);
             border-radius: 8px; padding: 14px;
             display: flex; align-items: center; gap: 12px;
         }
@@ -538,7 +535,7 @@
             align-items: center;
             gap: 8px;
             padding: 10px 12px;
-            background: #f9fafb;
+            background: #faf8f5;
             border-radius: 6px;
             font-size: 12px;
             color: var(--text-light);
@@ -607,7 +604,7 @@
         }
 
         .program-group-card {
-            background: #f9fafb;
+            background: #faf8f5;
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 14px;
@@ -916,7 +913,7 @@
             align-items: center;
             gap: 10px;
             padding: 10px 12px;
-            background: #f9fafb;
+            background: #faf8f5;
             border: 1px solid var(--border);
             border-radius: 8px;
             margin-bottom: 6px;
@@ -1080,7 +1077,7 @@
         }
 
         .program-sake-dropdown-item:hover {
-            background: #f9fafb;
+            background: #faf8f5;
         }
 
         .program-sake-dropdown-item strong {
@@ -1142,7 +1139,7 @@
         }
 
         .program-add-group-btn:hover {
-            background: #f9fafb;
+            background: #faf8f5;
         }
 
         .program-total {
@@ -1230,7 +1227,7 @@
             <button class="hamburger-btn" id="hamburgerBtn" aria-label="Apri menu di navigazione">
                 <i class="fas fa-bars"></i>
             </button>
-            <div class="icon"><img src="/ssa-logo.png" alt="SSA Logo"></div>
+            <div class="icon"><i class="fas fa-wine-bottle"></i></div>
             <div>
                 <h1>SSA Gestione Corsi</h1>
                 <div class="subtitle">corsi.sakesommelierassociation.it</div>
@@ -1256,8 +1253,8 @@
 <div class="mobile-nav-overlay" id="mobileNavOverlay"></div>
 <div class="mobile-nav" id="mobileNav" aria-label="Menu mobile">
     <div class="mobile-nav-header">
-        <div style="width:36px;height:36px;border-radius:50%;overflow:hidden;">
-            <img src="/ssa-logo.png" alt="SSA" style="width:100%;height:100%;object-fit:contain;">
+        <div class="icon" style="width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;">
+            <i class="fas fa-wine-bottle" style="color:white;"></i>
         </div>
         <h2>SSA</h2>
     </div>
@@ -2206,7 +2203,7 @@ function renderCourseDetailPage() {
         const defaultLines = [
             { key: 'location', label: 'Location (affitto sala)', icon: 'fa-map-marker-alt', color: '#e6a817', value: c.costs.location || 0 },
             { key: 'educator', label: 'Educator (compenso)', icon: 'fa-chalkboard-teacher', color: '#1a1a2e', value: c.costs.educator || 0 },
-            { key: 'food', label: 'Food/Catering', icon: 'fa-utensils', color: '#6b7280', value: c.costs.food || 0 },
+            { key: 'food', label: 'Food/Catering', icon: 'fa-utensils', color: '#c4975c', value: c.costs.food || 0 },
             { key: 'sake', label: 'Sake (prodotti)', icon: 'fa-wine-bottle', color: '#16213e', value: c.costs.sake || 0 },
             { key: 'adv', label: 'ADV (pubblicità)', icon: 'fa-bullhorn', color: '#2d8a4e', value: c.costs.adv || 0 }
         ];
@@ -2239,7 +2236,7 @@ function renderCourseDetailPage() {
             <span class="integration-badge shopify" style="font-size: 11px;"><i class="fab fa-shopify"></i> ID: ${c.shopifyId}</span>
         </div>
 
-        <div style="background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+        <div style="background: #faf8f5; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
             <div><strong>Date:</strong> ${c.dates}</div>
             <div><strong>Location:</strong> ${c.location}</div>
             <div><strong>Educator:</strong> ${c.educator.name} (${c.educator.region})</div>
