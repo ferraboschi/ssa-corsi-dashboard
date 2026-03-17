@@ -3,9 +3,11 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 // Course costs persistent storage
 const COSTS_FILE = path.join(__dirname, 'data', 'course-costs.json');
+const SHARE_FILE = path.join(__dirname, 'data', 'share-tokens.json');
 
 function loadCosts() {
   try {
@@ -24,7 +26,30 @@ function saveCostsToFile(costs) {
   } catch (e) { console.error('Error saving costs:', e); }
 }
 
+// Share tokens persistent storage
+function loadShareTokens() {
+  try {
+    if (fs.existsSync(SHARE_FILE)) {
+      return JSON.parse(fs.readFileSync(SHARE_FILE, 'utf8'));
+    }
+  } catch (e) { console.error('Error loading share tokens:', e); }
+  return {};
+}
+
+function saveShareTokensToFile(tokens) {
+  try {
+    const dir = path.dirname(SHARE_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SHARE_FILE, JSON.stringify(tokens, null, 2));
+  } catch (e) { console.error('Error saving share tokens:', e); }
+}
+
+function generateShareToken() {
+  return crypto.randomUUID();
+}
+
 const courseCosts = loadCosts();
+let shareTokens = loadShareTokens();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -306,10 +331,22 @@ app.get('/api/courses', async (req, res) => {
             ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
             : 'Sconosciuto';
 
+          // Better phone collection: check customer phone, fallback to shipping/billing addresses
+          let phone = order.customer?.phone || '';
+          if (!phone && order.shipping_address?.phone) {
+            phone = order.shipping_address.phone;
+          }
+          if (!phone && order.billing_address?.phone) {
+            phone = order.billing_address.phone;
+          }
+          if (!phone && order.customer?.default_address?.phone) {
+            phone = order.customer.default_address.phone;
+          }
+
           course.students.push({
             name: customerName,
             email: order.customer?.email || '',
-            phone: order.customer?.phone || '',
+            phone: phone,
             orderId: order.id,
             orderNumber: order.name || `#${order.order_number}`,
             orderDate: order.created_at,
@@ -408,7 +445,7 @@ app.get('/api/costs/:courseId', (req, res) => {
 
 app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
-  const { location, educator, food, sake, adv, program } = req.body;
+  const { location, educator, food, sake, adv, program, lines } = req.body;
   courseCosts[courseId] = {
     location: parseFloat(location) || 0,
     educator: parseFloat(educator) || 0,
@@ -419,6 +456,10 @@ app.post('/api/costs/:courseId', (req, res) => {
   // Save program (groups with sakes) if provided
   if (program !== undefined) {
     courseCosts[courseId].program = program;
+  }
+  // Save lines array if provided
+  if (lines !== undefined) {
+    courseCosts[courseId].lines = lines;
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
@@ -534,6 +575,449 @@ app.get('/api/sakecompany/products', async (req, res) => {
     console.error('Sake Company API error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// ============================================================================
+// SHARE TOKEN ROUTES
+// ============================================================================
+app.post('/api/share/:courseHandle', async (req, res) => {
+  try {
+    const { courseHandle } = req.params;
+    const { ttlDays } = req.body;
+    const ttl = (ttlDays || 7) * 24 * 60 * 60 * 1000; // Convert to milliseconds
+
+    const token = generateShareToken();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ttl);
+
+    shareTokens[token] = {
+      token,
+      courseHandle,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString()
+    };
+
+    saveShareTokensToFile(shareTokens);
+    res.json({
+      success: true,
+      token,
+      courseHandle,
+      expiresAt: expiresAt.toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/share/:token', (req, res) => {
+  try {
+    const { token } = req.params;
+    if (shareTokens[token]) {
+      delete shareTokens[token];
+      saveShareTokensToFile(shareTokens);
+      res.json({ success: true, message: 'Token revoked' });
+    } else {
+      res.status(404).json({ success: false, error: 'Token not found' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/share-tokens/:courseHandle', (req, res) => {
+  try {
+    const { courseHandle } = req.params;
+    const now = new Date();
+    const activeTokens = Object.values(shareTokens)
+      .filter(t => t.courseHandle === courseHandle && new Date(t.expiresAt) > now)
+      .map(t => ({
+        token: t.token,
+        createdAt: t.createdAt,
+        expiresAt: t.expiresAt
+      }));
+    res.json({ success: true, tokens: activeTokens });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/shared/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const tokenData = shareTokens[token];
+
+    if (!tokenData) {
+      return res.status(404).json({ success: false, error: 'Token not found' });
+    }
+
+    const expiresAt = new Date(tokenData.expiresAt);
+    if (new Date() > expiresAt) {
+      return res.status(401).json({ success: false, error: 'Token expired' });
+    }
+
+    // Fetch course data by handle
+    const products = await fetchAllShopifyProducts();
+    const orders = await fetchAllShopifyOrders();
+
+    const courseProduct = products.find(p => p.handle === tokenData.courseHandle);
+    if (!courseProduct) {
+      return res.status(404).json({ success: false, error: 'Course not found' });
+    }
+
+    // Build course data without financial info
+    const course = {
+      id: courseProduct.id,
+      title: courseProduct.title,
+      handle: courseProduct.handle,
+      body_html: courseProduct.body_html,
+      images: courseProduct.images,
+      students: []
+    };
+
+    // Get educator info from tags or vendor
+    const educatorTag = courseProduct.tags?.find(tag => tag.startsWith('educator:'));
+    course.educator = educatorTag ? educatorTag.replace('educator:', '') : courseProduct.vendor || '';
+
+    // Get program info from costs (stored by handle)
+    const costs = courseCosts[courseProduct.handle];
+    if (costs && costs.program) {
+      course.program = costs.program;
+    }
+
+    // Get student names only (no financial data)
+    const studentSet = new Set();
+    orders.forEach(order => {
+      if (!order.line_items) return;
+      order.line_items.forEach(item => {
+        if (item.product_id === courseProduct.id) {
+          const customerName = order.customer
+            ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
+            : 'Sconosciuto';
+          if (customerName) {
+            studentSet.add(customerName);
+          }
+        }
+      });
+    });
+
+    course.students = Array.from(studentSet).map(name => ({ name }));
+
+    res.json({ success: true, data: course });
+  } catch (error) {
+    console.error('Error in /api/shared/:token:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// SHARE TOKEN READ-ONLY PAGE (must be BEFORE wildcard route)
+// ============================================================================
+app.get('/share/:token', (req, res) => {
+  const token = req.params.token;
+  res.send(`
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSA - Course Share</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    :root {
+      --color-primary: #2a5f3f;
+      --color-secondary: #d4a574;
+      --color-accent: #8b4513;
+      --color-light: #f5f1ed;
+      --color-text: #333;
+      --color-border: #ddd;
+      --font-serif: Georgia, serif;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    body {
+      font-family: var(--font-sans);
+      color: var(--color-text);
+      background-color: var(--color-light);
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+      border-bottom: 2px solid var(--color-secondary);
+      padding-bottom: 2rem;
+    }
+    .header h1 {
+      font-family: var(--font-serif);
+      color: var(--color-primary);
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .header .ssa-brand {
+      font-size: 0.9rem;
+      color: var(--color-secondary);
+      font-weight: 600;
+      letter-spacing: 2px;
+    }
+    .status-error {
+      background-color: #fee;
+      border: 1px solid #fcc;
+      color: #c33;
+      padding: 1rem;
+      border-radius: 4px;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .status-expired {
+      background-color: #ffeaa7;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 1.5rem;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 1.1rem;
+      margin: 2rem 0;
+    }
+    .course-info {
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .course-title {
+      font-family: var(--font-serif);
+      font-size: 2rem;
+      color: var(--color-primary);
+      margin-bottom: 1rem;
+    }
+    .course-description {
+      color: #666;
+      margin-bottom: 1.5rem;
+      line-height: 1.8;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .info-row:last-child {
+      border-bottom: none;
+    }
+    .info-label {
+      font-weight: 600;
+      color: var(--color-primary);
+      min-width: 150px;
+    }
+    .info-value {
+      text-align: right;
+    }
+    .educator-section {
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .educator-title {
+      font-family: var(--font-serif);
+      font-size: 1.3rem;
+      color: var(--color-primary);
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--color-secondary);
+      padding-bottom: 0.5rem;
+    }
+    .educator-info {
+      color: #666;
+      line-height: 1.8;
+    }
+    .program-section {
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+    }
+    .program-title {
+      font-family: var(--font-serif);
+      font-size: 1.3rem;
+      color: var(--color-primary);
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--color-secondary);
+      padding-bottom: 0.5rem;
+    }
+    .program-content {
+      color: #666;
+    }
+    .sake-group {
+      background-color: #fafafa;
+      border-left: 4px solid var(--color-secondary);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+    }
+    .sake-group-name {
+      font-weight: 600;
+      color: var(--color-primary);
+      margin-bottom: 0.5rem;
+    }
+    .sake-item {
+      color: #666;
+      margin-bottom: 0.3rem;
+      padding-left: 1rem;
+    }
+    .students-section {
+      background: white;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 2rem;
+    }
+    .students-title {
+      font-family: var(--font-serif);
+      font-size: 1.3rem;
+      color: var(--color-primary);
+      margin-bottom: 1rem;
+      border-bottom: 2px solid var(--color-secondary);
+      padding-bottom: 0.5rem;
+    }
+    .student-list {
+      list-style: none;
+      columns: 2;
+      gap: 2rem;
+    }
+    .student-list li {
+      padding: 0.5rem 0;
+      color: #666;
+      break-inside: avoid;
+    }
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      .header h1 { font-size: 1.6rem; }
+      .course-title { font-size: 1.4rem; }
+      .info-row { flex-direction: column; gap: 4px; }
+      .info-label { min-width: auto; }
+      .info-value { text-align: left; }
+      .student-list { columns: 1; }
+      .course-info, .educator-section, .program-section, .students-section { padding: 1rem; }
+    }
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: #666;
+    }
+    .spinner {
+      border: 4px solid var(--color-light);
+      border-top: 4px solid var(--color-primary);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 1rem auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="ssa-brand">SAKE SOMMELIER ASSOCIATION</div>
+      <h1>Course Information</h1>
+    </div>
+    <div id="content">
+      <div class="loading">
+        <div class="spinner"></div>
+        <p>Loading course information...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadCourseData() {
+      try {
+        const response = await fetch('/api/shared/${token}');
+        const result = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            document.getElementById('content').innerHTML = '<div class="status-expired">Link scaduto</div>';
+          } else {
+            document.getElementById('content').innerHTML = '<div class="status-error">Errore: ' + (result.error || 'Course not found') + '</div>';
+          }
+          return;
+        }
+
+        const course = result.data;
+        let html = '';
+
+        // Course info
+        html += '<div class="course-info">';
+        html += '<div class="course-title">' + (course.title || 'Untitled') + '</div>';
+        if (course.body_html) {
+          html += '<div class="course-description">' + course.body_html + '</div>';
+        }
+        html += '</div>';
+
+        // Educator
+        if (course.educator) {
+          html += '<div class="educator-section">';
+          html += '<div class="educator-title">Educator</div>';
+          html += '<div class="educator-info">' + course.educator + '</div>';
+          html += '</div>';
+        }
+
+        // Program (sake details)
+        if (course.program && Array.isArray(course.program)) {
+          html += '<div class="program-section">';
+          html += '<div class="program-title">Program</div>';
+          html += '<div class="program-content">';
+          course.program.forEach(group => {
+            html += '<div class="sake-group">';
+            html += '<div class="sake-group-name">' + (group.name || 'Group') + '</div>';
+            if (Array.isArray(group.sakes)) {
+              group.sakes.forEach(sake => {
+                html += '<div class="sake-item">' + (sake.name || 'Unknown') + '</div>';
+              });
+            }
+            html += '</div>';
+          });
+          html += '</div>';
+          html += '</div>';
+        }
+
+        // Students
+        if (course.students && Array.isArray(course.students) && course.students.length > 0) {
+          html += '<div class="students-section">';
+          html += '<div class="students-title">Students (' + course.students.length + ')</div>';
+          html += '<ul class="student-list">';
+          course.students.forEach(student => {
+            html += '<li>' + (student.name || 'Unknown') + '</li>';
+          });
+          html += '</ul>';
+          html += '</div>';
+        }
+
+        document.getElementById('content').innerHTML = html;
+      } catch (error) {
+        document.getElementById('content').innerHTML = '<div class="status-error">Error loading course: ' + error.message + '</div>';
+      }
+    }
+
+    loadCourseData();
+  </script>
+</body>
+</html>
+  `);
 });
 
 // ============================================================================

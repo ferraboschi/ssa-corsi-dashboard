@@ -1156,7 +1156,7 @@
            RESPONSIVE
            ======================================== */
         @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .courses-grid { grid-template-columns: 1fr; }
             .educator-grid { grid-template-columns: 1fr; }
             .two-cols { grid-template-columns: 1fr; }
@@ -1164,6 +1164,44 @@
             .main { padding: 16px; }
             .header-nav { display: none; }
             .hamburger-btn { display: flex; align-items: center; }
+            .header-actions .integration-badge { display: none; }
+            .filter-bar { flex-wrap: wrap; gap: 8px; }
+            .filter-bar input[type="text"] { min-width: 0; width: 100%; }
+            .filter-bar select { width: 100%; }
+            .cost-line-row { flex-wrap: wrap; gap: 6px; }
+            .cost-line-label { min-width: 100px; }
+            .cost-line-value { width: 80px; }
+            .program-sake { flex-wrap: wrap; }
+            .program-sake-actions { opacity: 1; }
+            .program-sake-arrows { opacity: 1; }
+            .program-group-delete { opacity: 1; }
+            .program-group-arrows { opacity: 1; }
+            .stat-card { padding: 14px 16px; }
+            .stat-card .stat-value { font-size: 22px; }
+            .educator-top { flex-wrap: wrap; }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr; gap: 8px; }
+            .header-inner { padding: 10px 12px; }
+            .main { padding: 10px; }
+            .logo-area h1 { font-size: 15px; }
+            .logo-area .subtitle { font-size: 9px; }
+            .stat-card { padding: 12px; }
+            .stat-card .stat-value { font-size: 20px; }
+            .stat-card .stat-label { font-size: 10px; }
+            .course-content { padding: 14px 16px; }
+            .section-title { font-size: 12px; }
+            .cost-line-row { padding: 8px; }
+            .cost-line-label { font-size: 12px; padding: 4px 6px; }
+            .cost-line-value { width: 70px; font-size: 13px; }
+            .cost-line-euro { font-size: 12px; }
+            .data-table td { padding: 10px 8px; font-size: 12px; }
+            .data-table th { padding: 8px; font-size: 10px; }
+            .data-table .avatar { width: 28px; height: 28px; font-size: 10px; margin-right: 6px; }
+            .data-table .name-info .name { font-size: 12px; }
+            .data-table .name-info .email { font-size: 10px; }
+            .badge { font-size: 10px; padding: 3px 8px; }
         }
 
         /* ========================================
@@ -1893,6 +1931,17 @@ async function loadApiData() {
     });
     EDUCATORS = Array.from(educatorMap.values());
 
+    // Build student course count map for repeat indicator
+    window.STUDENT_COURSE_COUNT = {};
+    COURSES.forEach(c => {
+        c.students.forEach(st => {
+            if (st.email) {
+                const emailLower = st.email.toLowerCase();
+                window.STUDENT_COURSE_COUNT[emailLower] = (window.STUDENT_COURSE_COUNT[emailLower] || 0) + 1;
+            }
+        });
+    });
+
     // Load Airtable sake data
     try {
         if (cachedSake) {
@@ -2201,8 +2250,11 @@ function renderCourseDetailPage() {
             <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value" id="detailMargin">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: <span id="detailRatio">${s.ratio.toFixed(2)}</span>x</div></div>
         </div>
 
-        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico</div>
-        <div style="background: white; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
+        <div class="section-title" style="cursor: pointer;" onclick="toggleCostsSection()">
+            <i class="fas fa-coins"></i> Conto Economico
+            <i class="fas fa-chevron-down" id="costsToggleIcon" style="margin-left: auto; font-size: 11px; transition: transform 0.2s;"></i>
+        </div>
+        <div id="costsCollapsible" style="background: white; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
             <div id="costLinesContainer">${allCostRows}</div>
             <button onclick="addCostLine('${c.id}')" style="width: 100%; margin-top: 8px; padding: 8px; background: transparent; color: var(--accent); border: 1px dashed var(--accent); border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;">
                 <i class="fas fa-plus"></i> Aggiungi voce di costo
@@ -2244,24 +2296,48 @@ function renderCourseDetailPage() {
             </div>
         </div>
 
+        <div style="margin-bottom: 24px;">
+            <button onclick="toggleShareSection()" style="width: 100%; padding: 12px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fas fa-share-alt"></i> Condividi con Educator
+            </button>
+            <div id="shareSection" style="display: none; background: white; padding: 16px; border-radius: 10px; margin-top: 12px;">
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Durata del link (giorni)</label>
+                    <select id="shareTTLSelect" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;">
+                        <option value="7">7 giorni</option>
+                        <option value="14" selected>14 giorni</option>
+                        <option value="30">30 giorni</option>
+                    </select>
+                </div>
+                <button onclick="generateShareLink('${c.handle}')" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
+                    <i class="fas fa-plus"></i> Genera Link
+                </button>
+                <div id="shareLinksContainer" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+
         <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
         ${c.students.length > 0 ? `
-        <table class="data-table">
+        <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
+        <table class="data-table" style="min-width: 600px;">
             <thead><tr><th>Corsista</th><th>Telefono</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine Shopify</th></tr></thead>
             <tbody>
                 ${c.students.map(st => {
                     const initials = getInitials(st.name);
                     const isPaid = st.financialStatus === 'paid';
+                    const cleanPhone = st.phone ? st.phone.replace(/\D/g, '') : '';
+                    const isRepeat = st.email && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[st.email.toLowerCase()] > 1;
                     return `<tr>
-                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}</div><div class="email">${st.email || ''}</div></div></div></td>
-                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="tel:${st.phone}" style="color: var(--text); text-decoration: none;"><i class="fas fa-phone" style="font-size: 10px; color: var(--accent); margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
+                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? '<i class="fas fa-redo" style="font-size: 10px; color: var(--accent); margin-left: 6px;" title="Corsista ricorrente"></i>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
+                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="fab fa-whatsapp" style="font-size: 10px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
                         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
                     </tr>`;
                 }).join('')}
             </tbody>
-        </table>` : `
+        </table>
+        </div>` : `
         <div class="empty-state" style="padding: 24px;">
             <i class="fas fa-user-clock" style="font-size: 32px;"></i>
             <h3 style="font-size: 15px;">Nessun iscritto</h3>
@@ -3077,6 +3153,127 @@ function closeMobileNav() {
 window.addEventListener('load', () => {
     loadApiData();
 });
+
+// =============================================
+// COSTS COLLAPSIBLE
+// =============================================
+
+function toggleCostsSection() {
+    const content = document.getElementById('costsCollapsible');
+    const icon = document.getElementById('costsToggleIcon');
+    if (content && icon) {
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            icon.style.transform = 'rotate(0deg)';
+        } else {
+            content.style.display = 'none';
+            icon.style.transform = 'rotate(-90deg)';
+        }
+    }
+}
+
+// =============================================
+// SHARE LINK MANAGEMENT
+// =============================================
+
+function toggleShareSection() {
+    const section = document.getElementById('shareSection');
+    if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        if (section.style.display === 'block') {
+            const c = COURSES.find(x => x.id === window.currentCourseId);
+            if (c) loadShareLinks(c.handle);
+        }
+    }
+}
+
+async function loadShareLinks(courseHandle) {
+    try {
+        const response = await fetch(`/api/share-tokens/${courseHandle}`);
+        if (!response.ok) throw new Error('Failed to load share tokens');
+        const result = await response.json();
+        const tokens = result.tokens || [];
+
+        const container = document.getElementById('shareLinksContainer');
+        if (!container) return;
+
+        if (!tokens || tokens.length === 0) {
+            container.innerHTML = '<div style="color: var(--text-light); font-size: 12px; padding: 12px 0;">Nessun link attivo</div>';
+            return;
+        }
+
+        let html = '<div style="font-size: 12px;">';
+        tokens.forEach(token => {
+            const shareUrl = `${window.location.origin}/share/${token.token}`;
+            const expDate = new Date(token.expiresAt).toLocaleDateString('it-IT');
+            html += `
+                <div style="background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
+                    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                        <input type="text" value="${shareUrl}" readonly style="flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-family: monospace;" onclick="this.select()">
+                        <button onclick="copyShareLink('${token.token}')" style="padding: 6px 10px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                        <button onclick="revokeShareLink('${token.token}')" style="padding: 6px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div style="color: var(--text-light); font-size: 11px;">Scade: ${expDate}</div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (e) {
+        console.error('Error loading share links:', e);
+        document.getElementById('shareLinksContainer').innerHTML = '<div style="color: #dc3545; font-size: 12px;">Errore nel caricamento dei link</div>';
+    }
+}
+
+async function generateShareLink(courseHandle) {
+    try {
+        const ttl = document.getElementById('shareTTLSelect')?.value || '14';
+        const response = await fetch(`/api/share/${courseHandle}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ttlDays: parseInt(ttl) })
+        });
+
+        if (!response.ok) throw new Error('Failed to generate share link');
+        await loadShareLinks(courseHandle);
+        showToast('Link di condivisione generato');
+    } catch (e) {
+        console.error('Error generating share link:', e);
+        showError('Errore nella generazione del link: ' + e.message);
+    }
+}
+
+async function revokeShareLink(token) {
+    if (!confirm('Sei sicuro di voler revocare questo link?')) return;
+
+    try {
+        const response = await fetch(`/api/share/${token}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to revoke token');
+
+        const c = COURSES.find(x => x.id === window.currentCourseId);
+        if (c) {
+            await loadShareLinks(c.handle);
+            showToast('Link revocato');
+        }
+    } catch (e) {
+        console.error('Error revoking share link:', e);
+        showError('Errore nella revoca del link: ' + e.message);
+    }
+}
+
+function copyShareLink(token) {
+    const shareUrl = `${window.location.origin}/share/${token}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+        showToast('Link copiato negli appunti');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+        showError('Errore nella copia del link');
+    });
+}
 
 </script>
 </body>
