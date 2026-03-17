@@ -417,6 +417,8 @@
         /* ========================================
            DETAIL OVERLAY (MODAL)
            ======================================== */
+        /* DEPRECATED: Old modal overlay CSS - replaced with full-page course detail view
+           Keeping for reference but no longer used
         .detail-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.5);
             z-index: 200; display: flex; align-items: center; justify-content: center;
@@ -445,6 +447,17 @@
         }
         .detail-header .close-btn:hover { background: #fee2e2; color: var(--danger); border-color: var(--danger); }
         .detail-body { padding: 24px 32px; }
+        */
+
+        /* Cost input styling */
+        .cost-input {
+            font-weight: 500;
+        }
+        .cost-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(196, 151, 92, 0.1);
+        }
 
         /* ========================================
            TOAST & ERROR BANNER
@@ -590,16 +603,6 @@
 </div>
 
 <!-- Detail Overlay -->
-<div class="detail-overlay" id="detailOverlay" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
-    <div class="detail-panel">
-        <div class="detail-header">
-            <h2 id="detailTitle">Dettaglio Corso</h2>
-            <button class="close-btn" onclick="closeDetail()" aria-label="Chiudi dettaglio"><i class="fas fa-times"></i></button>
-        </div>
-        <div class="detail-body" id="detailBody"></div>
-    </div>
-</div>
-
 <main class="main">
     <!-- Error Banner -->
     <div class="error-banner" id="errorBanner">
@@ -724,6 +727,18 @@
             </div>
         </div>
     </div>
+
+    <!-- COURSE DETAIL PAGE -->
+    <div id="page-course-detail" class="page-hidden">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+            <button class="link-btn" onclick="backFromCourseDetail()" aria-label="Torna ai Corsi" style="font-size: 14px;">
+                <i class="fas fa-arrow-left"></i> Torna ai Corsi
+            </button>
+            <span style="color: var(--text-light); font-size: 13px;">|</span>
+            <span id="courseDetailBreadcrumb" style="color: var(--text-light); font-size: 13px;">Dettaglio Corso</span>
+        </div>
+        <div id="courseDetailContent"></div>
+    </div>
 </main>
 
 <script>
@@ -787,9 +802,11 @@ const CONFIG = {
 let COURSES = [];
 let EDUCATORS = [];
 let SAKE_CATALOG = [];
+let COURSE_COSTS = {}; // Store costs per course handle
 let sakeDisplayCount = CONFIG.SAKE_PAGE_SIZE;
 let apiStatus = { shopify: false, airtable: false, courses: false };
 let currentPage = 'dashboard';
+let previousPage = 'dashboard'; // Track previous page for course detail navigation
 let corsistiSort = { field: 'orderDate', dir: 'desc' };
 
 // =============================================
@@ -1010,7 +1027,7 @@ function renderCourseCardHTML(c, opts = {}) {
         : '';
 
     return `
-    <div class="course-card" onclick="openCourseDetail('${c.id}')" role="button" tabindex="0" aria-label="Dettaglio ${c.name}">
+    <div class="course-card" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" role="button" tabindex="0" aria-label="Dettaglio ${c.name}">
         <div class="course-banner ${c.courseType.color}"></div>
         <div class="course-content">
             <div class="course-top">
@@ -1070,6 +1087,24 @@ function renderStudentRowHTML(st, opts = {}) {
 }
 
 // =============================================
+// LOAD COSTS FROM API
+// =============================================
+
+async function loadCourseCosts() {
+    try {
+        const response = await fetch('/api/costs');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data) {
+                COURSE_COSTS = data.data;
+            }
+        }
+    } catch (e) {
+        console.error('Could not load course costs:', e);
+    }
+}
+
+// =============================================
 // API DATA LOADING
 // =============================================
 
@@ -1121,13 +1156,19 @@ async function loadApiData() {
             const rawStudents = c.students || [];
             const students = deduplicateStudents(rawStudents);
 
-            const costs = {
-                location: typeInfo.type.includes('online') ? 0 : 500,
-                educator: 800,
-                food: typeInfo.type.includes('online') ? 0 : 250,
-                sake: typeInfo.type.includes('online') ? 150 : 300,
-                adv: 200
-            };
+            // Use API costs if available, otherwise use defaults
+            let costs;
+            if (COURSE_COSTS[c.handle]) {
+                costs = COURSE_COSTS[c.handle];
+            } else {
+                costs = {
+                    location: typeInfo.type.includes('online') ? 0 : 500,
+                    educator: 800,
+                    food: typeInfo.type.includes('online') ? 0 : 250,
+                    sake: typeInfo.type.includes('online') ? 150 : 300,
+                    adv: 200
+                };
+            }
             const totalCosts = getTotalCosts(costs);
 
             const course = {
@@ -1206,6 +1247,9 @@ async function loadApiData() {
         // Not fatal — just show sake as unavailable
     }
 
+    // Load course costs from API
+    await loadCourseCosts();
+
     updateConnectionStatus();
     renderCurrentPage();
 }
@@ -1235,17 +1279,23 @@ function updateConnectionStatus() {
 // =============================================
 
 function navigateTo(page) {
+    // Track previous page (don't update for course-detail, which is internal)
+    if (page !== 'course-detail' && currentPage !== 'course-detail') {
+        previousPage = currentPage;
+    }
     currentPage = page;
 
-    // Update desktop nav
-    document.querySelectorAll('#mainNav button').forEach(b => b.classList.remove('active'));
-    const desktopBtn = document.querySelector(`#mainNav button[data-page="${page}"]`);
-    if (desktopBtn) desktopBtn.classList.add('active');
+    // Update desktop nav (only for main pages, not course-detail)
+    if (page !== 'course-detail') {
+        document.querySelectorAll('#mainNav button').forEach(b => b.classList.remove('active'));
+        const desktopBtn = document.querySelector(`#mainNav button[data-page="${page}"]`);
+        if (desktopBtn) desktopBtn.classList.add('active');
 
-    // Update mobile nav
-    document.querySelectorAll('#mobileNav button').forEach(b => b.classList.remove('active'));
-    const mobileBtn = document.querySelector(`#mobileNav button[data-page="${page}"]`);
-    if (mobileBtn) mobileBtn.classList.add('active');
+        // Update mobile nav
+        document.querySelectorAll('#mobileNav button').forEach(b => b.classList.remove('active'));
+        const mobileBtn = document.querySelector(`#mobileNav button[data-page="${page}"]`);
+        if (mobileBtn) mobileBtn.classList.add('active');
+    }
 
     // Show/hide pages
     document.querySelectorAll('[id^="page-"]').forEach(p => {
@@ -1268,6 +1318,7 @@ function renderCurrentPage() {
     else if (currentPage === 'corsisti') renderCorsistiPage();
     else if (currentPage === 'educator') renderEducatorPage();
     else if (currentPage === 'sake') renderSakePage();
+    else if (currentPage === 'course-detail') renderCourseDetailPage();
 }
 
 // =============================================
@@ -1370,14 +1421,41 @@ function renderCorsiPage() {
 // =============================================
 
 function openCourseDetail(courseId) {
+    navigateTo('course-detail');
+}
+
+function renderCourseDetailPage() {
+    // This function is called when the page is loaded, but we need the courseId
+    // The courseId is stored in currentCourseId (set before navigation)
+    const courseId = window.currentCourseId;
+    if (!courseId) return;
+
     const c = COURSES.find(x => x.id === courseId);
-    if (!c) return;
+    if (!c) {
+        document.getElementById('courseDetailContent').innerHTML =
+            '<div class="empty-state"><i class="fas fa-exclamation-circle" style="font-size: 32px;"></i><h3>Corso non trovato</h3></div>';
+        return;
+    }
+
     const s = c.sustainability;
 
-    document.getElementById('detailTitle').textContent = c.name;
-    const body = document.getElementById('detailBody');
+    // Build the costs section with editable fields
+    const costLabels = { location: 'Location (affitto sala)', educator: 'Educator (compenso)', food: 'Food/Catering', sake: 'Sake (prodotti)', adv: 'ADV (pubblicità)' };
+    const costIcons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
+    const costColors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
 
-    body.innerHTML = `
+    const costRows = Object.keys(costLabels).map(key => `
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+            <div style="font-size: 18px; color: ${costColors[key]}; min-width: 24px;"><i class="fas ${costIcons[key]}"></i></div>
+            <div style="flex: 1;">
+                <div style="font-size: 13px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px;">${costLabels[key]}</div>
+            </div>
+            <input type="number" id="cost-${key}" class="cost-input" value="${c.costs[key] || 0}" min="0" step="10" style="width: 120px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; text-align: right; font-size: 14px; font-weight: 500;">
+        </div>
+    `).join('');
+
+    document.getElementById('courseDetailBreadcrumb').textContent = c.name;
+    document.getElementById('courseDetailContent').innerHTML = `
         <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
             <span class="badge ${c.courseType.color}" style="font-size: 13px; padding: 6px 16px;">${c.courseType.label}</span>
             <span class="badge" style="background: #dbeafe; color: #1d4ed8; font-size: 13px; padding: 6px 16px;"><i class="fas fa-map-marker-alt"></i> ${c.city}</span>
@@ -1393,31 +1471,23 @@ function openCourseDetail(courseId) {
 
         <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 24px;">
             <div class="stat-card gold"><div class="stat-label">Iscritti</div><div class="stat-value">${c.students.length}/${c.maxStudents}</div><div class="stat-sub">Min. ${c.minStudents}</div></div>
-            <div class="stat-card green"><div class="stat-label">Ricavo</div><div class="stat-value">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
-            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value">${formatCurrency(s.costs)}</div><div class="stat-sub">5 voci</div></div>
-            <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: ${s.ratio.toFixed(2)}x</div></div>
+            <div class="stat-card green"><div class="stat-label">Ricavo</div><div class="stat-value" id="detailRevenue">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
+            <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value" id="detailTotalCosts">${formatCurrency(s.costs)}</div><div class="stat-sub">5 voci</div></div>
+            <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value" id="detailMargin">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: <span id="detailRatio">${s.ratio.toFixed(2)}</span>x</div></div>
         </div>
 
-        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico</div>
-        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px;">
-            ${(() => {
-                const costs = c.costs || {};
-                const labels = { location: 'Location', educator: 'Educator', food: 'Food', sake: 'Sake', adv: 'ADV' };
-                const icons = { location: 'fa-map-marker-alt', educator: 'fa-chalkboard-teacher', food: 'fa-utensils', sake: 'fa-wine-bottle', adv: 'fa-bullhorn' };
-                const colors = { location: '#e6a817', educator: '#1a1a2e', food: '#c4975c', sake: '#16213e', adv: '#2d8a4e' };
-                return Object.keys(labels).map(key => `
-                    <div style="background: white; border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; ${!costs[key] ? 'opacity: 0.5; border-style: dashed;' : ''}">
-                        <div style="font-size: 18px; color: ${colors[key]}; margin-bottom: 6px;"><i class="fas ${icons[key]}"></i></div>
-                        <div style="font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">${labels[key]}</div>
-                        <div style="font-size: 18px; font-weight: 700;">${costs[key] ? formatCurrency(costs[key]) : '\u2014'}</div>
-                    </div>
-                `).join('');
-            })()}
+        <div class="section-title"><i class="fas fa-coins"></i> Conto Economico (Editable)</div>
+        <div style="background: white; padding: 16px; border-radius: 10px; margin-bottom: 24px;">
+            ${costRows}
+            <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 16px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
+                <i class="fas fa-save"></i> Salva Costi
+            </button>
         </div>
+
         <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg); border-radius: 8px; margin-bottom: 24px; font-size: 13px;">
-            <span style="color: var(--text-light);">Totale costi: <strong style="color: var(--text);">${formatCurrency(s.costs)}</strong></span>
+            <span style="color: var(--text-light);">Totale costi: <strong id="costiSummaryTotal" style="color: var(--text);">${formatCurrency(s.costs)}</strong></span>
             <span style="color: var(--text-light);">Break-even: <strong style="color: var(--text);">${c.price > 0 ? Math.ceil(s.costs / c.price) : '\u2014'} iscritti</strong></span>
-            <span style="color: var(--text-light);">Margine/iscritto: <strong style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${c.students.length > 0 ? formatCurrency(s.profit / c.students.length) : '\u2014'}</strong></span>
+            <span style="color: var(--text-light);">Margine/iscritto: <strong style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};" id="costiSummaryPerStudent">${c.students.length > 0 ? formatCurrency(s.profit / c.students.length) : '\u2014'}</strong></span>
         </div>
 
         <div class="two-cols" style="margin-bottom: 24px;">
@@ -1466,13 +1536,80 @@ function openCourseDetail(courseId) {
         </div>`}
     `;
 
-    document.getElementById('detailOverlay').classList.add('show');
-    // Trap focus
-    document.querySelector('.detail-panel .close-btn').focus();
+    // Add event listeners for real-time cost updates
+    ['location', 'educator', 'food', 'sake', 'adv'].forEach(key => {
+        const input = document.getElementById(`cost-${key}`);
+        if (input) {
+            input.addEventListener('input', updateCostsSummary);
+        }
+    });
 }
 
-function closeDetail() {
-    document.getElementById('detailOverlay').classList.remove('show');
+function updateCostsSummary() {
+    const courseId = window.currentCourseId;
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const newCosts = {
+        location: parseFloat(document.getElementById('cost-location').value) || 0,
+        educator: parseFloat(document.getElementById('cost-educator').value) || 0,
+        food: parseFloat(document.getElementById('cost-food').value) || 0,
+        sake: parseFloat(document.getElementById('cost-sake').value) || 0,
+        adv: parseFloat(document.getElementById('cost-adv').value) || 0
+    };
+
+    const totalCosts = getTotalCosts(newCosts);
+    const revenue = c.students.length * c.price;
+    const profit = revenue - totalCosts;
+    const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
+
+    document.getElementById('detailTotalCosts').textContent = formatCurrency(totalCosts);
+    document.getElementById('detailMargin').textContent = formatCurrency(profit);
+    document.getElementById('detailRatio').textContent = ratio.toFixed(2);
+    document.getElementById('costiSummaryTotal').textContent = formatCurrency(totalCosts);
+    document.getElementById('costiSummaryPerStudent').textContent = c.students.length > 0 ? formatCurrency(profit / c.students.length) : '—';
+}
+
+async function saveCourseDetail(courseId) {
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+
+    const newCosts = {
+        location: parseFloat(document.getElementById('cost-location').value) || 0,
+        educator: parseFloat(document.getElementById('cost-educator').value) || 0,
+        food: parseFloat(document.getElementById('cost-food').value) || 0,
+        sake: parseFloat(document.getElementById('cost-sake').value) || 0,
+        adv: parseFloat(document.getElementById('cost-adv').value) || 0
+    };
+
+    try {
+        const response = await fetch(`/api/costs/${c.handle}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newCosts)
+        });
+
+        if (response.ok) {
+            // Update local cache
+            COURSE_COSTS[c.handle] = newCosts;
+
+            // Update course object
+            c.costs = newCosts;
+            c.totalCosts = getTotalCosts(newCosts);
+            c.sustainability = computeSustainability(c);
+
+            showToast('Costi salvati con successo');
+        } else {
+            showError('Errore nel salvataggio dei costi');
+        }
+    } catch (e) {
+        console.error('Save costs error:', e);
+        showError('Errore di connessione');
+    }
+}
+
+function backFromCourseDetail() {
+    navigateTo(previousPage || 'dashboard');
 }
 
 // =============================================
@@ -1679,12 +1816,11 @@ function closeMobileNav() {
         navigateTo(btn.dataset.page);
     });
 
-    // Detail overlay
-    document.getElementById('detailOverlay').addEventListener('click', (e) => {
-        if (e.target === document.getElementById('detailOverlay')) closeDetail();
-    });
+    // Course detail page - escape key goes back
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeDetail();
+        if (e.key === 'Escape' && currentPage === 'course-detail') {
+            backFromCourseDetail();
+        }
     });
 
     // Debounced search inputs
