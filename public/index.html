@@ -2300,15 +2300,20 @@ function renderCourseDetailPage() {
     }
 
     // Ensure diploma_fee line exists (after ssa_fee, position 3)
+    // Only count NEW participants (not repeat students who already have a diploma)
     const diplomaCostPerPerson = isCertificato ? 20 : 10;
-    const diplomaTotal = c.students.length * diplomaCostPerPerson;
+    const newStudentsCount = c.students.filter(st => {
+        if (!st.email) return true; // can't verify, count as new
+        return !(window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[st.email.toLowerCase()] > 1);
+    }).length;
+    const diplomaTotal = newStudentsCount * diplomaCostPerPerson;
     let diplomaFeeIdx = c.costs.lines.findIndex(l => l.key === 'diploma_fee');
     if (diplomaFeeIdx === -1) {
-        c.costs.lines.splice(3, 0, { key: 'diploma_fee', label: `Diplomi (${c.students.length} × €${diplomaCostPerPerson})`, icon: 'fa-graduation-cap', color: '#7c3aed', value: diplomaTotal, autoCalc: true });
+        c.costs.lines.splice(3, 0, { key: 'diploma_fee', label: `Diplomi (${newStudentsCount} nuovi × €${diplomaCostPerPerson})`, icon: 'fa-graduation-cap', color: '#7c3aed', value: diplomaTotal, autoCalc: true });
     } else {
         c.costs.lines[diplomaFeeIdx].autoCalc = true;
         c.costs.lines[diplomaFeeIdx].value = diplomaTotal;
-        c.costs.lines[diplomaFeeIdx].label = `Diplomi (${c.students.length} × €${diplomaCostPerPerson})`;
+        c.costs.lines[diplomaFeeIdx].label = `Diplomi (${newStudentsCount} nuovi × €${diplomaCostPerPerson})`;
         if (diplomaFeeIdx !== 3) {
             const dipLine = c.costs.lines.splice(diplomaFeeIdx, 1)[0];
             c.costs.lines.splice(3, 0, dipLine);
@@ -2435,8 +2440,8 @@ function renderCourseDetailPage() {
         <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
         ${c.students.length > 0 ? `
         <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-        <table class="data-table" style="min-width: 600px;">
-            <thead><tr><th>Corsista</th><th>Telefono</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine Shopify</th></tr></thead>
+        <table class="data-table" style="min-width: 700px;">
+            <thead><tr><th>Corsista</th><th>Telefono</th><th>Importo</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine</th></tr></thead>
             <tbody>
                 ${c.students.map(st => {
                     const initials = getInitials(st.name);
@@ -2444,8 +2449,9 @@ function renderCourseDetailPage() {
                     const cleanPhone = st.phone ? st.phone.replace(/\D/g, '') : '';
                     const isRepeat = st.email && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[st.email.toLowerCase()] > 1;
                     return `<tr>
-                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? '<i class="fas fa-redo" style="font-size: 10px; color: var(--accent); margin-left: 6px;" title="Corsista ricorrente"></i>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
+                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="fab fa-whatsapp" style="font-size: 10px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
+                        <td style="font-weight: 600; font-size: 13px; white-space: nowrap;">${st.amount ? formatCurrency(st.amount) : '-'}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
                         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
