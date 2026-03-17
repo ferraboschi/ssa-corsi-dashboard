@@ -1485,7 +1485,7 @@ const CONFIG = {
             name: 'Da confermare', region: 'Trentino-Alto Adige', initials: '?'
         },
         'corso-di-sake-sommelier-certificato-maggio-2026-milano': {
-            name: 'Da confermare', region: 'Lombardia', initials: '?'
+            name: 'Lorenzo Ferraboschi', region: 'Lombardia', initials: 'LF'
         },
         'corso-di-sake-sommelier-certificato-maggio-2025-roma': {
             name: 'Camilla Bonnannini', region: 'Lazio', initials: 'CB'
@@ -1884,7 +1884,19 @@ async function loadApiData() {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
-            const educatorBase = CONFIG.EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            // Read educator from Shopify tags first, fallback to hardcoded map
+            let educatorBase = CONFIG.EDUCATOR_MAP[c.handle] || { name: 'Da assegnare', region: '', initials: '?' };
+            if (c.tags) {
+                const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
+                const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+                if (educatorTag) {
+                    const tagName = educatorTag.replace('educator:', '').trim();
+                    if (tagName) {
+                        const initials = tagName.split(' ').map(w => w[0]).join('').toUpperCase();
+                        educatorBase = { name: tagName, region: educatorBase.region || '', initials };
+                    }
+                }
+            }
             const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
             const educator = { ...educatorBase, photo: educatorProfile.photo || '', bio: educatorProfile.bio || '' };
             const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
