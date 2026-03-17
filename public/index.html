@@ -608,6 +608,25 @@
             display: none;
         }
 
+        .program-add-group-day-btn {
+            width: 100%;
+            margin-top: 8px;
+            padding: 8px;
+            background: transparent;
+            color: var(--accent);
+            border: 1px dashed var(--accent);
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.7;
+        }
+        .program-add-group-day-btn:hover {
+            opacity: 1;
+            background: #f0f4ff;
+        }
+
         .program-group-card {
             background: #f9fafb;
             border: 1px solid var(--border);
@@ -1004,8 +1023,6 @@
         .cost-line-sake {
             background: #f0f4ff;
             border: 1px solid #dbeafe;
-            border-radius: 8px;
-            padding: 2px 0;
         }
 
         .educator-photo {
@@ -1792,7 +1809,7 @@ function renderCourseCardHTML(c, opts = {}) {
                 </div>
                 <div class="course-stat">
                     <div class="val">${formatCurrency(c.revenue)}</div>
-                    <div class="lbl">Ricavo</div>
+                    <div class="lbl">Incasso</div>
                 </div>
                 <div class="course-stat">
                     <div class="val" style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(s.profit)}</div>
@@ -1943,7 +1960,8 @@ async function loadApiData() {
                 totalCosts,
                 students,
                 enrollmentCount: c.enrollmentCount || 0,
-                revenue: c.revenue || 0,
+                // Revenue = sum of actual student amounts (after deduplication), not server total
+                revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
                 status: 'active'
             };
 
@@ -2363,7 +2381,7 @@ function renderCourseDetailPage() {
 
         <div class="stats-grid detail-stats" style="margin-bottom: 24px;">
             <div class="stat-card gold"><div class="stat-label">Iscritti</div><div class="stat-value">${c.students.length}/${c.maxStudents}</div><div class="stat-sub">Min. ${c.minStudents}</div></div>
-            <div class="stat-card green"><div class="stat-label">Ricavo</div><div class="stat-value" id="detailRevenue">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
+            <div class="stat-card green"><div class="stat-label">Incasso</div><div class="stat-value" id="detailRevenue">${formatCurrency(s.revenue)}</div><div class="stat-sub">${formatCurrency(c.price)}/pers.</div></div>
             <div class="stat-card blue"><div class="stat-label">Costi Totali</div><div class="stat-value" id="detailTotalCosts">${formatCurrency(s.costs)}</div><div class="stat-sub">5 voci</div></div>
             <div class="stat-card ${s.profit >= 0 ? 'green' : 'red'}"><div class="stat-label">Margine</div><div class="stat-value" id="detailMargin">${formatCurrency(s.profit)}</div><div class="stat-sub">Ratio: <span id="detailRatio">${s.ratio.toFixed(2)}</span>x</div></div>
         </div>
@@ -2388,7 +2406,6 @@ function renderCourseDetailPage() {
                 <i class="fas fa-info-circle"></i> Stima: 1 bottiglia ogni 15 partecipanti
             </div>
             <div id="programContainer"></div>
-            <button class="program-add-group-btn" onclick="addProgramGroup()"><i class="fas fa-plus"></i> Nuovo Gruppo</button>
             <div class="program-total" id="programTotal">Totale Sake Programma: €0.00</div>
             <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 12px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
                 <i class="fas fa-save"></i> Salva Programma e Costi
@@ -2487,10 +2504,11 @@ function updateCostsSummary() {
     }
 
     const totalCosts = getCostLinesTotal(c);
-    const revenue = c.students.length * c.price;
+    const revenue = c.revenue || c.students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0);
     const profit = revenue - totalCosts;
     const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
 
+    document.getElementById('detailRevenue').textContent = formatCurrency(revenue);
     document.getElementById('detailTotalCosts').textContent = formatCurrency(totalCosts);
     document.getElementById('detailMargin').textContent = formatCurrency(profit);
     document.getElementById('detailRatio').textContent = ratio.toFixed(2);
@@ -2656,8 +2674,9 @@ function renderProgram() {
         if (groups.length > 0) {
             html += groups.map((group, idx) => renderProgramGroup(group, day, maxDays, program.indexOf(group), idx, groups.length)).join('');
         } else {
-            html += `<div class="program-empty-placeholder">Nessun gruppo per questo giorno</div>`;
+            html += `<div class="program-empty-placeholder">Nessun sake ancora — clicca Aggiungi per iniziare</div>`;
         }
+        html += `<button class="program-add-group-day-btn" onclick="event.stopPropagation(); addProgramGroup(${day})"><i class="fas fa-plus"></i> Aggiungi Gruppo al Giorno ${day}</button>`;
         html += `</div></div>`;
     }
 
@@ -3013,15 +3032,17 @@ function deleteProgramGroup(groupIdx) {
     renderProgram();
 }
 
-function addProgramGroup() {
+function addProgramGroup(day) {
     const courseId = window.currentCourseId;
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
 
+    const targetDay = day || 1;
     const program = COURSE_COSTS[c.handle]?.program || [];
+    const dayGroups = program.filter(g => g.day === targetDay);
     program.push({
-        name: `Nuovo Gruppo ${program.length + 1}`,
-        day: 1,
+        name: `Nuovo Gruppo ${dayGroups.length + 1}`,
+        day: targetDay,
         sakes: []
     });
 
