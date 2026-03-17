@@ -691,6 +691,28 @@ app.get('/api/shared/:token', async (req, res) => {
     const costs = courseCosts[courseProduct.handle];
     if (costs && costs.program) {
       course.program = costs.program;
+
+      // Enrich sake items with Sake Company product handles (for product page links)
+      try {
+        const scData = await fetchSakeCompanyProducts();
+        const skuHandleMap = {};
+        scData.products.forEach(p => {
+          p.skus.forEach(sku => {
+            if (!skuHandleMap[sku]) skuHandleMap[sku] = p.handle;
+          });
+        });
+        course.program.forEach(group => {
+          if (group.sakes) {
+            group.sakes.forEach(sake => {
+              if (sake.code && skuHandleMap[sake.code]) {
+                sake.handle = skuHandleMap[sake.code];
+              }
+            });
+          }
+        });
+      } catch (e) {
+        console.error('Share: sake company enrichment failed:', e.message);
+      }
     }
 
     // Get full student data (name, email, phone, order date) - no financial amounts
@@ -719,6 +741,19 @@ app.get('/api/shared/:token', async (req, res) => {
       });
     });
 
+    // Deduplicate students (same logic as frontend)
+    const seenOrders = new Set();
+    const seenEmails = new Set();
+    course.students = course.students.filter(st => {
+      if (st.orderNumber && seenOrders.has(st.orderNumber)) return false;
+      if (st.orderNumber) seenOrders.add(st.orderNumber);
+      const emailKey = (st.email || '').toLowerCase().trim();
+      if (emailKey && seenEmails.has(emailKey)) return false;
+      if (emailKey) seenEmails.add(emailKey);
+      return true;
+    });
+    course.enrollmentCount = course.students.length;
+
     res.json({ success: true, data: course });
   } catch (error) {
     console.error('Error in /api/shared/:token:', error.message);
@@ -731,6 +766,7 @@ app.get('/api/shared/:token', async (req, res) => {
 // ============================================================================
 app.get('/share/:token', (req, res) => {
   const token = req.params.token;
+  const sakeCompanyDomain = SAKE_COMPANY_STORE.replace('.myshopify.com', '');
   res.send(`
 <!DOCTYPE html>
 <html lang="it">
@@ -762,11 +798,25 @@ app.get('/share/:token', (req, res) => {
     .badge.blue { background: #dbeafe; color: #1e40af; }
     .badge.green { background: #dcfce7; color: #166534; }
     .badge.cyan { background: #cffafe; color: #0e7490; }
-    .info-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+
+    /* Collapsible sections */
+    .section-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+    .section-header { padding: 16px 20px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; }
+    .section-header:hover { background: #f9fafb; }
+    .section-header .section-label { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+    .section-header .section-label i { color: var(--primary); }
+    .section-header .toggle-chevron { font-size: 12px; color: var(--text-light); transition: transform 0.25s ease; }
+    .section-header .toggle-chevron.collapsed { transform: rotate(-90deg); }
+    .section-body { transition: max-height 0.35s ease, padding 0.35s ease; overflow: hidden; }
+    .section-body.collapsed { max-height: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important; }
+    .section-body-inner { padding: 0 20px 20px; }
+
+    /* Info grid */
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .info-grid .item { font-size: 13px; }
     .info-grid .item strong { color: var(--text); }
-    .info-grid .item span { color: var(--text-light); }
+
+    /* Stats */
     .stat-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
     .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; position: relative; overflow: hidden; }
     .stat-box::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--primary); }
@@ -774,31 +824,57 @@ app.get('/share/:token', (req, res) => {
     .stat-box .label { font-size: 11px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
     .stat-box .value { font-size: 22px; font-weight: 700; }
     .stat-box .sub { font-size: 11px; color: var(--text-light); margin-top: 2px; }
-    .section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
-    .section-title i { color: var(--primary); }
-    .student-table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+
+    /* Program: day sections */
+    .day-section { background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; overflow: hidden; }
+    .day-section:last-child { margin-bottom: 0; }
+    .day-header { background: linear-gradient(135deg, #eef2ff, #f0f4ff); padding: 12px 16px; font-size: 13px; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+    .day-header i { font-size: 12px; }
+    .day-body { padding: 12px 16px; }
+
+    /* Group card */
+    .group-card { margin-bottom: 14px; }
+    .group-card:last-child { margin-bottom: 0; }
+    .group-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+    /* Sake card — large photo + side info */
+    .sake-card { display: flex; gap: 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; align-items: flex-start; transition: box-shadow 0.2s; }
+    .sake-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    .sake-card:last-child { margin-bottom: 0; }
+    .sake-photo { flex-shrink: 0; width: 100px; height: 140px; border-radius: 8px; overflow: hidden; background: #f3f4f6; display: flex; align-items: center; justify-content: center; }
+    .sake-photo img { width: 100%; height: 100%; object-fit: contain; }
+    .sake-photo .sake-placeholder { font-size: 40px; opacity: 0.3; }
+    .sake-info { flex: 1; min-width: 0; }
+    .sake-info .sake-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .sake-info .sake-jp { font-size: 12px; color: var(--text-light); margin-bottom: 6px; }
+    .sake-info .sake-meta { font-size: 11px; color: var(--text-light); line-height: 1.6; }
+    .sake-info .sake-meta span { display: inline-block; margin-right: 8px; }
+    .sake-info .sake-qty-badge { display: inline-flex; align-items: center; gap: 4px; background: #dbeafe; color: #1e40af; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-top: 6px; }
+    .sake-info .sake-link { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--primary); text-decoration: none; margin-top: 6px; margin-left: 8px; }
+    .sake-info .sake-link:hover { text-decoration: underline; }
+
+    /* Student table */
+    .student-table { width: 100%; border-collapse: collapse; }
     .student-table th { text-align: left; padding: 10px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); background: #f9fafb; border-bottom: 1px solid var(--border); font-weight: 600; }
     .student-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
     .student-table tr:last-child td { border-bottom: none; }
     .student-table .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; margin-right: 8px; vertical-align: middle; }
     .student-table .email { color: var(--text-light); font-size: 12px; }
-    .student-table .wa-link { color: #25D366; text-decoration: none; }
-    .program-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin-bottom: 12px; }
-    .program-day { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 8px; color: var(--primary); }
-    .program-group { font-size: 13px; color: var(--text); margin-bottom: 4px; }
-    .sake-item { font-size: 12px; color: var(--text-light); padding-left: 16px; margin-bottom: 2px; }
+    .student-table .wa-link { color: #25D366; text-decoration: none; font-size: 16px; }
+
     .status-error { background: #fee2e2; border: 1px solid #fca5a5; color: #dc2626; padding: 16px; border-radius: 8px; text-align: center; }
     .status-expired { background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: 20px; border-radius: 8px; text-align: center; font-size: 15px; }
     .loading { text-align: center; padding: 3rem; color: var(--text-light); }
     .spinner { border: 3px solid var(--border); border-top: 3px solid var(--primary); border-radius: 50%; width: 36px; height: 36px; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     .footer { text-align: center; padding: 24px; font-size: 11px; color: var(--text-light); }
-    @media (max-width: 600px) {
+    @media (max-width: 700px) {
       .main { padding: 12px; }
       .info-grid { grid-template-columns: 1fr; }
       .stat-row { grid-template-columns: 1fr; }
       .stat-box .value { font-size: 18px; }
-      .info-card, .program-card { padding: 14px 16px; }
+      .sake-card { flex-direction: column; align-items: center; text-align: center; }
+      .sake-photo { width: 140px; height: 180px; }
       .student-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .student-table { min-width: 500px; }
     }
@@ -817,11 +893,30 @@ app.get('/share/:token', (req, res) => {
   <div class="footer">Sake Sommelier Association &copy; 2026 &mdash; Link condiviso, sola lettura</div>
 
   <script>
+    const SAKE_COMPANY_DOMAIN = '${sakeCompanyDomain}';
+
+    function toggleSection(id) {
+      const body = document.getElementById(id);
+      const chevron = document.querySelector('[data-toggle="' + id + '"]');
+      if (!body) return;
+      if (body.classList.contains('collapsed')) {
+        body.style.maxHeight = body.scrollHeight + 'px';
+        body.classList.remove('collapsed');
+        if (chevron) chevron.classList.remove('collapsed');
+        setTimeout(() => { body.style.maxHeight = 'none'; }, 350);
+      } else {
+        body.style.maxHeight = body.scrollHeight + 'px';
+        requestAnimationFrame(() => {
+          body.style.maxHeight = '0px';
+          body.classList.add('collapsed');
+          if (chevron) chevron.classList.add('collapsed');
+        });
+      }
+    }
+
     function parseTitle(title) {
-      const months = { 'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04', 'maggio': '05', 'giugno': '06',
-        'luglio': '07', 'agosto': '08', 'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12' };
       let city = '', dateStr = '';
-      const cityMatch = title.match(/,\\s*([A-Za-zÀ-ú\\s]+)$/);
+      const cityMatch = title.match(/,\\s*([A-Za-z\\u00C0-\\u00ff\\s]+)$/);
       if (cityMatch) city = cityMatch[1].trim();
       const dateMatch = title.match(/(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\\s+(\\d{4})/i);
       if (dateMatch) dateStr = dateMatch[1] + ' ' + dateMatch[2];
@@ -834,13 +929,18 @@ app.get('/share/:token', (req, res) => {
       return dt.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
 
+    function sakeCompanyUrl(handle) {
+      if (!handle) return '';
+      return 'https://' + SAKE_COMPANY_DOMAIN + '.myshopify.com/products/' + handle;
+    }
+
     async function loadCourseData() {
       try {
         const response = await fetch('/api/shared/${token}');
         const result = await response.json();
         if (!response.ok) {
           if (response.status === 401) {
-            document.getElementById('content').innerHTML = '<div class="status-expired"><i class="fas fa-clock"></i> Questo link è scaduto. Richiedi un nuovo link di accesso.</div>';
+            document.getElementById('content').innerHTML = '<div class="status-expired"><i class="fas fa-clock"></i> Questo link \\u00e8 scaduto. Richiedi un nuovo link di accesso.</div>';
           } else {
             document.getElementById('content').innerHTML = '<div class="status-error">Errore: ' + (result.error || 'Corso non trovato') + '</div>';
           }
@@ -848,7 +948,7 @@ app.get('/share/:token', (req, res) => {
         }
         const c = result.data;
         const parsed = parseTitle(c.title);
-        const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price).toLocaleString('it-IT', {minimumFractionDigits: 2}) + ' €' : '';
+        const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price).toLocaleString('it-IT', {minimumFractionDigits: 2}) + ' \\u20ac' : '';
         const maxStudents = c.variants && c.variants[0] && c.variants[0].inventory_quantity != null ? (c.enrollmentCount + (c.variants[0].inventory_quantity || 0)) : 20;
         const tags = c.tags || [];
         const isOnline = tags.some(t => t.toLowerCase().includes('online'));
@@ -864,39 +964,97 @@ app.get('/share/:token', (req, res) => {
         if (parsed.city) html += '<span class="badge green"><i class="fas fa-map-marker-alt"></i>&nbsp;' + parsed.city + '</span>';
         html += '</div>';
 
-        // Info card
-        html += '<div class="info-card"><div class="info-grid">';
-        if (parsed.dateStr) html += '<div class="item"><strong>Periodo:</strong> ' + parsed.dateStr + '</div>';
-        if (c.educator) html += '<div class="item"><strong>Educator:</strong> ' + c.educator + '</div>';
-        if (parsed.city && !isOnline) html += '<div class="item"><strong>Città:</strong> ' + parsed.city + '</div>';
-        if (price) html += '<div class="item"><strong>Prezzo:</strong> ' + price + '/persona</div>';
-        html += '</div></div>';
-
         // Stats
         html += '<div class="stat-row">';
         html += '<div class="stat-box"><div class="label">Iscritti</div><div class="value">' + c.enrollmentCount + '/' + maxStudents + '</div><div class="sub">Min. 6</div></div>';
         html += '<div class="stat-box green"><div class="label">Posti disponibili</div><div class="value">' + Math.max(0, maxStudents - c.enrollmentCount) + '</div></div>';
         html += '</div>';
 
-        // Program
+        // ── SECTION: Info ──
+        html += '<div class="section-card">';
+        html += '<div class="section-header" onclick="toggleSection(\\'sec-info\\')">';
+        html += '<span class="section-label"><i class="fas fa-info-circle"></i> Informazioni</span>';
+        html += '<i class="fas fa-chevron-down toggle-chevron" data-toggle="sec-info"></i>';
+        html += '</div>';
+        html += '<div class="section-body" id="sec-info"><div class="section-body-inner">';
+        html += '<div class="info-grid">';
+        if (parsed.dateStr) html += '<div class="item"><strong>Periodo:</strong> ' + parsed.dateStr + '</div>';
+        if (c.educator) html += '<div class="item"><strong>Educator:</strong> ' + c.educator + '</div>';
+        if (parsed.city && !isOnline) html += '<div class="item"><strong>Citt\\u00e0:</strong> ' + parsed.city + '</div>';
+        if (price) html += '<div class="item"><strong>Prezzo:</strong> ' + price + '/persona</div>';
+        html += '</div>';
+        html += '</div></div></div>';
+
+        // ── SECTION: Programma ──
         if (c.program && Array.isArray(c.program) && c.program.length > 0) {
-          html += '<div class="section-title"><i class="fas fa-book"></i> Programma</div>';
-          c.program.forEach((group, i) => {
-            html += '<div class="program-card">';
-            html += '<div class="program-day">Giorno ' + (group.day || (i+1)) + '</div>';
-            html += '<div class="program-group">' + (group.name || '') + '</div>';
-            if (Array.isArray(group.sakes) && group.sakes.length > 0) {
-              group.sakes.forEach(s => {
-                html += '<div class="sake-item">• ' + (s.name || '') + (s.size ? ' (' + s.size + ')' : '') + '</div>';
-              });
-            }
-            html += '</div>';
+          html += '<div class="section-card">';
+          html += '<div class="section-header" onclick="toggleSection(\\'sec-program\\')">';
+          html += '<span class="section-label"><i class="fas fa-book"></i> Programma</span>';
+          html += '<i class="fas fa-chevron-down toggle-chevron" data-toggle="sec-program"></i>';
+          html += '</div>';
+          html += '<div class="section-body" id="sec-program"><div class="section-body-inner">';
+
+          // Group by day
+          const days = {};
+          c.program.forEach(group => {
+            const d = group.day || 1;
+            if (!days[d]) days[d] = [];
+            days[d].push(group);
           });
+
+          Object.keys(days).sort((a,b) => a - b).forEach(dayNum => {
+            const groups = days[dayNum];
+            html += '<div class="day-section">';
+            html += '<div class="day-header"><i class="fas fa-calendar-day"></i> Giorno ' + dayNum + '</div>';
+            html += '<div class="day-body">';
+
+            groups.forEach(group => {
+              html += '<div class="group-card">';
+              if (group.name) html += '<div class="group-name">' + group.name + '</div>';
+              if (Array.isArray(group.sakes) && group.sakes.length > 0) {
+                group.sakes.forEach(s => {
+                  const scUrl = sakeCompanyUrl(s.handle);
+                  html += '<div class="sake-card">';
+                  html += '<div class="sake-photo">';
+                  if (s.image) {
+                    html += '<img src="' + s.image + '" alt="' + (s.name || '') + '">';
+                  } else {
+                    html += '<div class="sake-placeholder">\\ud83c\\udf76</div>';
+                  }
+                  html += '</div>';
+                  html += '<div class="sake-info">';
+                  html += '<div class="sake-title">' + (s.name || '') + '</div>';
+                  if (s.nameJp) html += '<div class="sake-jp">' + s.nameJp + '</div>';
+                  html += '<div class="sake-meta">';
+                  if (s.code) html += '<span><strong>SKU:</strong> ' + s.code + '</span>';
+                  if (s.type) html += '<span><strong>Tipo:</strong> ' + s.type + '</span>';
+                  if (s.sakagura) html += '<span><strong>Sakagura:</strong> ' + s.sakagura + '</span>';
+                  if (s.size) html += '<span><strong>Formato:</strong> ' + s.size + 'ml</span>';
+                  html += '</div>';
+                  html += '<div style="margin-top:6px;">';
+                  if (s.qty) html += '<span class="sake-qty-badge"><i class="fas fa-boxes"></i> Qt\\u00e0: ' + s.qty + '</span>';
+                  if (scUrl) html += '<a href="' + scUrl + '" target="_blank" class="sake-link"><i class="fas fa-external-link-alt"></i> Scheda Tecnica</a>';
+                  html += '</div>';
+                  html += '</div></div>';
+                });
+              }
+              html += '</div>';
+            });
+
+            html += '</div></div>';
+          });
+
+          html += '</div></div></div>';
         }
 
-        // Students table
+        // ── SECTION: Iscritti ──
         if (c.students && c.students.length > 0) {
-          html += '<div class="section-title" style="margin-top:20px;"><i class="fas fa-users"></i> Iscritti (' + c.students.length + ')</div>';
+          html += '<div class="section-card">';
+          html += '<div class="section-header" onclick="toggleSection(\\'sec-students\\')">';
+          html += '<span class="section-label"><i class="fas fa-users"></i> Iscritti (' + c.students.length + ')</span>';
+          html += '<i class="fas fa-chevron-down toggle-chevron" data-toggle="sec-students"></i>';
+          html += '</div>';
+          html += '<div class="section-body" id="sec-students"><div class="section-body-inner">';
           html += '<div class="student-table-wrap"><table class="student-table"><thead><tr><th>Corsista</th><th>Telefono</th><th>Data Iscrizione</th></tr></thead><tbody>';
           c.students.forEach(st => {
             const initials = st.name ? st.name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase() : '?';
@@ -909,6 +1067,7 @@ app.get('/share/:token', (req, res) => {
             html += '</tr>';
           });
           html += '</tbody></table></div>';
+          html += '</div></div></div>';
         }
 
         document.getElementById('content').innerHTML = html;
