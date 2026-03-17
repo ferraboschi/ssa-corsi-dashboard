@@ -324,8 +324,12 @@ app.get('/api/courses', async (req, res) => {
       order.line_items.forEach(item => {
         if (courseMap.has(item.product_id)) {
           const course = courseMap.get(item.product_id);
+          // Calculate actual paid amount (subtract discounts from gross price)
+          const itemDiscounts = (item.discount_allocations || []).reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+          const actualAmount = (parseFloat(item.price || 0) * item.quantity) - itemDiscounts;
+
           course.enrollmentCount += item.quantity;
-          course.revenue += parseFloat(item.price || 0) * item.quantity;
+          course.revenue += actualAmount;
 
           const customerName = order.customer
             ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim()
@@ -351,7 +355,7 @@ app.get('/api/courses', async (req, res) => {
             orderNumber: order.name || `#${order.order_number}`,
             orderDate: order.created_at,
             financialStatus: order.financial_status,
-            amount: parseFloat(item.price || 0) * item.quantity,
+            amount: actualAmount,
             variantTitle: item.variant_title || ''
           });
         }
@@ -385,8 +389,9 @@ app.get('/api/educator/:id', async (req, res) => {
       orders.forEach(order => {
         order.line_items?.forEach(item => {
           if (item.product_id === product.id) {
+            const edItemDiscounts = (item.discount_allocations || []).reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
             course.enrollmentCount += item.quantity;
-            course.revenue += parseFloat(item.price || 0) * item.quantity;
+            course.revenue += (parseFloat(item.price || 0) * item.quantity) - edItemDiscounts;
             if (order.customer?.email) {
               studentSet.add(JSON.stringify({ name: `${order.customer.first_name} ${order.customer.last_name}`, email: order.customer.email }));
             }
@@ -715,7 +720,7 @@ app.get('/api/shared/:token', async (req, res) => {
       }
     }
 
-    // Get full student data (name, email, phone, order date) - no financial amounts
+    // Get full student data (name, email, phone, order date, amount)
     orders.forEach(order => {
       if (!order.line_items) return;
       order.line_items.forEach(item => {
@@ -729,12 +734,17 @@ app.get('/api/shared/:token', async (req, res) => {
           if (!phone && order.billing_address?.phone) phone = order.billing_address.phone;
           if (!phone && order.customer?.default_address?.phone) phone = order.customer.default_address.phone;
 
+          // Calculate actual paid amount (subtract discounts)
+          const shareItemDiscounts = (item.discount_allocations || []).reduce((sum, d) => sum + parseFloat(d.amount || 0), 0);
+          const shareAmount = (parseFloat(item.price || 0) * item.quantity) - shareItemDiscounts;
+
           course.students.push({
             name: customerName,
             email: order.customer?.email || '',
             phone: phone,
             orderDate: order.created_at,
-            orderNumber: order.name || `#${order.order_number}`
+            orderNumber: order.name || `#${order.order_number}`,
+            amount: shareAmount
           });
           course.enrollmentCount += item.quantity;
         }

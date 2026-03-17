@@ -1988,12 +1988,17 @@ async function loadApiData() {
     EDUCATORS = Array.from(educatorMap.values());
 
     // Build student course count map for repeat indicator
+    // Count distinct courses per email (not duplicate orders within same course)
     window.STUDENT_COURSE_COUNT = {};
     COURSES.forEach(c => {
+        const seenInCourse = new Set();
         c.students.forEach(st => {
             if (st.email) {
                 const emailLower = st.email.toLowerCase();
-                window.STUDENT_COURSE_COUNT[emailLower] = (window.STUDENT_COURSE_COUNT[emailLower] || 0) + 1;
+                if (!seenInCourse.has(emailLower)) {
+                    seenInCourse.add(emailLower);
+                    window.STUDENT_COURSE_COUNT[emailLower] = (window.STUDENT_COURSE_COUNT[emailLower] || 0) + 1;
+                }
             }
         });
     });
