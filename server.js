@@ -240,8 +240,16 @@ app.get('/api/airtable/sake', async (req, res) => {
     const cacheKey = 'airtable_sake_products';
     let data = getCache(cacheKey);
     if (!data) {
-      const response = await airtableFetch(encodeURIComponent(AIRTABLE_TABLE_ID));
-      data = response.records || [];
+      // Paginate through all Airtable records (max 100 per page)
+      data = [];
+      let offset = null;
+      do {
+        const endpoint = encodeURIComponent(AIRTABLE_TABLE_ID) + '?pageSize=100' + (offset ? `&offset=${offset}` : '');
+        const response = await airtableFetch(endpoint);
+        data.push(...(response.records || []));
+        offset = response.offset || null;
+      } while (offset);
+      console.log(`Airtable: loaded ${data.length} sake products`);
       setCache(cacheKey, data, 300);
     }
     res.json({ success: true, count: data.length, data });

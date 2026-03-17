@@ -1539,7 +1539,7 @@ async function loadApiData() {
 
     // Try cache first
     const cachedCourses = getCached('courses');
-    const cachedSake = getCached('sake_v2');
+    const cachedSake = getCached('sake_v3');
 
     // Load courses
     try {
@@ -1701,7 +1701,7 @@ async function loadApiData() {
             console.error('Sake Company images failed:', e);
         }
         // Cache AFTER image enrichment so cache includes images
-        setCache('sake_v2', SAKE_CATALOG);
+        setCache('sake_v3', SAKE_CATALOG);
     }
 
     // Load course costs from API
