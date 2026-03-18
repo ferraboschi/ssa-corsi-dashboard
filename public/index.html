@@ -1883,13 +1883,17 @@ async function loadApiData() {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
-            // Read educator: 1) from saved config (Airtable), 2) from Shopify tags, 3) default
+            // Read educator: 1) Shopify metafield, 2) saved config (Airtable), 3) Shopify tags, 4) default
             let educatorName = '';
-            // Priority 1: saved educator in course costs
-            if (COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+            // Priority 1: Shopify product metafield "Sake Educator" (from server)
+            if (c.educatorName) {
+                educatorName = c.educatorName;
+            }
+            // Priority 2: saved educator in course costs (Airtable)
+            if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
                 educatorName = COURSE_COSTS[c.handle].educatorName;
             }
-            // Priority 2: Shopify product tag educator:Name
+            // Priority 3: Shopify product tag educator:Name (legacy)
             if (!educatorName && c.tags) {
                 const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
                 const educatorTag = tagsArray.find(t => t.startsWith('educator:'));

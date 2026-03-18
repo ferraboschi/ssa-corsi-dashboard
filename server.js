@@ -435,6 +435,30 @@ app.get('/api/courses', async (req, res) => {
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
 
+    // Fetch metafields for each course product (in parallel, batches of 5)
+    // This gets the "Sake Educator" field from Shopify metafields
+    const metafieldMap = {};
+    const MFBATCH = 5;
+    for (let i = 0; i < courseProducts.length; i += MFBATCH) {
+      const batch = courseProducts.slice(i, i + MFBATCH);
+      await Promise.all(batch.map(async (product) => {
+        try {
+          const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
+          const metafields = mfResp.metafields || [];
+          // Look for educator metafield (key contains 'educator' or 'sake_educator')
+          const educatorMf = metafields.find(mf =>
+            mf.key === 'sake_educator' || mf.key === 'educator' ||
+            (mf.key && mf.key.toLowerCase().includes('educator'))
+          );
+          if (educatorMf && educatorMf.value) {
+            metafieldMap[product.id] = educatorMf.value;
+          }
+        } catch (e) {
+          // Silently skip metafield errors
+        }
+      }));
+    }
+
     // Build enrollment data from orders
     const courseMap = new Map();
     courseProducts.forEach(product => {
@@ -452,6 +476,8 @@ app.get('/api/courses', async (req, res) => {
         published_at: product.published_at,
         variants: product.variants,
         images: product.images,
+        // Educator from Shopify metafield
+        educatorName: metafieldMap[product.id] || '',
         // Enrollment data
         enrollmentCount: 0,
         revenue: 0,
@@ -959,10 +985,22 @@ app.get('/api/shared/:token', async (req, res) => {
       enrollmentCount: 0
     };
 
-    // Educator: from Shopify tag first, then from saved config, then vendor
-    const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
-    const savedEducator = courseCosts[courseProduct.handle]?.educatorName;
-    course.educator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || courseProduct.vendor || '');
+    // Educator: from metafield first, then saved config, then tag, then vendor
+    let shareEducator = '';
+    try {
+      const mfResp = await shopifyFetch(`/products/${courseProduct.id}/metafields.json`);
+      const educatorMf = (mfResp.metafields || []).find(mf =>
+        mf.key === 'sake_educator' || mf.key === 'educator' ||
+        (mf.key && mf.key.toLowerCase().includes('educator'))
+      );
+      if (educatorMf && educatorMf.value) shareEducator = educatorMf.value;
+    } catch (e) { /* skip */ }
+    if (!shareEducator) {
+      const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
+      const savedEducator = courseCosts[courseProduct.handle]?.educatorName;
+      shareEducator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || '');
+    }
+    course.educator = shareEducator;
 
     // Program & costs (no financial details, only program structure)
     const costs = courseCosts[courseProduct.handle];
