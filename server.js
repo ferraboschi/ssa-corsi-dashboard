@@ -519,9 +519,6 @@ app.get('/api/courses', async (req, res) => {
 
     const courses = Array.from(courseMap.values());
 
-    // Automatically check WhatsApp for all student phone numbers
-    await enrichStudentsWithWhatsApp(courses);
-
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
@@ -609,7 +606,7 @@ app.get('/api/costs/:courseId', (req, res) => {
 
 app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
-  const { location, educator, food, sake, adv, program, lines } = req.body;
+  const { location, educator, food, sake, adv, program, lines, educatorName } = req.body;
   courseCosts[courseId] = {
     location: parseFloat(location) || 0,
     educator: parseFloat(educator) || 0,
@@ -624,6 +621,10 @@ app.post('/api/costs/:courseId', (req, res) => {
   // Save lines array if provided
   if (lines !== undefined) {
     courseCosts[courseId].lines = lines;
+  }
+  // Save educator assignment if provided
+  if (educatorName !== undefined) {
+    courseCosts[courseId].educatorName = educatorName;
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });

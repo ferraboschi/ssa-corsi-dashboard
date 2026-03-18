@@ -1883,21 +1883,30 @@ async function loadApiData() {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
-            // Read educator ONLY from Shopify product tags (educator:Name)
-            let educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
-            if (c.tags) {
+            // Read educator: 1) from saved config (Airtable), 2) from Shopify tags, 3) default
+            let educatorName = '';
+            // Priority 1: saved educator in course costs
+            if (COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+                educatorName = COURSE_COSTS[c.handle].educatorName;
+            }
+            // Priority 2: Shopify product tag educator:Name
+            if (!educatorName && c.tags) {
                 const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
                 const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
                 if (educatorTag) {
                     const tagName = educatorTag.replace('educator:', '').trim();
-                    if (tagName) {
-                        const initials = tagName.split(' ').map(w => w[0]).join('').toUpperCase();
-                        educatorBase = { name: tagName, region: '', initials };
-                    }
+                    if (tagName) educatorName = tagName;
                 }
             }
+            let educatorBase;
+            if (educatorName) {
+                const initials = educatorName.split(' ').map(w => w[0]).join('').toUpperCase();
+                educatorBase = { name: educatorName, region: '', initials };
+            } else {
+                educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
+            }
             const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
-            const educator = { ...educatorBase, photo: educatorProfile.photo || '', bio: educatorProfile.bio || '' };
+            const educator = { ...educatorBase, photo: educatorProfile.photo || '', bio: educatorProfile.bio || '', region: educatorProfile.region || educatorBase.region };
             const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
             const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
 
@@ -2374,7 +2383,7 @@ function renderCourseDetailPage() {
         <div style="background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
             <div><strong>Date:</strong> ${c.dates}</div>
             <div><strong>Location:</strong> ${c.location}</div>
-            <div><strong>Educator:</strong> ${c.educator.name} (${c.educator.region})</div>
+            <div><strong>Educator:</strong> ${c.educator.name}${c.educator.region ? ` (${c.educator.region})` : ''}</div>
             <div><strong>Prezzo:</strong> ${formatCurrency(c.price)}/persona</div>
         </div>
 
@@ -2420,16 +2429,23 @@ function renderCourseDetailPage() {
         <div style="margin-bottom: 24px;">
             <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator</div>
             <div class="educator-card" style="margin-bottom: 0;">
-                <div class="educator-top" style="margin-bottom: ${c.educator.bio ? '12px' : '0'};">
-                    ${c.educator.photo
-                        ? `<img src="${c.educator.photo}" alt="${c.educator.name}" class="educator-photo">`
-                        : `<div class="educator-avatar">${c.educator.initials}</div>`}
-                    <div>
-                        <div class="educator-name">${c.educator.name}</div>
-                        <div class="educator-role">${c.educator.region}</div>
+                <div class="educator-top" style="margin-bottom: 12px;">
+                    <div id="educatorPreviewAvatar">
+                        ${c.educator.photo
+                            ? `<img src="${c.educator.photo}" alt="${c.educator.name}" class="educator-photo">`
+                            : `<div class="educator-avatar">${c.educator.initials}</div>`}
+                    </div>
+                    <div style="flex: 1;">
+                        <select id="educatorSelect" onchange="onEducatorChange('${c.id}')" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-weight: 600; background: white; cursor: pointer;">
+                            <option value="" ${c.educator.name === 'Da assegnare' ? 'selected' : ''}>Da assegnare</option>
+                            ${Object.keys(CONFIG.EDUCATOR_PROFILES).map(name =>
+                                `<option value="${name}" ${c.educator.name === name ? 'selected' : ''}>${name}</option>`
+                            ).join('')}
+                        </select>
+                        <div class="educator-role" id="educatorPreviewRegion" style="margin-top: 4px;">${c.educator.region}</div>
                     </div>
                 </div>
-                ${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}
+                <div id="educatorPreviewBio">${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}</div>
             </div>
         </div>
 
@@ -2470,7 +2486,7 @@ function renderCourseDetailPage() {
                                      (nameKey && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nameKey] > 1);
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
-                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? (st.hasWhatsApp ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Su WhatsApp — clicca per chattare"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : `<span title="Non risulta su WhatsApp"><i class="fas fa-phone-alt" style="font-size: 10px; color: #aaa; margin-right: 4px;"></i>${st.phone}</span>`) : '-'}</td>
+                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="fab fa-whatsapp" style="font-size: 10px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
                         <td style="font-weight: 600; font-size: 13px; white-space: nowrap;">${st.amount ? formatCurrency(st.amount) : (st.amount === 0 ? '0,00 €' : '-')}${st.discountCode ? `<br><span style="font-size: 9px; font-weight: 500; color: #d97706; background: #fffbeb; padding: 1px 5px; border-radius: 6px;" title="Sconto: ${st.discountCode}"><i class="fas fa-tag" style="font-size: 8px;"></i> ${st.discountCode}</span>` : ''}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
@@ -2563,6 +2579,39 @@ function deleteCostLine(idx) {
     renderCourseDetailPage();
 }
 
+function onEducatorChange(courseId) {
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c) return;
+    const sel = document.getElementById('educatorSelect');
+    const name = sel.value;
+    const profile = CONFIG.EDUCATOR_PROFILES[name] || {};
+
+    // Update preview avatar
+    const avatarDiv = document.getElementById('educatorPreviewAvatar');
+    if (profile.photo) {
+        avatarDiv.innerHTML = `<img src="${profile.photo}" alt="${name}" class="educator-photo">`;
+    } else if (name) {
+        const initials = name.split(' ').map(w => w[0]).join('').toUpperCase();
+        avatarDiv.innerHTML = `<div class="educator-avatar">${initials}</div>`;
+    } else {
+        avatarDiv.innerHTML = `<div class="educator-avatar">?</div>`;
+    }
+
+    // Update preview region and bio
+    document.getElementById('educatorPreviewRegion').textContent = profile.region || '';
+    document.getElementById('educatorPreviewBio').innerHTML = profile.bio ? `<div class="educator-bio">${profile.bio}</div>` : '';
+
+    // Update course object
+    const initials = name ? name.split(' ').map(w => w[0]).join('').toUpperCase() : '?';
+    c.educator = {
+        name: name || 'Da assegnare',
+        region: profile.region || '',
+        initials,
+        photo: profile.photo || '',
+        bio: profile.bio || ''
+    };
+}
+
 async function saveCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);
     if (!c) return;
@@ -2590,9 +2639,14 @@ async function saveCourseDetail(courseId) {
     // Collect program data from UI
     const program = collectProgramData();
 
+    // Get educator assignment
+    const educatorSelect = document.getElementById('educatorSelect');
+    const educatorName = educatorSelect ? educatorSelect.value : (c.educator.name !== 'Da assegnare' ? c.educator.name : '');
+
     const payload = {
         ...newCosts,
-        program: program
+        program: program,
+        educatorName: educatorName
     };
 
     try {
