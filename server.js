@@ -518,6 +518,10 @@ app.get('/api/courses', async (req, res) => {
     });
 
     const courses = Array.from(courseMap.values());
+
+    // Automatically check WhatsApp for all student phone numbers
+    await enrichStudentsWithWhatsApp(courses);
+
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
@@ -626,67 +630,82 @@ app.post('/api/costs/:courseId', (req, res) => {
 });
 
 // ============================================================================
-// WHATSAPP NUMBER CHECK
+// WHATSAPP NUMBER CHECK (automatic, server-side)
 // ============================================================================
 const waCheckCache = {};        // { cleanPhone: true|false|null }
 const WA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 const waCheckTimestamps = {};   // { cleanPhone: timestamp }
 
-app.post('/api/check-whatsapp', async (req, res) => {
-  const { phones } = req.body;   // array of raw phone strings
-  if (!Array.isArray(phones) || phones.length === 0) {
-    return res.json({ success: false, error: 'phones array required' });
+// Core: check a single phone number against wa.me
+async function checkSingleWhatsApp(cleanPhone) {
+  // Return cached result if still valid
+  if (waCheckCache[cleanPhone] !== undefined && waCheckTimestamps[cleanPhone] &&
+      Date.now() - waCheckTimestamps[cleanPhone] < WA_CACHE_TTL) {
+    return waCheckCache[cleanPhone];
   }
-
-  const results = {};
-  const toCheck = [];
-
-  for (const phone of phones) {
-    const clean = phone.replace(/[^\d]/g, '');
-    if (!clean || clean.length < 8) {
-      results[phone] = { wa: false };
-      continue;
-    }
-    // Check cache (and TTL)
-    if (waCheckCache[clean] !== undefined && waCheckTimestamps[clean] &&
-        Date.now() - waCheckTimestamps[clean] < WA_CACHE_TTL) {
-      results[phone] = { wa: waCheckCache[clean] };
-      continue;
-    }
-    toCheck.push({ original: phone, clean });
+  try {
+    const resp = await fetch(`https://wa.me/${cleanPhone}`, {
+      method: 'GET',
+      redirect: 'manual',
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SSA-Dashboard/1.0)' },
+      signal: AbortSignal.timeout(8000)
+    });
+    const location = resp.headers.get('location') || '';
+    const status = resp.status;
+    const isOnWA = (status === 301 || status === 302) &&
+                    location.includes('api.whatsapp.com');
+    waCheckCache[cleanPhone] = isOnWA;
+    waCheckTimestamps[cleanPhone] = Date.now();
+    return isOnWA;
+  } catch (e) {
+    return null; // unknown
   }
+}
 
-  // Check uncached numbers via wa.me (HEAD request, redirect: manual)
-  // wa.me returns 301/302 → api.whatsapp.com for numbers that can receive messages
+// Batch check: enrich an array of students with hasWhatsApp field
+// Runs in parallel batches of 5, non-blocking
+async function enrichStudentsWithWhatsApp(courses) {
+  // Collect unique phone numbers across all courses
+  const phoneSet = new Map(); // cleanPhone → [{ course, studentIndex }]
+  courses.forEach(course => {
+    (course.students || []).forEach((st, idx) => {
+      if (!st.phone) { st.hasWhatsApp = false; return; }
+      const clean = st.phone.replace(/[^\d]/g, '');
+      if (!clean || clean.length < 8) { st.hasWhatsApp = false; return; }
+      // If cached, apply immediately
+      if (waCheckCache[clean] !== undefined && waCheckTimestamps[clean] &&
+          Date.now() - waCheckTimestamps[clean] < WA_CACHE_TTL) {
+        st.hasWhatsApp = waCheckCache[clean];
+        return;
+      }
+      if (!phoneSet.has(clean)) phoneSet.set(clean, []);
+      phoneSet.get(clean).push({ course, idx });
+    });
+  });
+
+  const toCheck = Array.from(phoneSet.keys());
+  if (toCheck.length === 0) return;
+
+  console.log(`WA check: ${toCheck.length} numbers to verify (${Object.keys(waCheckCache).length} cached)`);
+
+  // Check in parallel batches of 5
   const BATCH = 5;
   for (let i = 0; i < toCheck.length; i += BATCH) {
     const batch = toCheck.slice(i, i + BATCH);
-    await Promise.all(batch.map(async ({ original, clean }) => {
-      try {
-        const resp = await fetch(`https://wa.me/${clean}`, {
-          method: 'GET',
-          redirect: 'manual',
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SSA-Dashboard/1.0)' },
-          signal: AbortSignal.timeout(8000)
-        });
-        // wa.me returns 302 to api.whatsapp.com/send/... for valid WhatsApp numbers
-        const location = resp.headers.get('location') || '';
-        const status = resp.status;
-        const isOnWA = (status === 301 || status === 302) &&
-                        location.includes('api.whatsapp.com');
-        waCheckCache[clean] = isOnWA;
-        waCheckTimestamps[clean] = Date.now();
-        results[original] = { wa: isOnWA };
-        console.log(`WA check ${clean}: ${status} → ${location.substring(0, 60)} → ${isOnWA}`);
-      } catch (e) {
-        results[original] = { wa: null }; // unknown (timeout/error)
-        console.log(`WA check ${clean}: error ${e.message}`);
-      }
-    }));
+    const results = await Promise.all(batch.map(clean => checkSingleWhatsApp(clean)));
+    batch.forEach((clean, j) => {
+      const isOnWA = results[j];
+      // Apply result to all students with this phone
+      phoneSet.get(clean).forEach(({ course, idx }) => {
+        course.students[idx].hasWhatsApp = isOnWA;
+      });
+    });
   }
 
-  res.json({ success: true, results });
-});
+  const okCount = toCheck.filter(p => waCheckCache[p] === true).length;
+  const noCount = toCheck.filter(p => waCheckCache[p] === false).length;
+  console.log(`WA check done: ${okCount} on WA, ${noCount} not on WA, ${toCheck.length - okCount - noCount} unknown`);
+}
 
 // ============================================================================
 // SAKE COMPANY SHOPIFY (Storefront API - product images)
