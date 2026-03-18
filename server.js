@@ -68,7 +68,7 @@ let airtablePersistenceActive = false;
 
 async function initConfigTable() {
   const apiKey = process.env.AIRTABLE_API_KEY;
-  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA';
   if (!apiKey) {
     console.log('Airtable persistence: DISABLED (no API key)');
     return;
@@ -94,7 +94,7 @@ async function initConfigTable() {
 async function airtableConfigGet(key) {
   if (!airtablePersistenceActive) return null;
   const apiKey = process.env.AIRTABLE_API_KEY;
-  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA';
   const tablePath = encodeURIComponent(CONFIG_TABLE_NAME);
   try {
     const formula = encodeURIComponent(`{Key}="${key}"`);
@@ -117,7 +117,7 @@ async function airtableConfigGet(key) {
 async function airtableConfigSet(key, value) {
   if (!airtablePersistenceActive) return;
   const apiKey = process.env.AIRTABLE_API_KEY;
-  const baseId = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+  const baseId = process.env.AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA';
   const tablePath = encodeURIComponent(CONFIG_TABLE_NAME);
   try {
     const formula = encodeURIComponent(`{Key}="${key}"`);
@@ -303,7 +303,7 @@ async function fetchAllShopifyOrders() {
 // AIRTABLE API UTILITIES
 // ============================================================================
 const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
-const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appB0TjUHqfXr4ekq';
+const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA';
 const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID || 'tblnJO5Mf7EVmteRk';
 
 async function airtableFetch(endpoint, options = {}) {
