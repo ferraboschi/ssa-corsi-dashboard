@@ -128,26 +128,41 @@ async function airtableConfigSet(key, value) {
     const data = resp.ok ? await resp.json() : { records: [] };
     const jsonValue = JSON.stringify(value);
 
-    if (data.records && data.records.length > 0) {
+    // Filter to records that actually have a Key value matching
+    const matching = (data.records || []).filter(r => r.fields && r.fields.Key === key);
+
+    if (matching.length > 0) {
       // Update existing record
-      await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}/${data.records[0].id}`, {
+      const writeResp = await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}/${matching[0].id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ fields: { Value: jsonValue } })
+        body: JSON.stringify({ fields: { Key: key, Value: jsonValue } })
       });
+      if (!writeResp.ok) {
+        const errBody = await writeResp.text();
+        console.error(`Airtable PATCH '${key}' failed: ${writeResp.status} ${errBody}`);
+      } else {
+        console.log(`Airtable config '${key}' updated (${jsonValue.length} chars)`);
+      }
     } else {
-      // Create new record
-      await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}`, {
+      // Create new record (single record format)
+      const writeResp = await fetch(`https://api.airtable.com/v0/${baseId}/${tablePath}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ records: [{ fields: { Key: key, Value: jsonValue } }] })
+        body: JSON.stringify({ fields: { Key: key, Value: jsonValue } })
       });
+      if (!writeResp.ok) {
+        const errBody = await writeResp.text();
+        console.error(`Airtable POST '${key}' failed: ${writeResp.status} ${errBody}`);
+      } else {
+        console.log(`Airtable config '${key}' created (${jsonValue.length} chars)`);
+      }
     }
   } catch (e) {
     console.error(`Airtable config set '${key}' failed:`, e.message);
@@ -159,22 +174,18 @@ async function loadFromAirtable() {
   try {
     const costsData = await airtableConfigGet('course_costs');
     if (costsData && Object.keys(costsData).length > 0) {
-      // Merge Airtable data into in-memory state (Airtable wins over empty file)
+      // Airtable ALWAYS wins (file is ephemeral on Render, Airtable is the source of truth)
       Object.keys(costsData).forEach(k => {
-        if (!courseCosts[k] || Object.keys(courseCosts[k]).length === 0) {
-          courseCosts[k] = costsData[k];
-        }
+        courseCosts[k] = costsData[k];
       });
-      console.log(`Loaded ${Object.keys(costsData).length} course costs from Airtable`);
+      console.log(`Loaded ${Object.keys(costsData).length} course costs from Airtable (overwriting file data)`);
     }
     const tokensData = await airtableConfigGet('share_tokens');
     if (tokensData && Object.keys(tokensData).length > 0) {
       Object.keys(tokensData).forEach(k => {
-        if (!shareTokens[k]) {
-          shareTokens[k] = tokensData[k];
-        }
+        shareTokens[k] = tokensData[k];
       });
-      console.log(`Loaded ${Object.keys(tokensData).length} share tokens from Airtable`);
+      console.log(`Loaded ${Object.keys(tokensData).length} share tokens from Airtable (overwriting file data)`);
     }
   } catch (e) {
     console.error('Failed to load from Airtable:', e.message);
