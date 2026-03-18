@@ -1848,6 +1848,9 @@ async function loadApiData() {
     const cachedCourses = getCached('courses');
     const cachedSake = getCached('sake_v3');
 
+    // Load course costs FIRST (must be available before processing courses)
+    await loadCourseCosts();
+
     // Load courses
     try {
         if (cachedCourses) {
@@ -2055,9 +2058,6 @@ async function loadApiData() {
         // Cache AFTER image enrichment so cache includes images
         setCache('sake_v3', SAKE_CATALOG);
     }
-
-    // Load course costs from API
-    await loadCourseCosts();
 
     updateConnectionStatus();
     renderCurrentPage();
