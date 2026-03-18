@@ -2453,7 +2453,10 @@ function renderCourseDetailPage() {
             </div>
         </div>
 
-        <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
+        <div class="section-title" style="display: flex; align-items: center; justify-content: space-between;">
+            <span><i class="fas fa-users"></i> Iscritti (${c.students.length})</span>
+            ${c.students.some(st => st.phone) ? `<button id="wa-check-btn" onclick="checkWhatsAppNumbers('${c.id}')" style="font-size: 11px; padding: 4px 10px; border: 1px solid #25D366; background: white; color: #25D366; border-radius: 6px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 4px;"><i class="fab fa-whatsapp" style="font-size: 10px;"></i> Verifica WA</button>` : ''}
+        </div>
         ${c.students.length > 0 ? `
         <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
         <table class="data-table" style="min-width: 700px;">
@@ -2470,7 +2473,7 @@ function renderCourseDetailPage() {
                                      (nameKey && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nameKey] > 1);
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
-                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="fab fa-whatsapp" style="font-size: 10px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : '-'}</td>
+                        <td style="font-size: 12px; white-space: nowrap;" ${cleanPhone ? `data-wa-phone="${cleanPhone}"` : ''}>${st.phone ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;"><i class="${WA_CHECK_RESULTS[cleanPhone] === true ? 'fab fa-whatsapp' : WA_CHECK_RESULTS[cleanPhone] === false ? 'fab fa-whatsapp' : 'fab fa-whatsapp'} wa-status-icon" style="font-size: 10px; color: ${WA_CHECK_RESULTS[cleanPhone] === true ? '#25D366' : WA_CHECK_RESULTS[cleanPhone] === false ? '#ccc' : '#25D366'}; margin-right: 4px;" title="${WA_CHECK_RESULTS[cleanPhone] === true ? 'Su WhatsApp ✓' : WA_CHECK_RESULTS[cleanPhone] === false ? 'Non su WhatsApp ✗' : 'Clicca Verifica WA per controllare'}"></i>${st.phone}</a>` : '-'}</td>
                         <td style="font-weight: 600; font-size: 13px; white-space: nowrap;">${st.amount ? formatCurrency(st.amount) : (st.amount === 0 ? '0,00 €' : '-')}${st.discountCode ? `<br><span style="font-size: 9px; font-weight: 500; color: #d97706; background: #fffbeb; padding: 1px 5px; border-radius: 6px;" title="Sconto: ${st.discountCode}"><i class="fas fa-tag" style="font-size: 8px;"></i> ${st.discountCode}</span>` : ''}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
@@ -2561,6 +2564,80 @@ function deleteCostLine(idx) {
     }
     c.costs.lines.splice(idx, 1);
     renderCourseDetailPage();
+}
+
+// =========================================================================
+// WHATSAPP NUMBER CHECK
+// =========================================================================
+const WA_CHECK_RESULTS = {};  // { cleanPhone: true|false|null }
+
+async function checkWhatsAppNumbers(courseId) {
+    const c = COURSES.find(x => x.id === courseId);
+    if (!c || !c.students.length) return;
+
+    const phones = c.students
+        .map(st => st.phone)
+        .filter(p => p && p.trim());
+
+    if (phones.length === 0) {
+        showToast('Nessun numero di telefono da verificare');
+        return;
+    }
+
+    // Show loading state
+    const btn = document.getElementById('wa-check-btn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size: 10px;"></i> Verifica...';
+    }
+
+    try {
+        const response = await fetch('/api/check-whatsapp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phones })
+        });
+        const data = await response.json();
+        if (data.success && data.results) {
+            Object.entries(data.results).forEach(([phone, info]) => {
+                const clean = phone.replace(/\D/g, '');
+                WA_CHECK_RESULTS[clean] = info.wa;
+            });
+            // Update UI indicators
+            document.querySelectorAll('[data-wa-phone]').forEach(el => {
+                const phone = el.getAttribute('data-wa-phone');
+                const status = WA_CHECK_RESULTS[phone];
+                const icon = el.querySelector('.wa-status-icon');
+                if (icon) {
+                    if (status === true) {
+                        icon.className = 'fab fa-whatsapp wa-status-icon';
+                        icon.style.color = '#25D366';
+                        icon.title = 'Numero su WhatsApp';
+                    } else if (status === false) {
+                        icon.className = 'fab fa-whatsapp wa-status-icon';
+                        icon.style.color = '#ccc';
+                        icon.title = 'Numero NON su WhatsApp';
+                    } else {
+                        icon.className = 'fas fa-question-circle wa-status-icon';
+                        icon.style.color = '#f59e0b';
+                        icon.title = 'Verifica non riuscita';
+                    }
+                }
+            });
+            const okCount = Object.values(data.results).filter(r => r.wa === true).length;
+            const noCount = Object.values(data.results).filter(r => r.wa === false).length;
+            const unknownCount = Object.values(data.results).filter(r => r.wa === null).length;
+            showToast(`WhatsApp: ${okCount} ✓  ${noCount} ✗  ${unknownCount > 0 ? unknownCount + ' ?' : ''}`);
+        }
+    } catch (e) {
+        console.error('WhatsApp check error:', e);
+        showError('Errore nella verifica WhatsApp');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fab fa-whatsapp" style="font-size: 10px;"></i> Verifica WA';
+        }
+    }
 }
 
 async function saveCourseDetail(courseId) {

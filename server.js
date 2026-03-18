@@ -626,6 +626,69 @@ app.post('/api/costs/:courseId', (req, res) => {
 });
 
 // ============================================================================
+// WHATSAPP NUMBER CHECK
+// ============================================================================
+const waCheckCache = {};        // { cleanPhone: true|false|null }
+const WA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const waCheckTimestamps = {};   // { cleanPhone: timestamp }
+
+app.post('/api/check-whatsapp', async (req, res) => {
+  const { phones } = req.body;   // array of raw phone strings
+  if (!Array.isArray(phones) || phones.length === 0) {
+    return res.json({ success: false, error: 'phones array required' });
+  }
+
+  const results = {};
+  const toCheck = [];
+
+  for (const phone of phones) {
+    const clean = phone.replace(/[^\d]/g, '');
+    if (!clean || clean.length < 8) {
+      results[phone] = { wa: false };
+      continue;
+    }
+    // Check cache (and TTL)
+    if (waCheckCache[clean] !== undefined && waCheckTimestamps[clean] &&
+        Date.now() - waCheckTimestamps[clean] < WA_CACHE_TTL) {
+      results[phone] = { wa: waCheckCache[clean] };
+      continue;
+    }
+    toCheck.push({ original: phone, clean });
+  }
+
+  // Check uncached numbers via wa.me (HEAD request, redirect: manual)
+  // wa.me returns 301/302 → api.whatsapp.com for numbers that can receive messages
+  const BATCH = 5;
+  for (let i = 0; i < toCheck.length; i += BATCH) {
+    const batch = toCheck.slice(i, i + BATCH);
+    await Promise.all(batch.map(async ({ original, clean }) => {
+      try {
+        const resp = await fetch(`https://wa.me/${clean}`, {
+          method: 'GET',
+          redirect: 'manual',
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SSA-Dashboard/1.0)' },
+          signal: AbortSignal.timeout(8000)
+        });
+        // wa.me returns 302 to api.whatsapp.com/send/... for valid WhatsApp numbers
+        const location = resp.headers.get('location') || '';
+        const status = resp.status;
+        const isOnWA = (status === 301 || status === 302) &&
+                        location.includes('api.whatsapp.com');
+        waCheckCache[clean] = isOnWA;
+        waCheckTimestamps[clean] = Date.now();
+        results[original] = { wa: isOnWA };
+        console.log(`WA check ${clean}: ${status} → ${location.substring(0, 60)} → ${isOnWA}`);
+      } catch (e) {
+        results[original] = { wa: null }; // unknown (timeout/error)
+        console.log(`WA check ${clean}: error ${e.message}`);
+      }
+    }));
+  }
+
+  res.json({ success: true, results });
+});
+
+// ============================================================================
 // SAKE COMPANY SHOPIFY (Storefront API - product images)
 // ============================================================================
 const SAKE_COMPANY_STORE = process.env.SAKE_COMPANY_STORE || 'sake-company.myshopify.com';
