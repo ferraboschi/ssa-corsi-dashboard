@@ -625,10 +625,43 @@ app.post('/api/costs/:courseId', (req, res) => {
   // Save educator assignment if provided
   if (educatorName !== undefined) {
     courseCosts[courseId].educatorName = educatorName;
+    // Also sync educator tag to Shopify (fire-and-forget)
+    syncEducatorTagToShopify(courseId, educatorName).catch(e =>
+      console.error(`Shopify educator tag sync failed for ${courseId}:`, e.message)
+    );
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
 });
+
+// Sync educator:Name tag to Shopify product
+async function syncEducatorTagToShopify(courseHandle, educatorName) {
+  try {
+    // Find product by handle
+    const products = await fetchAllShopifyProducts();
+    const product = products.find(p => p.handle === courseHandle);
+    if (!product) {
+      console.log(`Shopify sync: product not found for handle ${courseHandle}`);
+      return;
+    }
+    // Parse existing tags, remove old educator: tag, add new one
+    let tags = (product.tags || '').split(',').map(t => t.trim()).filter(t => t && !t.startsWith('educator:'));
+    if (educatorName) {
+      tags.push(`educator:${educatorName}`);
+    }
+    const newTags = tags.join(', ');
+    // Update product via Shopify Admin API
+    await shopifyFetch(`/products/${product.id}.json`, {
+      method: 'PUT',
+      body: { product: { id: product.id, tags: newTags } }
+    });
+    // Invalidate product cache so next fetch picks up the new tag
+    setCache('shopify_all_products', null, 0);
+    console.log(`Shopify educator tag synced: ${courseHandle} → educator:${educatorName}`);
+  } catch (e) {
+    console.error(`Shopify educator sync error:`, e.message);
+  }
+}
 
 // ============================================================================
 // WHATSAPP NUMBER CHECK (automatic, server-side)
@@ -926,9 +959,10 @@ app.get('/api/shared/:token', async (req, res) => {
       enrollmentCount: 0
     };
 
-    // Educator
+    // Educator: from Shopify tag first, then from saved config, then vendor
     const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
-    course.educator = educatorTag ? educatorTag.replace('educator:', '') : courseProduct.vendor || '';
+    const savedEducator = courseCosts[courseProduct.handle]?.educatorName;
+    course.educator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || courseProduct.vendor || '');
 
     // Program & costs (no financial details, only program structure)
     const costs = courseCosts[courseProduct.handle];
