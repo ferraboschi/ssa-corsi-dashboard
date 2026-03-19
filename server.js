@@ -558,6 +558,9 @@ app.get('/api/courses', async (req, res) => {
       }
     });
 
+    // Enrich students with Twilio Lookup v2 WhatsApp data
+    await enrichStudentsWithWhatsApp(courses);
+
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
@@ -715,81 +718,110 @@ async function syncEducatorTagToShopify(courseHandle, educatorName) {
 }
 
 // ============================================================================
-// WHATSAPP NUMBER CHECK (automatic, server-side)
+// TWILIO LOOKUP V2 PHONE VERIFICATION
 // ============================================================================
-const waCheckCache = {};        // { cleanPhone: true|false|null }
-const WA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-const waCheckTimestamps = {};   // { cleanPhone: timestamp }
+const twilioLookupCache = {};        // { phone: true|false }
+const TWILIO_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const twilioLookupTimestamps = {};   // { phone: timestamp }
 
-// Core: check a single phone number against wa.me
-async function checkSingleWhatsApp(cleanPhone) {
+// Check if Twilio credentials are configured
+function hasTwilioConfig() {
+  return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+}
+
+// Core: check a single phone number via Twilio Lookup v2
+async function checkSingleTwilioLookup(phoneWithPlus) {
   // Return cached result if still valid
-  if (waCheckCache[cleanPhone] !== undefined && waCheckTimestamps[cleanPhone] &&
-      Date.now() - waCheckTimestamps[cleanPhone] < WA_CACHE_TTL) {
-    return waCheckCache[cleanPhone];
+  if (twilioLookupCache[phoneWithPlus] !== undefined && twilioLookupTimestamps[phoneWithPlus] &&
+      Date.now() - twilioLookupTimestamps[phoneWithPlus] < TWILIO_CACHE_TTL) {
+    return twilioLookupCache[phoneWithPlus];
   }
+
   try {
-    const resp = await fetch(`https://wa.me/${cleanPhone}`, {
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+    const url = `https://lookups.twilio.com/v2/PhoneNumbers/${encodeURIComponent(phoneWithPlus)}?Fields=line_type_intelligence`;
+    const resp = await fetch(url, {
       method: 'GET',
-      redirect: 'manual',
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SSA-Dashboard/1.0)' },
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'User-Agent': 'SSA-Dashboard/1.0'
+      },
       signal: AbortSignal.timeout(8000)
     });
-    const location = resp.headers.get('location') || '';
-    const status = resp.status;
-    const isOnWA = (status === 301 || status === 302) &&
-                    location.includes('api.whatsapp.com');
-    waCheckCache[cleanPhone] = isOnWA;
-    waCheckTimestamps[cleanPhone] = Date.now();
-    return isOnWA;
+
+    if (!resp.ok) {
+      console.debug(`Twilio Lookup failed for ${phoneWithPlus}: ${resp.status}`);
+      return null; // error - don't cache
+    }
+
+    const data = await resp.json();
+    const lineType = data.line_type_intelligence?.type;
+    const isMobile = lineType === 'mobile' || lineType === 'voip';
+
+    twilioLookupCache[phoneWithPlus] = isMobile;
+    twilioLookupTimestamps[phoneWithPlus] = Date.now();
+    return isMobile;
   } catch (e) {
-    return null; // unknown
+    console.debug(`Twilio Lookup error for ${phoneWithPlus}:`, e.message);
+    return null; // error - don't cache
   }
 }
 
 // Batch check: enrich an array of students with hasWhatsApp field
 // Runs in parallel batches of 5, non-blocking
 async function enrichStudentsWithWhatsApp(courses) {
-  // Collect unique phone numbers across all courses
-  const phoneSet = new Map(); // cleanPhone → [{ course, studentIndex }]
+  // Skip if Twilio not configured
+  if (!hasTwilioConfig()) {
+    return;
+  }
+
+  // Collect unique phone numbers across all courses (only those with + prefix)
+  const phoneSet = new Map(); // phoneWithPlus → [{ course, studentIndex }]
   courses.forEach(course => {
     (course.students || []).forEach((st, idx) => {
-      if (!st.phone) { st.hasWhatsApp = false; return; }
-      const clean = st.phone.replace(/[^\d]/g, '');
-      if (!clean || clean.length < 8) { st.hasWhatsApp = false; return; }
+      if (!st.phone) { st.hasWhatsApp = undefined; return; }
+      const phone = st.phone.trim();
+      // Only check numbers with + prefix
+      if (!phone.startsWith('+')) { st.hasWhatsApp = undefined; return; }
       // If cached, apply immediately
-      if (waCheckCache[clean] !== undefined && waCheckTimestamps[clean] &&
-          Date.now() - waCheckTimestamps[clean] < WA_CACHE_TTL) {
-        st.hasWhatsApp = waCheckCache[clean];
+      if (twilioLookupCache[phone] !== undefined && twilioLookupTimestamps[phone] &&
+          Date.now() - twilioLookupTimestamps[phone] < TWILIO_CACHE_TTL) {
+        st.hasWhatsApp = twilioLookupCache[phone];
         return;
       }
-      if (!phoneSet.has(clean)) phoneSet.set(clean, []);
-      phoneSet.get(clean).push({ course, idx });
+      if (!phoneSet.has(phone)) phoneSet.set(phone, []);
+      phoneSet.get(phone).push({ course, idx });
     });
   });
 
   const toCheck = Array.from(phoneSet.keys());
   if (toCheck.length === 0) return;
 
-  console.log(`WA check: ${toCheck.length} numbers to verify (${Object.keys(waCheckCache).length} cached)`);
+  console.log(`Twilio Lookup: ${toCheck.length} numbers to verify (${Object.keys(twilioLookupCache).length} cached)`);
+
+  let mobileCount = 0, nonMobileCount = 0, errorCount = 0;
 
   // Check in parallel batches of 5
   const BATCH = 5;
   for (let i = 0; i < toCheck.length; i += BATCH) {
     const batch = toCheck.slice(i, i + BATCH);
-    const results = await Promise.all(batch.map(clean => checkSingleWhatsApp(clean)));
-    batch.forEach((clean, j) => {
-      const isOnWA = results[j];
+    const results = await Promise.all(batch.map(phone => checkSingleTwilioLookup(phone)));
+    batch.forEach((phone, j) => {
+      const isMobile = results[j];
       // Apply result to all students with this phone
-      phoneSet.get(clean).forEach(({ course, idx }) => {
-        course.students[idx].hasWhatsApp = isOnWA;
+      phoneSet.get(phone).forEach(({ course, idx }) => {
+        course.students[idx].hasWhatsApp = isMobile;
+        if (isMobile === true) mobileCount++;
+        else if (isMobile === false) nonMobileCount++;
+        else errorCount++;
       });
     });
   }
 
-  const okCount = toCheck.filter(p => waCheckCache[p] === true).length;
-  const noCount = toCheck.filter(p => waCheckCache[p] === false).length;
-  console.log(`WA check done: ${okCount} on WA, ${noCount} not on WA, ${toCheck.length - okCount - noCount} unknown`);
+  console.log(`Twilio Lookup: ${mobileCount} mobile, ${nonMobileCount} non-mobile, ${errorCount} errors out of ${toCheck.length} checked`);
 }
 
 // ============================================================================

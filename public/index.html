@@ -2489,11 +2489,29 @@ function renderCourseDetailPage() {
                     const nameKey = st.name ? st.name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
                     const isRepeat = (emailKey && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[emailKey] > 1) ||
                                      (nameKey && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nameKey] > 1);
+                    // Determine phone icon and behavior based on Twilio hasWhatsApp flag
+                    let phoneIcon = '';
+                    if (st.hasWhatsApp === true) {
+                      // Green WhatsApp icon + clickable wa.me link
+                      phoneIcon = `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Apri chat WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366;"></i></a>`;
+                    } else if (st.hasWhatsApp === false) {
+                      // Gray phone icon (non-mobile)
+                      phoneIcon = `<i class="fas fa-phone-alt" style="font-size: 10px; color: #ccc;"></i>`;
+                    } else {
+                      // undefined - fall back to hasIntlPrefix logic
+                      if (st.phone && hasIntlPrefix) {
+                        phoneIcon = `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Apri chat WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366;"></i></a>`;
+                      } else if (st.phone) {
+                        phoneIcon = `<i class="fas fa-phone-alt" style="font-size: 10px; color: #ccc;"></i>`;
+                      } else {
+                        phoneIcon = `<i class="fas fa-plus-circle" style="font-size: 10px; color: #ccc;"></i>`;
+                      }
+                    }
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">
                             <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
-                                ${st.phone ? (hasIntlPrefix ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Apri chat WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366;"></i></a>` : `<i class="fas fa-phone-alt" style="font-size: 10px; color: #ccc;"></i>`) : `<i class="fas fa-plus-circle" style="font-size: 10px; color: #ccc;"></i>`}
+                                ${phoneIcon}
                                 <span class="phone-display">${st.phone || '<span style="color:#ccc; font-style:italic;">aggiungi</span>'}</span>
                             </div>
                         </td>
