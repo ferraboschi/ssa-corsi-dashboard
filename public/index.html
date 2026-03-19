@@ -2483,54 +2483,6 @@ function renderCourseDetailPage() {
             </div>
         </div>
 
-        <div style="margin-bottom: 12px;">
-            <button onclick="exportCourseExcel('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="width: 100%; padding: 12px 16px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <i class="fas fa-file-excel"></i> Esporta Excel Iscritti (con indirizzi)
-            </button>
-        </div>
-
-        <div style="margin-bottom: 24px;">
-            <button onclick="toggleWhatsAppSection()" style="width: 100%; padding: 12px 16px; background: #25D366; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <i class="fab fa-whatsapp"></i> Gestione Gruppo WhatsApp
-            </button>
-            <div id="whatsappSection" style="display: none; background: white; padding: 16px; border-radius: 10px; margin-top: 12px;">
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Link Invito Gruppo WhatsApp</label>
-                    <input type="text" id="whatsappGroupLinkInput" placeholder="https://chat.whatsapp.com/..." style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 8px;">
-                    <button onclick="saveWhatsAppLink('${c.handle}')" style="width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
-                        <i class="fas fa-save"></i> Salva Link
-                    </button>
-                </div>
-                <button onclick="copyWhatsAppInvite('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="width: 100%; padding: 10px; background: #25D366; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
-                    <i class="fas fa-copy"></i> Copia Messaggio Invito
-                </button>
-                <div style="font-size: 12px; color: var(--text-light); margin-bottom: 12px; padding: 8px; background: #f0f0f0; border-radius: 6px;">
-                    <strong>Studenti con WhatsApp:</strong>
-                </div>
-                <div id="whatsappStudentsList" style="max-height: 200px; overflow-y: auto; font-size: 12px;"></div>
-            </div>
-        </div>
-
-        <div style="margin-bottom: 24px;">
-            <button onclick="toggleShareSection()" style="width: 100%; padding: 12px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <i class="fas fa-share-alt"></i> Condividi con Educator
-            </button>
-            <div id="shareSection" style="display: none; background: white; padding: 16px; border-radius: 10px; margin-top: 12px;">
-                <div style="margin-bottom: 12px;">
-                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Durata del link (giorni)</label>
-                    <select id="shareTTLSelect" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;">
-                        <option value="7">7 giorni</option>
-                        <option value="14" selected>14 giorni</option>
-                        <option value="30">30 giorni</option>
-                    </select>
-                </div>
-                <button onclick="generateShareLink('${c.handle}')" style="width: 100%; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
-                    <i class="fas fa-plus"></i> Genera Link
-                </button>
-                <div id="shareLinksContainer" style="max-height: 200px; overflow-y: auto;"></div>
-            </div>
-        </div>
-
         <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
         ${c.students.length > 0 ? `
         <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
@@ -2587,6 +2539,60 @@ function renderCourseDetailPage() {
             <h3 style="font-size: 15px;">Nessun iscritto</h3>
             <p>Non ci sono ancora iscrizioni per questo corso su Shopify.</p>
         </div>`}
+
+        <div style="margin-top: 32px;">
+            <div class="section-title"><i class="fas fa-link"></i> Link e Azioni</div>
+            <div style="background: white; border-radius: 10px; padding: 16px; display: grid; gap: 12px;">
+
+                <!-- Card 1: Export Excel -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 14px; color: #166534;"><i class="fas fa-file-excel"></i> Esporta Iscritti</div>
+                        <div style="font-size: 12px; color: #4ade80;">File Excel con nomi, email, telefoni e indirizzi</div>
+                    </div>
+                    <button onclick="exportCourseExcel('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="padding: 8px 16px; background: #16a34a; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap;">Scarica .xlsx</button>
+                </div>
+
+                <!-- Card 2: WhatsApp Group -->
+                <div style="padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
+                    <div style="margin-bottom: 10px;">
+                        <div style="font-weight: 600; font-size: 14px; color: #166534;"><i class="fab fa-whatsapp"></i> Gruppo WhatsApp</div>
+                        <div style="font-size: 12px; color: #4ade80;">Link di invito al gruppo del corso</div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input id="waGroupLink" type="text" placeholder="https://chat.whatsapp.com/..." value="${COURSE_COSTS[c.handle]?.whatsappGroupLink || ''}" style="flex:1; min-width: 150px; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;" />
+                        <button onclick="saveWhatsAppLink('${c.handle}')" style="padding: 8px 12px; background: #16a34a; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;"><i class="fas fa-save"></i> Salva</button>
+                        <button onclick="copyWhatsAppInvite('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="padding: 8px 12px; background: #25D366; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;"><i class="fas fa-copy"></i> Copia Invito</button>
+                    </div>
+                </div>
+
+                <!-- Card 3: Condividi con Educator -->
+                <div style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px; color: #1e40af;"><i class="fas fa-share-alt"></i> Condividi con Educator</div>
+                            <div style="font-size: 12px; color: #60a5fa;">Genera link di accesso per il docente</div>
+                        </div>
+                        <button onclick="toggleShareSection()" style="padding: 6px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;"><i class="fas fa-cog"></i></button>
+                    </div>
+                    <div id="shareSection" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #bfdbfe;">
+                        <div style="margin-bottom: 10px;">
+                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Durata del link (giorni)</label>
+                            <select id="shareTTLSelect" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;">
+                                <option value="7">7 giorni</option>
+                                <option value="14" selected>14 giorni</option>
+                                <option value="30">30 giorni</option>
+                            </select>
+                        </div>
+                        <button onclick="generateShareLink('${c.handle}')" style="width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 10px;">
+                            <i class="fas fa-plus"></i> Genera Link
+                        </button>
+                        <div id="shareLinksContainer" style="max-height: 200px; overflow-y: auto;"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
     `;
 
     // Cost line event listeners are inline (oninput) — no extra binding needed
@@ -3612,59 +3618,8 @@ function copyShareLink(token) {
 // WHATSAPP GROUP MANAGEMENT
 // =============================================
 
-function toggleWhatsAppSection() {
-    const section = document.getElementById('whatsappSection');
-    if (section) {
-        section.style.display = section.style.display === 'none' ? 'block' : 'none';
-        if (section.style.display === 'block') {
-            const c = COURSES.find(x => x.id === window.currentCourseId);
-            if (c) loadWhatsAppData(c);
-        }
-    }
-}
-
-function loadWhatsAppData(course) {
-    // Pre-fill WhatsApp group link input if already saved
-    const savedLink = COURSE_COSTS[course.handle]?.whatsappGroupLink || '';
-    const input = document.getElementById('whatsappGroupLinkInput');
-    if (input) input.value = savedLink;
-
-    // Load and display students with WhatsApp
-    loadWhatsAppStudentsList(course);
-}
-
-function loadWhatsAppStudentsList(course) {
-    const container = document.getElementById('whatsappStudentsList');
-    if (!container) return;
-
-    // Filter students with verified WhatsApp (hasWhatsApp === true)
-    const whatsappStudents = course.students.filter(s => s.hasWhatsApp === true);
-
-    if (whatsappStudents.length === 0) {
-        container.innerHTML = '<div style="color: var(--text-light); padding: 8px 0;">Nessuno studente con numero WhatsApp verificato</div>';
-        return;
-    }
-
-    let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
-    whatsappStudents.forEach(student => {
-        const cleanPhone = student.phone ? student.phone.replace(/\D/g, '') : '';
-        const waLink = `https://wa.me/${cleanPhone}`;
-        const name = student.name || 'Sconosciuto';
-        html += `
-            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px; background: #f9f9f9; border-radius: 4px;">
-                <span>${name}</span>
-                <a href="${waLink}" target="_blank" style="color: #25D366; text-decoration: none; font-size: 12px;">
-                    <i class="fab fa-whatsapp"></i> Invia
-                </a>
-            </div>
-        `;
-    });
-    html += '</div>';
-    container.innerHTML = html;
-}
-
 async function saveWhatsAppLink(courseHandle) {
-    const input = document.getElementById('whatsappGroupLinkInput');
+    const input = document.getElementById('waGroupLink');
     if (!input || !input.value.trim()) {
         showError('Per favore inserisci un link WhatsApp valido');
         return;
@@ -3686,8 +3641,6 @@ async function saveWhatsAppLink(courseHandle) {
         });
 
         if (!response.ok) throw new Error('Failed to save WhatsApp link');
-
-        const result = await response.json();
 
         // Update local COURSE_COSTS
         if (!COURSE_COSTS[courseHandle]) COURSE_COSTS[courseHandle] = {};
