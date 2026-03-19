@@ -635,6 +635,65 @@ app.get('/api/export/corsisti', async (req, res) => {
 });
 
 // ============================================================================
+// COURSE EXPORT WITH ADDRESSES (JSON, for Excel generation)
+// ============================================================================
+app.get('/api/export/course/:handle', async (req, res) => {
+  try {
+    const handle = req.params.handle;
+    const products = await fetchAllShopifyProducts();
+    const orders = await fetchAllShopifyOrders();
+    const product = products.find(p => p.handle === handle);
+    if (!product) return res.status(404).json({ success: false, error: 'Course not found' });
+
+    const students = [];
+    orders.forEach(order => {
+      if (!order.line_items) return;
+      order.line_items.forEach(item => {
+        if (item.product_id === product.id) {
+          const addr = order.shipping_address || order.billing_address || order.customer?.default_address || {};
+          students.push({
+            name: order.customer ? `${order.customer.first_name || ''} ${order.customer.last_name || ''}`.trim() : 'Sconosciuto',
+            email: order.customer?.email || '',
+            phone: order.customer?.phone || addr.phone || '',
+            address1: addr.address1 || '',
+            address2: addr.address2 || '',
+            city: addr.city || '',
+            zip: addr.zip || '',
+            province: addr.province || '',
+            country: addr.country || '',
+            orderNumber: order.name || '',
+            orderDate: order.created_at,
+            amount: (parseFloat(item.price || 0) * item.quantity) - (item.discount_allocations || []).reduce((s, d) => s + parseFloat(d.amount || 0), 0)
+          });
+        }
+      });
+    });
+
+    // Apply phone overrides
+    const overrides = courseCosts[handle]?.phoneOverrides;
+    if (overrides) {
+      students.forEach(st => {
+        const ek = (st.email || '').toLowerCase().trim();
+        if (ek && overrides[ek]) st.phone = overrides[ek];
+      });
+    }
+
+    // Deduplicate
+    const seen = new Set();
+    const unique = students.filter(st => {
+      const key = (st.email || st.name).toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    res.json({ success: true, course: product.title, handle, students: unique });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
 // COURSE COSTS API
 // ============================================================================
 app.get('/api/costs', (req, res) => {
