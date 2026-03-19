@@ -2350,6 +2350,22 @@ function renderCourseDetailPage() {
         }
     }
 
+    // Ensure textbook_fee line exists (after diploma_fee, position 4)
+    const textbookCostPerStudent = isCertificato ? 9 : 8;
+    const textbookTotal = c.students.length * textbookCostPerStudent;
+    let textbookFeeIdx = c.costs.lines.findIndex(l => l.key === 'textbook_fee');
+    if (textbookFeeIdx === -1) {
+        c.costs.lines.splice(4, 0, { key: 'textbook_fee', label: `Libri di testo (${c.students.length} iscritti × €${textbookCostPerStudent})`, icon: 'fa-book', color: '#6b4423', value: textbookTotal, autoCalc: true });
+    } else {
+        c.costs.lines[textbookFeeIdx].autoCalc = true;
+        c.costs.lines[textbookFeeIdx].value = textbookTotal;
+        c.costs.lines[textbookFeeIdx].label = `Libri di testo (${c.students.length} iscritti × €${textbookCostPerStudent})`;
+        if (textbookFeeIdx !== 4) {
+            const textbookLine = c.costs.lines.splice(textbookFeeIdx, 1)[0];
+            c.costs.lines.splice(4, 0, textbookLine);
+        }
+    }
+
     // Remove old 'educator' key (from previous migration) if it still exists
     const oldEducatorIdx = c.costs.lines.findIndex(l => l.key === 'educator');
     if (oldEducatorIdx !== -1) c.costs.lines.splice(oldEducatorIdx, 1);
@@ -2361,6 +2377,7 @@ function renderCourseDetailPage() {
             : line.key === 'educator_fee' ? 'Costo fisso educator (€200/gg)'
             : line.key === 'ssa_fee' ? 'Costo fisso gestione SSA'
             : line.key === 'diploma_fee' ? 'Calcolato da iscritti × costo diploma'
+            : line.key === 'textbook_fee' ? 'Calcolato da iscritti × costo libro'
             : '';
         return `
         <div class="cost-line-row${fixedClass}">
@@ -2440,12 +2457,7 @@ function renderCourseDetailPage() {
                             : `<div class="educator-avatar">${c.educator.initials}</div>`}
                     </div>
                     <div style="flex: 1;">
-                        <select id="educatorSelect" onchange="onEducatorChange('${c.id}')" style="width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-weight: 600; background: white; cursor: pointer;">
-                            <option value="" ${c.educator.name === 'Da assegnare' ? 'selected' : ''}>Da assegnare</option>
-                            ${Object.keys(CONFIG.EDUCATOR_PROFILES).map(name =>
-                                `<option value="${name}" ${c.educator.name === name ? 'selected' : ''}>${name}</option>`
-                            ).join('')}
-                        </select>
+                        <div style="font-size: 14px; font-weight: 600; color: var(--text);">${c.educator.name}</div>
                         <div class="educator-role" id="educatorPreviewRegion" style="margin-top: 4px;">${c.educator.region}</div>
                     </div>
                 </div>
@@ -2663,38 +2675,6 @@ function editPhoneInline(cell) {
     });
 }
 
-function onEducatorChange(courseId) {
-    const c = COURSES.find(x => x.id === courseId);
-    if (!c) return;
-    const sel = document.getElementById('educatorSelect');
-    const name = sel.value;
-    const profile = CONFIG.EDUCATOR_PROFILES[name] || {};
-
-    // Update preview avatar
-    const avatarDiv = document.getElementById('educatorPreviewAvatar');
-    if (profile.photo) {
-        avatarDiv.innerHTML = `<img src="${profile.photo}" alt="${name}" class="educator-photo">`;
-    } else if (name) {
-        const initials = name.split(' ').map(w => w[0]).join('').toUpperCase();
-        avatarDiv.innerHTML = `<div class="educator-avatar">${initials}</div>`;
-    } else {
-        avatarDiv.innerHTML = `<div class="educator-avatar">?</div>`;
-    }
-
-    // Update preview region and bio
-    document.getElementById('educatorPreviewRegion').textContent = profile.region || '';
-    document.getElementById('educatorPreviewBio').innerHTML = profile.bio ? `<div class="educator-bio">${profile.bio}</div>` : '';
-
-    // Update course object
-    const initials = name ? name.split(' ').map(w => w[0]).join('').toUpperCase() : '?';
-    c.educator = {
-        name: name || 'Da assegnare',
-        region: profile.region || '',
-        initials,
-        photo: profile.photo || '',
-        bio: profile.bio || ''
-    };
-}
 
 async function saveCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);
@@ -2723,14 +2703,9 @@ async function saveCourseDetail(courseId) {
     // Collect program data from UI
     const program = collectProgramData();
 
-    // Get educator assignment
-    const educatorSelect = document.getElementById('educatorSelect');
-    const educatorName = educatorSelect ? educatorSelect.value : (c.educator.name !== 'Da assegnare' ? c.educator.name : '');
-
     const payload = {
         ...newCosts,
-        program: program,
-        educatorName: educatorName
+        program: program
     };
 
     try {
@@ -3210,9 +3185,9 @@ function updateProgramTotal() {
     if (!c) return;
 
     const program = COURSE_COSTS[c.handle]?.program || [];
-    const total = program.reduce((sum, group) => {
+    const total = Math.round(program.reduce((sum, group) => {
         return sum + group.sakes.reduce((groupSum, sake) => groupSum + (sake.cost * sake.qty), 0);
-    }, 0);
+    }, 0));
 
     document.getElementById('programTotal').textContent = `Totale Sake Programma: ${formatCurrency(total)}`;
 
