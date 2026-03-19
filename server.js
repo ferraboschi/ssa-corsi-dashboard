@@ -767,7 +767,7 @@ app.get('/api/costs/:courseId', (req, res) => {
 
 app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
-  const { location, educator, food, sake, adv, program, lines, educatorName } = req.body;
+  const { location, educator, food, sake, adv, program, lines, educatorName, whatsappGroupLink } = req.body;
   courseCosts[courseId] = {
     location: parseFloat(location) || 0,
     educator: parseFloat(educator) || 0,
@@ -786,6 +786,10 @@ app.post('/api/costs/:courseId', (req, res) => {
   // Keep educatorName field for backward compatibility
   if (educatorName !== undefined) {
     courseCosts[courseId].educatorName = educatorName;
+  }
+  // Save WhatsApp group link if provided
+  if (whatsappGroupLink !== undefined) {
+    courseCosts[courseId].whatsappGroupLink = whatsappGroupLink;
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });

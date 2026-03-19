@@ -1277,6 +1277,7 @@
             <button class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
             <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
             <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
+            <button data-page="passati"><i class="fas fa-history"></i> Passati</button>
             <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
         </nav>
         <div class="header-actions">
@@ -1301,6 +1302,7 @@
     <button class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
     <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
     <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
+    <button data-page="passati"><i class="fas fa-history"></i> Passati</button>
     <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
 
 </div>
@@ -1418,6 +1420,27 @@
     <div id="page-educator" class="page-hidden">
         <div class="section-title"><i class="fas fa-chalkboard-teacher"></i> Educator SSA &mdash; Corsi Assegnati</div>
         <div class="educator-grid" id="educatorGrid"></div>
+    </div>
+
+    <!-- PAST COURSES PAGE -->
+    <div id="page-passati" class="page-hidden">
+        <div class="section-title"><i class="fas fa-history"></i> Corsi Passati &mdash; Ultimi 3 Mesi</div>
+        <div class="card">
+            <div class="card-body" style="padding: 0;">
+                <table class="data-table" id="pastCoursesTable">
+                    <thead><tr>
+                        <th>Tipo Corso</th>
+                        <th>Città</th>
+                        <th>Date</th>
+                        <th>Educator</th>
+                        <th>Iscritti</th>
+                        <th>Incasso</th>
+                        <th>Sostenibilità</th>
+                    </tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- COURSE DETAIL PAGE -->
@@ -2138,6 +2161,7 @@ function renderCurrentPage() {
     if (currentPage === 'dashboard') renderDashboard();
     else if (currentPage === 'corsi') renderCorsiPage();
     else if (currentPage === 'corsisti') renderCorsistiPage();
+    else if (currentPage === 'passati') renderPastCoursesPage();
     else if (currentPage === 'educator') renderEducatorPage();
     else if (currentPage === 'course-detail') renderCourseDetailPage();
 }
@@ -2463,6 +2487,28 @@ function renderCourseDetailPage() {
             <button onclick="exportCourseExcel('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="width: 100%; padding: 12px 16px; background: #16a34a; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <i class="fas fa-file-excel"></i> Esporta Excel Iscritti (con indirizzi)
             </button>
+        </div>
+
+        <div style="margin-bottom: 24px;">
+            <button onclick="toggleWhatsAppSection()" style="width: 100%; padding: 12px 16px; background: #25D366; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <i class="fab fa-whatsapp"></i> Gestione Gruppo WhatsApp
+            </button>
+            <div id="whatsappSection" style="display: none; background: white; padding: 16px; border-radius: 10px; margin-top: 12px;">
+                <div style="margin-bottom: 12px;">
+                    <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Link Invito Gruppo WhatsApp</label>
+                    <input type="text" id="whatsappGroupLinkInput" placeholder="https://chat.whatsapp.com/..." style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; margin-bottom: 8px;">
+                    <button onclick="saveWhatsAppLink('${c.handle}')" style="width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
+                        <i class="fas fa-save"></i> Salva Link
+                    </button>
+                </div>
+                <button onclick="copyWhatsAppInvite('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="width: 100%; padding: 10px; background: #25D366; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 12px;">
+                    <i class="fas fa-copy"></i> Copia Messaggio Invito
+                </button>
+                <div style="font-size: 12px; color: var(--text-light); margin-bottom: 12px; padding: 8px; background: #f0f0f0; border-radius: 6px;">
+                    <strong>Studenti con WhatsApp:</strong>
+                </div>
+                <div id="whatsappStudentsList" style="max-height: 200px; overflow-y: auto; font-size: 12px;"></div>
+            </div>
         </div>
 
         <div style="margin-bottom: 24px;">
@@ -3560,6 +3606,229 @@ function copyShareLink(token) {
         console.error('Copy failed:', err);
         showError('Errore nella copia del link');
     });
+}
+
+// =============================================
+// WHATSAPP GROUP MANAGEMENT
+// =============================================
+
+function toggleWhatsAppSection() {
+    const section = document.getElementById('whatsappSection');
+    if (section) {
+        section.style.display = section.style.display === 'none' ? 'block' : 'none';
+        if (section.style.display === 'block') {
+            const c = COURSES.find(x => x.id === window.currentCourseId);
+            if (c) loadWhatsAppData(c);
+        }
+    }
+}
+
+function loadWhatsAppData(course) {
+    // Pre-fill WhatsApp group link input if already saved
+    const savedLink = COURSE_COSTS[course.handle]?.whatsappGroupLink || '';
+    const input = document.getElementById('whatsappGroupLinkInput');
+    if (input) input.value = savedLink;
+
+    // Load and display students with WhatsApp
+    loadWhatsAppStudentsList(course);
+}
+
+function loadWhatsAppStudentsList(course) {
+    const container = document.getElementById('whatsappStudentsList');
+    if (!container) return;
+
+    // Filter students with verified WhatsApp (hasWhatsApp === true)
+    const whatsappStudents = course.students.filter(s => s.hasWhatsApp === true);
+
+    if (whatsappStudents.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-light); padding: 8px 0;">Nessuno studente con numero WhatsApp verificato</div>';
+        return;
+    }
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 6px;">';
+    whatsappStudents.forEach(student => {
+        const cleanPhone = student.phone ? student.phone.replace(/\D/g, '') : '';
+        const waLink = `https://wa.me/${cleanPhone}`;
+        const name = student.name || 'Sconosciuto';
+        html += `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px; background: #f9f9f9; border-radius: 4px;">
+                <span>${name}</span>
+                <a href="${waLink}" target="_blank" style="color: #25D366; text-decoration: none; font-size: 12px;">
+                    <i class="fab fa-whatsapp"></i> Invia
+                </a>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+async function saveWhatsAppLink(courseHandle) {
+    const input = document.getElementById('whatsappGroupLinkInput');
+    if (!input || !input.value.trim()) {
+        showError('Per favore inserisci un link WhatsApp valido');
+        return;
+    }
+
+    const link = input.value.trim();
+
+    // Validate it's a WhatsApp link
+    if (!link.includes('chat.whatsapp.com') && !link.includes('wa.me')) {
+        showError('Il link deve essere un link WhatsApp valido (chat.whatsapp.com o wa.me)');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/costs/${courseHandle}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ whatsappGroupLink: link })
+        });
+
+        if (!response.ok) throw new Error('Failed to save WhatsApp link');
+
+        const result = await response.json();
+
+        // Update local COURSE_COSTS
+        if (!COURSE_COSTS[courseHandle]) COURSE_COSTS[courseHandle] = {};
+        COURSE_COSTS[courseHandle].whatsappGroupLink = link;
+
+        showToast('Link WhatsApp salvato');
+    } catch (e) {
+        console.error('Error saving WhatsApp link:', e);
+        showError('Errore nel salvataggio del link: ' + e.message);
+    }
+}
+
+function copyWhatsAppInvite(courseHandle, courseName) {
+    const c = COURSES.find(x => x.handle === courseHandle);
+    if (!c) return;
+
+    const link = COURSE_COSTS[courseHandle]?.whatsappGroupLink || '';
+    if (!link) {
+        showError('Per favore salva il link del gruppo WhatsApp prima di copiare il messaggio');
+        return;
+    }
+
+    const inviteMessage = `Ciao! 👋\nSei iscritto/a al corso ${courseName}.\nUnisciti al gruppo WhatsApp del corso: ${link}\nA presto!`;
+
+    navigator.clipboard.writeText(inviteMessage).then(() => {
+        showToast('Messaggio di invito copiato negli appunti');
+    }).catch(err => {
+        console.error('Copy failed:', err);
+        showError('Errore nella copia del messaggio');
+    });
+}
+
+// =============================================
+// PAST COURSES RENDERING
+// =============================================
+
+function renderPastCoursesPage() {
+    // Build array of courses that ended in the last 3 months
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+    const allCoursesData = getCached('courses') || [];
+    const PAST_COURSES = allCoursesData
+        .filter(c => {
+            const dateInfo = parseCourseDate(c.handle);
+            if (!dateInfo) return false;
+            const endDate = new Date(dateInfo.end + 'T23:59:59');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            // Course has ended AND is within last 3 months
+            return endDate < today && endDate >= threeMonthsAgo;
+        })
+        .map(c => {
+            const typeInfo = parseCourseType(c.handle, c.title);
+            const city = parseCourseCity(c.handle, c.title);
+            const dateInfo = parseCourseDate(c.handle);
+
+            // Get educator name (same logic as in loadApiData)
+            let educatorName = '';
+            if (c.educatorName) {
+                educatorName = c.educatorName;
+            }
+            if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+                educatorName = COURSE_COSTS[c.handle].educatorName;
+            }
+            if (!educatorName && c.tags) {
+                const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
+                const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+                if (educatorTag) {
+                    const tagName = educatorTag.replace('educator:', '').trim();
+                    if (tagName) educatorName = tagName;
+                }
+            }
+            educatorName = educatorName || 'Da assegnare';
+
+            // Get students and revenue
+            const rawStudents = c.students || [];
+            const students = deduplicateStudents(rawStudents);
+            const revenue = students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0);
+
+            // Compute sustainability
+            const costs = COURSE_COSTS[c.handle] || {};
+            const totalCosts = getTotalCosts(costs);
+            const profit = revenue - totalCosts;
+            const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
+            let sustainabilityStatus = 'safe';
+            if (ratio < 1.2) sustainabilityStatus = 'critical';
+            else if (ratio < 1.5) sustainabilityStatus = 'warning';
+
+            return {
+                handle: c.handle,
+                name: c.name,
+                type: typeInfo.type,
+                city: city || CONFIG.LOCATION_MAP[c.handle] || '',
+                startDate: dateInfo?.start || '',
+                endDate: dateInfo?.end || '',
+                educatorName: educatorName,
+                studentCount: students.length,
+                revenue: revenue,
+                sustainabilityStatus: sustainabilityStatus
+            };
+        });
+
+    const tableBody = document.querySelector('#pastCoursesTable tbody');
+    if (!tableBody) return;
+
+    if (PAST_COURSES.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="7" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso passato negli ultimi 3 mesi</td></tr>';
+        return;
+    }
+
+    let html = '';
+    PAST_COURSES.forEach(course => {
+        const typeBadge = course.type.includes('certificato') ? 'Certificato' : 'Introduttivo';
+        const typeColor = course.type.includes('certificato') ? '#2563eb' : '#059669';
+        const dateRange = `${new Date(course.startDate).toLocaleDateString('it-IT')} - ${new Date(course.endDate).toLocaleDateString('it-IT')}`;
+
+        let sustainabilityBadge = '';
+        let badgeColor = '#10b981';
+        let badgeText = 'Sostenibile';
+        if (course.sustainabilityStatus === 'critical') {
+            badgeColor = '#dc2626';
+            badgeText = 'Critico';
+        } else if (course.sustainabilityStatus === 'warning') {
+            badgeColor = '#f59e0b';
+            badgeText = 'Attenzione';
+        }
+        sustainabilityBadge = `<span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${badgeText}</span>`;
+
+        html += `<tr>
+            <td><span style="display: inline-block; background: ${typeColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${typeBadge}</span></td>
+            <td>${course.city}</td>
+            <td style="font-size: 12px;">${dateRange}</td>
+            <td>${course.educatorName}</td>
+            <td style="text-align: center; font-weight: 600;">${course.studentCount}</td>
+            <td style="font-weight: 600; white-space: nowrap;">${formatCurrency(course.revenue)}</td>
+            <td>${sustainabilityBadge}</td>
+        </tr>`;
+    });
+
+    tableBody.innerHTML = html;
 }
 
 </script>
