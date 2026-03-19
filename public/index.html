@@ -1982,7 +1982,21 @@ async function loadApiData() {
                 status: 'active'
             };
 
-            // Pre-compute sustainability
+            // Pre-compute auto-calc cost lines so home dashboard matches detail page
+            const isCert = typeInfo.type.includes('certificato');
+            const diplomaCost = isCert ? 115 : 60;
+            const textbookCost = isCert ? 9 : 8;
+            const educatorFeeCost = isCert ? 600 : 200;
+            const ssaFeeCost = isCert ? 900 : 300;
+            if (course.costs.lines && course.costs.lines.length > 0) {
+                course.costs.lines.forEach(line => {
+                    if (line.key === 'diploma_fee') line.value = students.length * diplomaCost;
+                    if (line.key === 'textbook_fee') line.value = students.length * textbookCost;
+                    if (line.key === 'educator_fee') line.value = educatorFeeCost;
+                    if (line.key === 'ssa_fee') line.value = ssaFeeCost;
+                });
+            }
+            course.totalCosts = getCostLinesTotal(course);
             course.sustainability = computeSustainability(course);
             return course;
         })
