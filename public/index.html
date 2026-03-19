@@ -2328,22 +2328,16 @@ function renderCourseDetailPage() {
     // Ensure diploma_fee line exists (after ssa_fee, position 3)
     // Only count NEW participants (not repeat students who already have a diploma)
     // Check by email AND by name (same person may use different emails)
-    const diplomaCostPerPerson = isCertificato ? 20 : 10;
-    const newStudentsCount = c.students.filter(st => {
-        const ek = st.email ? st.email.toLowerCase().trim() : '';
-        const nk = st.name ? st.name.toLowerCase().trim().replace(/\s+/g, ' ') : '';
-        if (ek && window.STUDENT_COURSE_COUNT && window.STUDENT_COURSE_COUNT[ek] > 1) return false;
-        if (nk && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nk] > 1) return false;
-        return true;
-    }).length;
-    const diplomaTotal = newStudentsCount * diplomaCostPerPerson;
+    const diplomaCostPerPerson = isCertificato ? 115 : 60;
+    const diplomaStudents = c.students.length;
+    const diplomaTotal = diplomaStudents * diplomaCostPerPerson;
     let diplomaFeeIdx = c.costs.lines.findIndex(l => l.key === 'diploma_fee');
     if (diplomaFeeIdx === -1) {
-        c.costs.lines.splice(3, 0, { key: 'diploma_fee', label: `Diplomi (${newStudentsCount} nuovi × €${diplomaCostPerPerson})`, icon: 'fa-graduation-cap', color: '#7c3aed', value: diplomaTotal, autoCalc: true });
+        c.costs.lines.splice(3, 0, { key: 'diploma_fee', label: `Diplomi (${diplomaStudents} × €${diplomaCostPerPerson})`, icon: 'fa-graduation-cap', color: '#7c3aed', value: diplomaTotal, autoCalc: true });
     } else {
         c.costs.lines[diplomaFeeIdx].autoCalc = true;
         c.costs.lines[diplomaFeeIdx].value = diplomaTotal;
-        c.costs.lines[diplomaFeeIdx].label = `Diplomi (${newStudentsCount} nuovi × €${diplomaCostPerPerson})`;
+        c.costs.lines[diplomaFeeIdx].label = `Diplomi (${diplomaStudents} × €${diplomaCostPerPerson})`;
         if (diplomaFeeIdx !== 3) {
             const dipLine = c.costs.lines.splice(diplomaFeeIdx, 1)[0];
             c.costs.lines.splice(3, 0, dipLine);
