@@ -545,6 +545,19 @@ app.get('/api/courses', async (req, res) => {
 
     const courses = Array.from(courseMap.values());
 
+    // Apply phone overrides from saved config
+    courses.forEach(course => {
+      const overrides = courseCosts[course.handle]?.phoneOverrides;
+      if (overrides && course.students) {
+        course.students.forEach(st => {
+          const emailKey = (st.email || '').toLowerCase().trim();
+          if (emailKey && overrides[emailKey]) {
+            st.phone = overrides[emailKey];
+          }
+        });
+      }
+    });
+
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
@@ -658,6 +671,18 @@ app.post('/api/costs/:courseId', (req, res) => {
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
+});
+
+// Phone overrides: save corrected phone numbers (keyed by email)
+app.post('/api/phone-overrides/:courseId', (req, res) => {
+  const { courseId } = req.params;
+  const { email, phone } = req.body;
+  if (!email) return res.json({ success: false, error: 'email required' });
+  if (!courseCosts[courseId]) courseCosts[courseId] = {};
+  if (!courseCosts[courseId].phoneOverrides) courseCosts[courseId].phoneOverrides = {};
+  courseCosts[courseId].phoneOverrides[email.toLowerCase().trim()] = phone;
+  saveCostsToFile(courseCosts);
+  res.json({ success: true });
 });
 
 // Sync educator:Name tag to Shopify product

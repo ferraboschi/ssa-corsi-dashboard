@@ -2491,7 +2491,12 @@ function renderCourseDetailPage() {
                                      (nameKey && window.STUDENT_NAME_COUNT && window.STUDENT_NAME_COUNT[nameKey] > 1);
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
-                        <td style="font-size: 12px; white-space: nowrap;">${st.phone ? (hasIntlPrefix ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Apri chat WhatsApp"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366; margin-right: 4px;"></i>${st.phone}</a>` : `<span style="color: var(--text-light);" title="Numero senza prefisso internazionale"><i class="fas fa-phone-alt" style="font-size: 10px; color: #ccc; margin-right: 4px;"></i>${st.phone}</span>`) : '-'}</td>
+                        <td style="font-size: 12px; white-space: nowrap;">
+                            <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
+                                ${st.phone ? (hasIntlPrefix ? `<a href="https://wa.me/${cleanPhone}" target="_blank" style="color: var(--text); text-decoration: none;" title="Apri chat WhatsApp" onclick="event.stopPropagation()"><i class="fab fa-whatsapp" style="font-size: 12px; color: #25D366;"></i></a>` : `<i class="fas fa-phone-alt" style="font-size: 10px; color: #ccc;"></i>`) : `<i class="fas fa-plus-circle" style="font-size: 10px; color: #ccc;"></i>`}
+                                <span class="phone-display">${st.phone || '<span style="color:#ccc; font-style:italic;">aggiungi</span>'}</span>
+                            </div>
+                        </td>
                         <td style="font-weight: 600; font-size: 13px; white-space: nowrap;">${st.amount ? formatCurrency(st.amount) : (st.amount === 0 ? '0,00 €' : '-')}${st.discountCode ? `<br><span style="font-size: 9px; font-weight: 500; color: #d97706; background: #fffbeb; padding: 1px 5px; border-radius: 6px;" title="Sconto: ${st.discountCode}"><i class="fas fa-tag" style="font-size: 8px;"></i> ${st.discountCode}</span>` : ''}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
@@ -2582,6 +2587,62 @@ function deleteCostLine(idx) {
     }
     c.costs.lines.splice(idx, 1);
     renderCourseDetailPage();
+}
+
+function editPhoneInline(cell) {
+    const display = cell.querySelector('.phone-display');
+    const currentPhone = display.textContent.trim();
+    const isPlaceholder = currentPhone === 'aggiungi' || currentPhone === '';
+    const email = cell.getAttribute('data-email');
+    const courseHandle = cell.getAttribute('data-course');
+
+    // Replace display with input
+    const input = document.createElement('input');
+    input.type = 'tel';
+    input.value = isPlaceholder ? '+39' : currentPhone;
+    input.style.cssText = 'width: 140px; padding: 4px 8px; border: 2px solid var(--primary); border-radius: 6px; font-size: 12px; outline: none;';
+    input.placeholder = '+39...';
+
+    // Remove onclick to prevent re-triggering
+    cell.onclick = null;
+    cell.style.cursor = 'default';
+    cell.innerHTML = '';
+    cell.appendChild(input);
+    input.focus();
+    input.select();
+
+    const save = async () => {
+        const newPhone = input.value.trim();
+        if (!email) {
+            showToast('Email mancante, impossibile salvare');
+            renderCourseDetailPage();
+            return;
+        }
+        // Save to server
+        try {
+            await fetch(`/api/phone-overrides/${courseHandle}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, phone: newPhone })
+            });
+            // Update local course data
+            const c = COURSES.find(x => x.handle === courseHandle);
+            if (c) {
+                const st = c.students.find(s => s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim());
+                if (st) st.phone = newPhone;
+            }
+            showToast('Telefono aggiornato');
+        } catch (e) {
+            showError('Errore nel salvataggio');
+        }
+        renderCourseDetailPage();
+    };
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { renderCourseDetailPage(); }
+    });
 }
 
 function onEducatorChange(courseId) {
