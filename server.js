@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const ExcelJS = require('exceljs');
 
 // Course costs persistent storage (file-based + Airtable for deploy persistence)
 const COSTS_FILE = path.join(__dirname, 'data', 'course-costs.json');
@@ -687,7 +688,66 @@ app.get('/api/export/course/:handle', async (req, res) => {
       return true;
     });
 
-    res.json({ success: true, course: product.title, handle, students: unique });
+    // Generate XLSX if format=xlsx requested, otherwise JSON
+    if (req.query.format === 'xlsx') {
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'SSA Gestione Corsi';
+      const ws = wb.addWorksheet('Iscritti');
+
+      // Header row
+      ws.columns = [
+        { header: 'Nome', key: 'name', width: 25 },
+        { header: 'Email', key: 'email', width: 30 },
+        { header: 'Telefono', key: 'phone', width: 18 },
+        { header: 'Indirizzo', key: 'address', width: 35 },
+        { header: 'CAP', key: 'zip', width: 8 },
+        { header: 'Città', key: 'city', width: 18 },
+        { header: 'Provincia', key: 'province', width: 12 },
+        { header: 'Paese', key: 'country', width: 12 },
+        { header: 'Ordine', key: 'orderNumber', width: 12 },
+        { header: 'Data Ordine', key: 'orderDate', width: 14 },
+        { header: 'Importo €', key: 'amount', width: 12 }
+      ];
+
+      // Style header
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0D5CAB' } };
+      ws.getRow(1).alignment = { horizontal: 'center' };
+
+      // Data rows
+      unique.forEach(st => {
+        ws.addRow({
+          name: st.name,
+          email: st.email,
+          phone: st.phone,
+          address: [st.address1, st.address2].filter(Boolean).join(', '),
+          zip: st.zip,
+          city: st.city,
+          province: st.province,
+          country: st.country,
+          orderNumber: st.orderNumber,
+          orderDate: st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '',
+          amount: st.amount ? parseFloat(st.amount.toFixed(2)) : 0
+        });
+      });
+
+      // Format amount column as currency
+      ws.getColumn('amount').numFmt = '#,##0.00 €';
+
+      // Auto-filter
+      ws.autoFilter = { from: 'A1', to: `K${unique.length + 1}` };
+
+      // Add course title as sheet header
+      ws.headerFooter.oddHeader = `&C&B${product.title}`;
+
+      const safeName = product.title.replace(/[^a-zA-Z0-9àèéìòù\s-]/g, '').replace(/\s+/g, '-').substring(0, 50);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="iscritti-${safeName}.xlsx"`);
+      await wb.xlsx.write(res);
+      res.end();
+    } else {
+      res.json({ success: true, course: product.title, handle, students: unique });
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
