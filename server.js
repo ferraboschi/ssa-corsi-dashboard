@@ -491,6 +491,63 @@ app.get('/api/airtable/sake', async (req, res) => {
 });
 
 // ============================================================================
+// EDUCATOR NAME MATCHING - Extract clean name from multi-line metafield values
+// Metafield values look like: "Brunella Bettati\nSake Educator SSA" or
+// "Francesco Menestrina. \nEnologo, Sommelier AIS e Sake Sommelier SSA."
+// We need to extract just the name and match it to Chi Siamo profiles.
+// ============================================================================
+function matchEducatorProfile(rawName, profiles) {
+  if (!rawName) return { cleanName: '', profile: null };
+
+  // Step 1: Take only the first line
+  let cleanName = rawName.split('\n')[0].trim();
+  // Step 2: Remove trailing dots, commas and common suffixes
+  cleanName = cleanName.replace(/[.,;:]+$/, '').trim();
+  // Remove common title suffixes that appear after the name
+  cleanName = cleanName.replace(/,\s*(Sake\s+)?Educator.*$/i, '').trim();
+  cleanName = cleanName.replace(/,\s*(Sake\s+)?Sommelier.*$/i, '').trim();
+  cleanName = cleanName.replace(/,\s*bartender.*$/i, '').trim();
+  cleanName = cleanName.replace(/,\s*Head\s+Educator.*$/i, '').trim();
+  cleanName = cleanName.replace(/[.,;:]+$/, '').trim();
+
+  // Step 3: Try exact match first
+  if (profiles[cleanName]) {
+    return { cleanName, profile: profiles[cleanName] };
+  }
+
+  // Step 4: Case-insensitive match
+  const profileNames = Object.keys(profiles);
+  const lowerClean = cleanName.toLowerCase();
+  const ciMatch = profileNames.find(n => n.toLowerCase() === lowerClean);
+  if (ciMatch) {
+    return { cleanName, profile: profiles[ciMatch] };
+  }
+
+  // Step 5: Fuzzy match - check if the clean name contains a profile name or vice versa
+  const containsMatch = profileNames.find(n =>
+    lowerClean.includes(n.toLowerCase()) || n.toLowerCase().includes(lowerClean)
+  );
+  if (containsMatch) {
+    return { cleanName, profile: profiles[containsMatch] };
+  }
+
+  // Step 6: Match by surname (last word of each name)
+  const cleanWords = cleanName.split(/\s+/);
+  if (cleanWords.length >= 2) {
+    const cleanSurname = cleanWords[cleanWords.length - 1].toLowerCase();
+    const surnameMatch = profileNames.find(n => {
+      const words = n.split(/\s+/);
+      return words.length >= 2 && words[words.length - 1].toLowerCase() === cleanSurname;
+    });
+    if (surnameMatch) {
+      return { cleanName, profile: profiles[surnameMatch] };
+    }
+  }
+
+  return { cleanName, profile: null };
+}
+
+// ============================================================================
 // COURSES API - Returns ONLY actual courses with FULL Shopify data + orders
 // ============================================================================
 app.get('/api/courses', async (req, res) => {
@@ -552,10 +609,10 @@ app.get('/api/courses', async (req, res) => {
     // Build enrollment data from orders
     const courseMap = new Map();
     courseProducts.forEach(product => {
-      // Get educator name from metafields
-      const educatorName = (metafieldMap[product.id] && metafieldMap[product.id].name) || '';
-      // Look up educator profile from Chi Siamo page by name
-      const profile = educatorName ? educatorProfiles[educatorName] : null;
+      // Get educator name from metafields (may contain multi-line text with title/description)
+      const rawEducatorName = (metafieldMap[product.id] && metafieldMap[product.id].name) || '';
+      // Extract clean educator name and look up profile
+      const { cleanName: educatorName, profile } = matchEducatorProfile(rawEducatorName, educatorProfiles);
 
       courseMap.set(product.id, {
         // Pass through ALL Shopify data
@@ -1506,10 +1563,10 @@ app.get('/api/shared/:token', async (req, res) => {
       const savedEducator = courseCosts[courseProduct.handle]?.educatorName;
       shareEducator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || '');
     }
-    // Look up educator profile from Chi Siamo page
+    // Look up educator profile from Chi Siamo page (with fuzzy name matching)
     const shareEducatorProfiles = await fetchEducatorProfiles();
-    const shareProfile = shareEducator ? shareEducatorProfiles[shareEducator] : null;
-    course.educator = shareEducator;
+    const { cleanName: cleanShareEducator, profile: shareProfile } = matchEducatorProfile(shareEducator, shareEducatorProfiles);
+    course.educator = cleanShareEducator || shareEducator;
     course.educatorPhoto = (shareProfile && shareProfile.photo) || '';
     course.educatorBio = (shareProfile && shareProfile.bio) || '';
     course.educatorRegion = (shareProfile && shareProfile.region) || '';
