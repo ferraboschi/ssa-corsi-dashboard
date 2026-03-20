@@ -1952,12 +1952,12 @@ async function loadApiData() {
                 educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
             }
             const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
-            // Priority: Shopify metafield photo/bio > CONFIG.EDUCATOR_PROFILES > empty
+            // Priority: server-scraped Chi Siamo data > CONFIG.EDUCATOR_PROFILES fallback > empty
             const educator = {
                 ...educatorBase,
                 photo: c.educatorPhoto || educatorProfile.photo || '',
                 bio: c.educatorBio || educatorProfile.bio || '',
-                region: educatorProfile.region || educatorBase.region
+                region: c.educatorRegion || educatorProfile.region || educatorBase.region
             };
             const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
             const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
@@ -2034,6 +2034,7 @@ async function loadApiData() {
         if (!educatorMap.has(ed.name)) {
             educatorMap.set(ed.name, {
                 name: ed.name, region: ed.region, initials: ed.initials,
+                photo: ed.photo || '', bio: ed.bio || '',
                 courses: [], totalStudents: 0
             });
         }
@@ -3417,19 +3418,18 @@ function renderEducatorPage() {
     }
 
     grid.innerHTML = EDUCATORS.map(ed => {
-        const profile = CONFIG.EDUCATOR_PROFILES[ed.name] || {};
         return `
     <div class="educator-card">
         <div class="educator-top">
-            ${profile.photo
-                ? `<img src="${profile.photo}" alt="${ed.name}" class="educator-photo">`
+            ${ed.photo
+                ? `<img src="${ed.photo}" alt="${ed.name}" class="educator-photo">`
                 : `<div class="educator-avatar">${ed.initials}</div>`}
             <div>
                 <div class="educator-name">${ed.name}</div>
                 <div class="educator-role">${ed.region} &bull; ${ed.totalStudents} corsisti totali</div>
             </div>
         </div>
-        ${profile.bio ? `<div class="educator-bio" style="margin-bottom: 12px;">${profile.bio}</div>` : ''}
+        ${ed.bio ? `<div class="educator-bio" style="margin-bottom: 12px;">${ed.bio}</div>` : ''}
         <div class="section-title" style="margin-bottom: 8px; font-size: 11px;"><i class="fas fa-graduation-cap"></i> Corsi Assegnati</div>
         <ul class="educator-courses">
             ${ed.courses.map(c => {

@@ -546,9 +546,17 @@ app.get('/api/courses', async (req, res) => {
       }));
     }
 
+    // Fetch educator profiles from Chi Siamo page (cached 24h)
+    const educatorProfiles = await fetchEducatorProfiles();
+
     // Build enrollment data from orders
     const courseMap = new Map();
     courseProducts.forEach(product => {
+      // Get educator name from metafields
+      const educatorName = (metafieldMap[product.id] && metafieldMap[product.id].name) || '';
+      // Look up educator profile from Chi Siamo page by name
+      const profile = educatorName ? educatorProfiles[educatorName] : null;
+
       courseMap.set(product.id, {
         // Pass through ALL Shopify data
         shopifyId: product.id,
@@ -563,10 +571,11 @@ app.get('/api/courses', async (req, res) => {
         published_at: product.published_at,
         variants: product.variants,
         images: product.images,
-        // Educator from Shopify metafields (name, photo, bio)
-        educatorName: (metafieldMap[product.id] && metafieldMap[product.id].name) || '',
-        educatorPhoto: (metafieldMap[product.id] && metafieldMap[product.id].photo) || '',
-        educatorBio: (metafieldMap[product.id] && metafieldMap[product.id].bio) || '',
+        // Educator from Shopify metafields + Chi Siamo profile
+        educatorName: educatorName,
+        educatorPhoto: (profile && profile.photo) || '',
+        educatorBio: (profile && profile.bio) || '',
+        educatorRegion: (profile && profile.region) || '',
         // Enrollment data
         enrollmentCount: 0,
         revenue: 0,
@@ -820,6 +829,90 @@ app.get('/api/debug/shopify-collections', async (req, res) => {
     res.json({ custom_collections: custom, smart_collections: smart });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
+// EDUCATOR PROFILES - scraped from Chi Siamo page on sakesommelierassociation.it
+// ============================================================================
+let cachedEducatorProfiles = null;
+let educatorProfilesCacheTime = 0;
+const EDUCATOR_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+async function fetchEducatorProfiles() {
+  // Return cached if fresh
+  if (cachedEducatorProfiles && (Date.now() - educatorProfilesCacheTime < EDUCATOR_CACHE_TTL)) {
+    return cachedEducatorProfiles;
+  }
+  try {
+    const response = await fetch('https://www.sakesommelierassociation.it/pages/chi-siamo');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const html = await response.text();
+
+    // Parse educator cards from the multicolumn section
+    // Each card has: <img>, <h3>Name</h3>, <p><strong>Region</strong></p>, <p>Bio</p>
+    const profiles = {};
+
+    // Match each multicolumn-card content
+    const cardRegex = /<li[^>]*class="[^"]*multicolumn-card[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
+    let match;
+    while ((match = cardRegex.exec(html)) !== null) {
+      const cardHtml = match[1];
+
+      // Extract image URL
+      const imgMatch = cardHtml.match(/<img[^>]*src="([^"]+)"/i);
+      const photoUrl = imgMatch ? imgMatch[1].split('?')[0] : '';
+
+      // Extract name from h3
+      const h3Match = cardHtml.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+      const name = h3Match ? h3Match[1].replace(/<[^>]+>/g, '').trim() : '';
+
+      // Extract region from first <strong> or <b> in a <p>
+      const regionMatch = cardHtml.match(/<p[^>]*>\s*<strong>([\s\S]*?)<\/strong>/i) ||
+                          cardHtml.match(/<p[^>]*>\s*<b>([\s\S]*?)<\/b>/i);
+      const region = regionMatch ? regionMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+
+      // Extract bio - get all <p> tags content, skip the region one
+      const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
+      let pMatch;
+      let bio = '';
+      while ((pMatch = pRegex.exec(cardHtml)) !== null) {
+        const pText = pMatch[1].replace(/<[^>]+>/g, '').trim();
+        // Skip if it starts with the region (that's the region paragraph)
+        if (pText && !pText.startsWith(region) && pText.length > 20) {
+          bio = pText;
+          break;
+        }
+        // If region and bio are in the same <p>, extract bio after region
+        if (pText.startsWith(region) && pText.length > region.length + 20) {
+          bio = pText.substring(region.length).trim();
+          break;
+        }
+      }
+
+      if (name) {
+        profiles[name] = { name, photo: photoUrl, region, bio };
+      }
+    }
+
+    cachedEducatorProfiles = profiles;
+    educatorProfilesCacheTime = Date.now();
+    console.log(`Fetched ${Object.keys(profiles).length} educator profiles from Chi Siamo page`);
+    return profiles;
+  } catch (error) {
+    console.error('Error fetching educator profiles:', error.message);
+    // Return cached even if stale, or empty
+    return cachedEducatorProfiles || {};
+  }
+}
+
+// API endpoint to get all educator profiles
+app.get('/api/educator-profiles', async (req, res) => {
+  try {
+    const profiles = await fetchEducatorProfiles();
+    res.json({ success: true, count: Object.keys(profiles).length, profiles });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -1399,27 +1492,19 @@ app.get('/api/shared/:token', async (req, res) => {
         (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
       );
       if (educatorMf && educatorMf.value) shareEducator = educatorMf.value;
-      // Also get educator photo and bio from metafields
-      const photoMf = metafields.find(mf =>
-        mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
-        mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
-        (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
-      );
-      if (photoMf && photoMf.value) shareEducatorPhoto = photoMf.value;
-      const bioMf = metafields.find(mf =>
-        mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
-        (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
-      );
-      if (bioMf && bioMf.value) shareEducatorBio = bioMf.value;
     } catch (e) { /* skip */ }
     if (!shareEducator) {
       const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
       const savedEducator = courseCosts[courseProduct.handle]?.educatorName;
       shareEducator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || '');
     }
+    // Look up educator profile from Chi Siamo page
+    const shareEducatorProfiles = await fetchEducatorProfiles();
+    const shareProfile = shareEducator ? shareEducatorProfiles[shareEducator] : null;
     course.educator = shareEducator;
-    course.educatorPhoto = shareEducatorPhoto;
-    course.educatorBio = shareEducatorBio;
+    course.educatorPhoto = (shareProfile && shareProfile.photo) || '';
+    course.educatorBio = (shareProfile && shareProfile.bio) || '';
+    course.educatorRegion = (shareProfile && shareProfile.region) || '';
 
     // Program & costs (no financial details, only program structure)
     const costs = courseCosts[courseProduct.handle];
