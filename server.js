@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cookieSession = require('cookie-session');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -199,6 +200,70 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// ============================================================================
+// AUTHENTICATION (cookie-session + simple username/password from .env)
+// ============================================================================
+const AUTH_USER = process.env.AUTH_USERNAME || 'admin';
+const AUTH_PASS = process.env.AUTH_PASSWORD || 'changeme';
+
+app.use(cookieSession({
+  name: 'ssa_session',
+  keys: [process.env.SESSION_SECRET || 'ssa-corsi-default-secret-change-me'],
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  httpOnly: true,
+  sameSite: 'lax'
+}));
+
+// Login page (served without auth)
+app.get('/login', (req, res) => {
+  if (req.session && req.session.authenticated) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Login API
+app.post('/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === AUTH_USER && password === AUTH_PASS) {
+    req.session.authenticated = true;
+    req.session.user = username;
+    return res.json({ success: true });
+  }
+  res.status(401).json({ success: false, error: 'Invalid credentials' });
+});
+
+// Logout
+app.post('/auth/logout', (req, res) => {
+  req.session = null;
+  res.json({ success: true });
+});
+app.get('/auth/logout', (req, res) => {
+  req.session = null;
+  res.redirect('/login');
+});
+
+// Share pages are public (no auth needed)
+app.get('/share/:token', (req, res, next) => { next(); });
+app.get('/api/shared/:token', (req, res, next) => { next(); });
+
+// Auth middleware — protect everything else except login assets
+app.use((req, res, next) => {
+  // Allow login page assets
+  if (req.path === '/login' || req.path === '/login.html' ||
+      req.path === '/ssa-logo.png' || req.path.startsWith('/auth/') ||
+      req.path.startsWith('/share/') || req.path.startsWith('/api/shared/')) {
+    return next();
+  }
+  if (req.session && req.session.authenticated) {
+    return next();
+  }
+  // API calls get 401, page requests get redirected
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' });
+  }
+  res.redirect('/login');
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ============================================================================
@@ -437,7 +502,7 @@ app.get('/api/courses', async (req, res) => {
     const courseProducts = products.filter(isCourseProduct);
 
     // Fetch metafields for each course product (in parallel, batches of 5)
-    // This gets the "Sake Educator" field from Shopify metafields
+    // This gets the "Sake Educator" name, photo and bio from Shopify metafields
     const metafieldMap = {};
     const MFBATCH = 5;
     for (let i = 0; i < courseProducts.length; i += MFBATCH) {
@@ -446,13 +511,34 @@ app.get('/api/courses', async (req, res) => {
         try {
           const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
           const metafields = mfResp.metafields || [];
-          // Look for educator metafield (key contains 'educator' or 'sake_educator')
+          const entry = {};
+          // Look for educator name metafield
           const educatorMf = metafields.find(mf =>
             mf.key === 'sake_educator' || mf.key === 'educator' ||
-            (mf.key && mf.key.toLowerCase().includes('educator'))
+            (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
           );
           if (educatorMf && educatorMf.value) {
-            metafieldMap[product.id] = educatorMf.value;
+            entry.name = educatorMf.value;
+          }
+          // Look for educator photo metafield
+          const photoMf = metafields.find(mf =>
+            mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
+            mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
+            (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
+          );
+          if (photoMf && photoMf.value) {
+            entry.photo = photoMf.value;
+          }
+          // Look for educator bio metafield
+          const bioMf = metafields.find(mf =>
+            mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
+            (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
+          );
+          if (bioMf && bioMf.value) {
+            entry.bio = bioMf.value;
+          }
+          if (Object.keys(entry).length > 0) {
+            metafieldMap[product.id] = entry;
           }
         } catch (e) {
           // Silently skip metafield errors
@@ -477,8 +563,10 @@ app.get('/api/courses', async (req, res) => {
         published_at: product.published_at,
         variants: product.variants,
         images: product.images,
-        // Educator from Shopify metafield
-        educatorName: metafieldMap[product.id] || '',
+        // Educator from Shopify metafields (name, photo, bio)
+        educatorName: (metafieldMap[product.id] && metafieldMap[product.id].name) || '',
+        educatorPhoto: (metafieldMap[product.id] && metafieldMap[product.id].photo) || '',
+        educatorBio: (metafieldMap[product.id] && metafieldMap[product.id].bio) || '',
         // Enrollment data
         enrollmentCount: 0,
         revenue: 0,
@@ -566,6 +654,31 @@ app.get('/api/courses', async (req, res) => {
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// DEBUG: Inspect all metafields for a course product (by handle)
+// ============================================================================
+app.get('/api/debug/metafields/:handle', async (req, res) => {
+  try {
+    const products = await fetchAllShopifyProducts();
+    const product = products.find(p => p.handle === req.params.handle);
+    if (!product) return res.status(404).json({ error: 'Product not found', handle: req.params.handle });
+    const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
+    res.json({
+      productId: product.id,
+      handle: product.handle,
+      title: product.title,
+      metafields: (mfResp.metafields || []).map(mf => ({
+        namespace: mf.namespace,
+        key: mf.key,
+        type: mf.type,
+        value: mf.value
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1135,13 +1248,28 @@ app.get('/api/shared/:token', async (req, res) => {
 
     // Educator: from metafield first, then saved config, then tag, then vendor
     let shareEducator = '';
+    let shareEducatorPhoto = '';
+    let shareEducatorBio = '';
     try {
       const mfResp = await shopifyFetch(`/products/${courseProduct.id}/metafields.json`);
-      const educatorMf = (mfResp.metafields || []).find(mf =>
+      const metafields = mfResp.metafields || [];
+      const educatorMf = metafields.find(mf =>
         mf.key === 'sake_educator' || mf.key === 'educator' ||
-        (mf.key && mf.key.toLowerCase().includes('educator'))
+        (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
       );
       if (educatorMf && educatorMf.value) shareEducator = educatorMf.value;
+      // Also get educator photo and bio from metafields
+      const photoMf = metafields.find(mf =>
+        mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
+        mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
+        (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
+      );
+      if (photoMf && photoMf.value) shareEducatorPhoto = photoMf.value;
+      const bioMf = metafields.find(mf =>
+        mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
+        (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
+      );
+      if (bioMf && bioMf.value) shareEducatorBio = bioMf.value;
     } catch (e) { /* skip */ }
     if (!shareEducator) {
       const educatorTag = tagsArray.find(tag => tag.startsWith('educator:'));
@@ -1149,6 +1277,8 @@ app.get('/api/shared/:token', async (req, res) => {
       shareEducator = educatorTag ? educatorTag.replace('educator:', '') : (savedEducator || '');
     }
     course.educator = shareEducator;
+    course.educatorPhoto = shareEducatorPhoto;
+    course.educatorBio = shareEducatorBio;
 
     // Program & costs (no financial details, only program structure)
     const costs = courseCosts[courseProduct.handle];

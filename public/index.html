@@ -1286,6 +1286,7 @@
             <div class="sync-badge" id="connectionStatus" role="status" aria-live="polite">
                 <span style="color: var(--warning);">&#9679;</span> Caricamento...
             </div>
+            <button onclick="window.location.href='/auth/logout'" title="Esci" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text-light);font-size:13px;font-family:inherit;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--danger)';this.style.color='var(--danger)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'"><i class="fas fa-sign-out-alt"></i> Esci</button>
         </div>
     </div>
 </header>
@@ -1304,7 +1305,8 @@
     <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
     <button data-page="passati"><i class="fas fa-history"></i> Passati</button>
     <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
-
+    <hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">
+    <button onclick="window.location.href='/auth/logout'" style="color:var(--danger);"><i class="fas fa-sign-out-alt"></i> Esci</button>
 </div>
 
 <!-- Toast -->
@@ -1424,7 +1426,7 @@
 
     <!-- PAST COURSES PAGE -->
     <div id="page-passati" class="page-hidden">
-        <div class="section-title"><i class="fas fa-history"></i> Corsi Passati &mdash; Ultimi 3 Mesi</div>
+        <div class="section-title"><i class="fas fa-history"></i> Corsi Passati &mdash; Ultimi 6 Mesi</div>
         <div class="card">
             <div class="card-body" style="padding: 0;">
                 <table class="data-table" id="pastCoursesTable">
@@ -1457,6 +1459,18 @@
 </main>
 
 <script>
+// =============================================
+// AUTH — Redirect to login on 401 responses
+// =============================================
+const _origFetch = window.fetch;
+window.fetch = async function(...args) {
+    const resp = await _origFetch.apply(this, args);
+    if (resp.status === 401 && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+    }
+    return resp;
+};
+
 // =============================================
 // CONFIG — Course data mappings
 // TODO: Move these to Airtable or API in the future so changes don't require code edits
@@ -1506,6 +1520,11 @@ const CONFIG = {
             region: 'Lombardia', initials: 'RS',
             photo: 'https://www.sakesommelierassociation.it/cdn/shop/files/Sake-Educator-Roberta-Sitzia-300x300-2.png?v=1753712438&width=200',
             bio: 'Lavora nel settore ristorazione con specializzazione in cucina giapponese'
+        },
+        'Stefano Battini': {
+            region: '', initials: 'SB',
+            photo: '',
+            bio: ''
         }
     },
     // EDUCATOR_MAP removed — educator is now read dynamically from Shopify product tags (educator:Name)
@@ -1933,7 +1952,13 @@ async function loadApiData() {
                 educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
             }
             const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
-            const educator = { ...educatorBase, photo: educatorProfile.photo || '', bio: educatorProfile.bio || '', region: educatorProfile.region || educatorBase.region };
+            // Priority: Shopify metafield photo/bio > CONFIG.EDUCATOR_PROFILES > empty
+            const educator = {
+                ...educatorBase,
+                photo: c.educatorPhoto || educatorProfile.photo || '',
+                bio: c.educatorBio || educatorProfile.bio || '',
+                region: educatorProfile.region || educatorBase.region
+            };
             const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
             const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
 
@@ -3692,9 +3717,9 @@ function copyWhatsAppInvite(courseHandle, courseName) {
 // =============================================
 
 function renderPastCoursesPage() {
-    // Build array of courses that ended in the last 3 months
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    // Build array of courses that ended in the last 6 months
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     const allCoursesData = getCached('courses') || [];
     const PAST_COURSES = allCoursesData
@@ -3704,8 +3729,8 @@ function renderPastCoursesPage() {
             const endDate = new Date(dateInfo.end + 'T23:59:59');
             const today = new Date();
             today.setHours(0, 0, 0, 0);
-            // Course has ended AND is within last 3 months
-            return endDate < today && endDate >= threeMonthsAgo;
+            // Course has ended AND is within last 6 months
+            return endDate < today && endDate >= sixMonthsAgo;
         })
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
@@ -3762,7 +3787,7 @@ function renderPastCoursesPage() {
     if (!tableBody) return;
 
     if (PAST_COURSES.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="7" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso passato negli ultimi 3 mesi</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="7" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso passato negli ultimi 6 mesi</td></tr>';
         return;
     }
 
