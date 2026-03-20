@@ -851,7 +851,9 @@ async function fetchEducatorProfiles() {
 
     // Split HTML at each multicolumn-card boundary and parse each card
     const profiles = {};
+    console.log(`Chi Siamo page HTML length: ${html.length}`);
     const cardChunks = html.split(/class="multicolumn-card/i);
+    console.log(`Found ${cardChunks.length - 1} multicolumn-card chunks`);
     // Skip first chunk (before the first card)
     for (let i = 1; i < cardChunks.length; i++) {
       const cardHtml = cardChunks[i];
@@ -894,8 +896,11 @@ async function fetchEducatorProfiles() {
       }
     }
 
-    cachedEducatorProfiles = profiles;
-    educatorProfilesCacheTime = Date.now();
+    // Only cache if we found profiles (don't cache failures)
+    if (Object.keys(profiles).length > 0) {
+      cachedEducatorProfiles = profiles;
+      educatorProfilesCacheTime = Date.now();
+    }
     console.log(`Fetched ${Object.keys(profiles).length} educator profiles from Chi Siamo page`);
     return profiles;
   } catch (error) {
@@ -908,6 +913,11 @@ async function fetchEducatorProfiles() {
 // API endpoint to get all educator profiles
 app.get('/api/educator-profiles', async (req, res) => {
   try {
+    // ?refresh=1 to force cache refresh
+    if (req.query.refresh) {
+      cachedEducatorProfiles = null;
+      educatorProfilesCacheTime = 0;
+    }
     const profiles = await fetchEducatorProfiles();
     res.json({ success: true, count: Object.keys(profiles).length, profiles });
   } catch (error) {
