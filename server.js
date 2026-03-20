@@ -683,6 +683,85 @@ app.get('/api/debug/metafields/:handle', async (req, res) => {
 });
 
 // ============================================================================
+// DEBUG: Explore Shopify metaobject definitions and metaobjects (GraphQL)
+// ============================================================================
+async function shopifyGraphQL(query, variables = {}) {
+  const url = `https://${SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN
+    },
+    body: JSON.stringify({ query, variables })
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Shopify GraphQL error ${response.status}: ${text}`);
+  }
+  return response.json();
+}
+
+// List all metaobject definitions
+app.get('/api/debug/metaobject-definitions', async (req, res) => {
+  try {
+    const result = await shopifyGraphQL(`{
+      metaobjectDefinitions(first: 50) {
+        edges {
+          node {
+            id
+            name
+            type
+            fieldDefinitions {
+              key
+              name
+              type { name }
+            }
+          }
+        }
+      }
+    }`);
+    res.json(result.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// List all metaobjects of a given type
+app.get('/api/debug/metaobjects/:type', async (req, res) => {
+  try {
+    const type = req.params.type;
+    const result = await shopifyGraphQL(`{
+      metaobjects(type: "${type}", first: 50) {
+        edges {
+          node {
+            id
+            handle
+            type
+            fields {
+              key
+              value
+              type
+              reference {
+                ... on MediaImage {
+                  image {
+                    url
+                    altText
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }`);
+    res.json(result.data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================================
 // EDUCATOR ROUTE
 // ============================================================================
 app.get('/api/educator/:id', async (req, res) => {
