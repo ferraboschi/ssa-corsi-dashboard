@@ -559,6 +559,75 @@ function matchEducatorProfile(rawName, profiles) {
 }
 
 // ============================================================================
+// METAFIELD CACHE - Fetches educator metafields with caching (5 min TTL)
+// ============================================================================
+let cachedMetafieldMap = null;
+let metafieldMapCacheTime = 0;
+const METAFIELD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function fetchCourseMetafields(courseProducts) {
+  // Return cached if fresh
+  if (cachedMetafieldMap && (Date.now() - metafieldMapCacheTime < METAFIELD_CACHE_TTL)) {
+    return cachedMetafieldMap;
+  }
+
+  const metafieldMap = {};
+  const MFBATCH = 4;
+  for (let i = 0; i < courseProducts.length; i += MFBATCH) {
+    const batch = courseProducts.slice(i, i + MFBATCH);
+    await Promise.all(batch.map(async (product) => {
+      try {
+        const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
+        const metafields = mfResp.metafields || [];
+        const entry = {};
+        // Look for educator name metafield
+        const educatorMf = metafields.find(mf =>
+          mf.key === 'sake_educator' || mf.key === 'educator' ||
+          (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
+        );
+        if (educatorMf && educatorMf.value) {
+          entry.name = educatorMf.value;
+        }
+        // Look for educator photo metafield
+        const photoMf = metafields.find(mf =>
+          mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
+          mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
+          (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
+        );
+        if (photoMf && photoMf.value) {
+          entry.photo = photoMf.value;
+        }
+        // Look for educator bio metafield
+        const bioMf = metafields.find(mf =>
+          mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
+          (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
+        );
+        if (bioMf && bioMf.value) {
+          entry.bio = bioMf.value;
+        }
+        if (Object.keys(entry).length > 0) {
+          metafieldMap[product.id] = entry;
+        }
+      } catch (e) {
+        console.error(`Metafield fetch failed for product ${product.id} (${product.title}): ${e.message}`);
+      }
+    }));
+    // Small delay between batches to avoid Shopify rate limits
+    if (i + MFBATCH < courseProducts.length) {
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+
+  // Cache the result
+  if (Object.keys(metafieldMap).length > 0) {
+    cachedMetafieldMap = metafieldMap;
+    metafieldMapCacheTime = Date.now();
+    console.log(`Cached metafields for ${Object.keys(metafieldMap).length} course products`);
+  }
+  return metafieldMap;
+}
+
+// ============================================================================
 // COURSES API - Returns ONLY actual courses with FULL Shopify data + orders
 // ============================================================================
 app.get('/api/courses', async (req, res) => {
@@ -569,54 +638,8 @@ app.get('/api/courses', async (req, res) => {
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
 
-    // Fetch metafields for each course product (in parallel, batches of 3)
-    // This gets the "Sake Educator" name, photo and bio from Shopify metafields
-    const metafieldMap = {};
-    const MFBATCH = 3;
-    for (let i = 0; i < courseProducts.length; i += MFBATCH) {
-      const batch = courseProducts.slice(i, i + MFBATCH);
-      await Promise.all(batch.map(async (product) => {
-        try {
-          const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
-          const metafields = mfResp.metafields || [];
-          const entry = {};
-          // Look for educator name metafield
-          const educatorMf = metafields.find(mf =>
-            mf.key === 'sake_educator' || mf.key === 'educator' ||
-            (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
-          );
-          if (educatorMf && educatorMf.value) {
-            entry.name = educatorMf.value;
-          }
-          // Look for educator photo metafield
-          const photoMf = metafields.find(mf =>
-            mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
-            mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
-            (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
-          );
-          if (photoMf && photoMf.value) {
-            entry.photo = photoMf.value;
-          }
-          // Look for educator bio metafield
-          const bioMf = metafields.find(mf =>
-            mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
-            (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
-          );
-          if (bioMf && bioMf.value) {
-            entry.bio = bioMf.value;
-          }
-          if (Object.keys(entry).length > 0) {
-            metafieldMap[product.id] = entry;
-          }
-        } catch (e) {
-          console.error(`Metafield fetch failed for product ${product.id} (${product.title}): ${e.message}`);
-        }
-      }));
-      // Small delay between batches to avoid Shopify rate limits
-      if (i + MFBATCH < courseProducts.length) {
-        await new Promise(r => setTimeout(r, 500));
-      }
-    }
+    // Fetch metafields (cached 5 min) - includes rate limit retry
+    const metafieldMap = await fetchCourseMetafields(courseProducts);
 
     // Fetch educator profiles from Chi Siamo page (cached 24h)
     const educatorProfiles = await fetchEducatorProfiles();
