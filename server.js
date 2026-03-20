@@ -849,19 +849,17 @@ async function fetchEducatorProfiles() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text();
 
-    // Parse educator cards from the multicolumn section
-    // Each card has: <img>, <h3>Name</h3>, <p><strong>Region</strong></p>, <p>Bio</p>
+    // Split HTML at each multicolumn-card boundary and parse each card
     const profiles = {};
+    const cardChunks = html.split(/class="multicolumn-card/i);
+    // Skip first chunk (before the first card)
+    for (let i = 1; i < cardChunks.length; i++) {
+      const cardHtml = cardChunks[i];
 
-    // Match each multicolumn-card content
-    const cardRegex = /<li[^>]*class="[^"]*multicolumn-card[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
-    let match;
-    while ((match = cardRegex.exec(html)) !== null) {
-      const cardHtml = match[1];
-
-      // Extract image URL
+      // Extract image URL (src may start with // or https://)
       const imgMatch = cardHtml.match(/<img[^>]*src="([^"]+)"/i);
-      const photoUrl = imgMatch ? imgMatch[1].split('?')[0] : '';
+      let photoUrl = imgMatch ? imgMatch[1].split('?')[0] : '';
+      if (photoUrl.startsWith('//')) photoUrl = 'https:' + photoUrl;
 
       // Extract name from h3
       const h3Match = cardHtml.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
@@ -872,22 +870,23 @@ async function fetchEducatorProfiles() {
                           cardHtml.match(/<p[^>]*>\s*<b>([\s\S]*?)<\/b>/i);
       const region = regionMatch ? regionMatch[1].replace(/<[^>]+>/g, '').trim() : '';
 
-      // Extract bio - get all <p> tags content, skip the region one
+      // Extract bio - get all <p> tags, find the one with actual bio text
       const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
       let pMatch;
       let bio = '';
       while ((pMatch = pRegex.exec(cardHtml)) !== null) {
         const pText = pMatch[1].replace(/<[^>]+>/g, '').trim();
-        // Skip if it starts with the region (that's the region paragraph)
-        if (pText && !pText.startsWith(region) && pText.length > 20) {
-          bio = pText;
-          break;
+        // Skip empty, short, or region-only paragraphs
+        if (!pText || pText.length < 20) continue;
+        // If it starts with region text, extract the bio portion after it
+        if (region && pText.startsWith(region)) {
+          const remainder = pText.substring(region.length).trim();
+          if (remainder.length > 20) { bio = remainder; break; }
+          continue;
         }
-        // If region and bio are in the same <p>, extract bio after region
-        if (pText.startsWith(region) && pText.length > region.length + 20) {
-          bio = pText.substring(region.length).trim();
-          break;
-        }
+        // Otherwise this is the bio paragraph
+        bio = pText;
+        break;
       }
 
       if (name) {
