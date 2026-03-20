@@ -849,11 +849,10 @@ async function fetchEducatorProfiles() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const html = await response.text();
 
-    // Split HTML at each multicolumn-card boundary and parse each card
+    // Split HTML at each "multicolumn-card content-container" boundary (exact class)
     const profiles = {};
-    console.log(`Chi Siamo page HTML length: ${html.length}`);
-    const cardChunks = html.split(/class="multicolumn-card/i);
-    console.log(`Found ${cardChunks.length - 1} multicolumn-card chunks`);
+    const cardChunks = html.split('multicolumn-card content-container');
+    console.log(`Chi Siamo: ${html.length} bytes, ${cardChunks.length - 1} educator cards`);
     // Skip first chunk (before the first card)
     for (let i = 1; i < cardChunks.length; i++) {
       const cardHtml = cardChunks[i];
