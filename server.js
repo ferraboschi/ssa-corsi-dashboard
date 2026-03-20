@@ -761,6 +761,68 @@ app.get('/api/debug/metaobjects/:type', async (req, res) => {
   }
 });
 
+// DEBUG: Check Shopify pages for educator content
+app.get('/api/debug/shopify-pages', async (req, res) => {
+  try {
+    const resp = await shopifyFetch('/pages.json?limit=250');
+    res.json((resp.pages || []).map(p => ({
+      id: p.id, title: p.title, handle: p.handle,
+      body_snippet: (p.body_html || '').substring(0, 200)
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Check Shopify blogs and articles
+app.get('/api/debug/shopify-blogs', async (req, res) => {
+  try {
+    const blogsResp = await shopifyFetch('/blogs.json');
+    const blogs = blogsResp.blogs || [];
+    const result = [];
+    for (const blog of blogs) {
+      const articlesResp = await shopifyFetch(`/blogs/${blog.id}/articles.json?limit=50`);
+      result.push({
+        blog: { id: blog.id, title: blog.title, handle: blog.handle },
+        articles: (articlesResp.articles || []).map(a => ({
+          id: a.id, title: a.title, handle: a.handle, author: a.author,
+          tags: a.tags, image: a.image?.src,
+          body_snippet: (a.body_html || '').substring(0, 200)
+        }))
+      });
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Search shop-level metafields for educator data
+app.get('/api/debug/shop-metafields', async (req, res) => {
+  try {
+    const resp = await shopifyFetch('/metafields.json?limit=250');
+    res.json((resp.metafields || []).map(mf => ({
+      namespace: mf.namespace, key: mf.key, type: mf.type,
+      value_snippet: String(mf.value || '').substring(0, 300)
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Check theme sections/templates via GraphQL for educator data
+app.get('/api/debug/shopify-collections', async (req, res) => {
+  try {
+    const resp = await shopifyFetch('/custom_collections.json?limit=250');
+    const custom = (resp.custom_collections || []).map(c => ({ id: c.id, title: c.title, handle: c.handle }));
+    const resp2 = await shopifyFetch('/smart_collections.json?limit=250');
+    const smart = (resp2.smart_collections || []).map(c => ({ id: c.id, title: c.title, handle: c.handle }));
+    res.json({ custom_collections: custom, smart_collections: smart });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============================================================================
 // EDUCATOR ROUTE
 // ============================================================================
