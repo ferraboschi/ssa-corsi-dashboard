@@ -300,20 +300,31 @@ async function shopifyFetch(endpoint, options = {}) {
     throw new Error('SHOPIFY_ACCESS_TOKEN not configured');
   }
   const url = `https://${SHOPIFY_STORE}/admin/api/${SHOPIFY_API_VERSION}${endpoint}`;
-  const response = await fetch(url, {
-    method: options.method || 'GET',
-    headers: {
-      'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
-      'Content-Type': 'application/json',
-      ...options.headers
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Shopify API Error (${response.status}): ${error}`);
+  const maxRetries = 3;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const response = await fetch(url, {
+      method: options.method || 'GET',
+      headers: {
+        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    if (response.status === 429) {
+      // Rate limited - wait and retry
+      const retryAfter = parseFloat(response.headers.get('Retry-After') || '2');
+      console.log(`Shopify rate limited on ${endpoint}, waiting ${retryAfter}s (attempt ${attempt + 1}/${maxRetries})`);
+      await new Promise(r => setTimeout(r, retryAfter * 1000));
+      continue;
+    }
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Shopify API Error (${response.status}): ${error}`);
+    }
+    return await response.json();
   }
-  return await response.json();
+  throw new Error(`Shopify API rate limit exceeded after ${maxRetries} retries: ${endpoint}`);
 }
 
 // Fetch ALL Shopify products with pagination
@@ -558,10 +569,10 @@ app.get('/api/courses', async (req, res) => {
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
 
-    // Fetch metafields for each course product (in parallel, batches of 5)
+    // Fetch metafields for each course product (in parallel, batches of 3)
     // This gets the "Sake Educator" name, photo and bio from Shopify metafields
     const metafieldMap = {};
-    const MFBATCH = 5;
+    const MFBATCH = 3;
     for (let i = 0; i < courseProducts.length; i += MFBATCH) {
       const batch = courseProducts.slice(i, i + MFBATCH);
       await Promise.all(batch.map(async (product) => {
@@ -598,9 +609,13 @@ app.get('/api/courses', async (req, res) => {
             metafieldMap[product.id] = entry;
           }
         } catch (e) {
-          // Silently skip metafield errors
+          console.error(`Metafield fetch failed for product ${product.id} (${product.title}): ${e.message}`);
         }
       }));
+      // Small delay between batches to avoid Shopify rate limits
+      if (i + MFBATCH < courseProducts.length) {
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
 
     // Fetch educator profiles from Chi Siamo page (cached 24h)
