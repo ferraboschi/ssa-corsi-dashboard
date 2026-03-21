@@ -3624,30 +3624,49 @@ function openStudentModal(email) {
     const emailKey = (email || '').toLowerCase().trim();
     if (!emailKey) return;
 
-    // Find all courses this student has participated in (past + active)
-    const allCourses = [...COURSES, ...(window.PAST_COURSES || [])];
+    // Build full course list from cached API data (includes ALL courses: past + active)
+    const allRawCourses = getCached('courses') || [];
     const participations = [];
-    allCourses.forEach(c => {
-        c.students.forEach(st => {
-            if ((st.email || '').toLowerCase().trim() === emailKey) {
-                participations.push({
-                    courseId: c.id,
-                    city: c.city,
-                    dates: c.dates,
-                    level: c.courseType.levelLabel,
-                    levelClass: c.courseType.level,
-                    delivery: c.courseType.deliveryLabel,
-                    deliveryClass: c.courseType.delivery,
-                    deliveryIcon: c.courseType.deliveryIcon,
-                    color: c.courseType.color,
-                    educator: c.educator.name,
-                    orderDate: st.orderDate,
-                    financialStatus: st.financialStatus,
-                    studentName: st.name,
-                    studentEmail: st.email,
-                    isPast: !!(c.isPast)
-                });
-            }
+
+    allRawCourses.forEach(c => {
+        const rawStudents = c.students || [];
+        const students = deduplicateStudents(rawStudents);
+        const match = students.find(st => (st.email || '').toLowerCase().trim() === emailKey);
+        if (!match) return;
+
+        const typeInfo = parseCourseType(c.handle, c.title);
+        const city = parseCourseCity(c.handle, c.title);
+        const dateInfo = parseCourseDate(c.handle);
+        const isFuture = isFutureCourse(c.handle);
+
+        // Resolve educator name
+        let educatorName = c.educatorName || '';
+        if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+            educatorName = COURSE_COSTS[c.handle].educatorName;
+        }
+        if (!educatorName && c.tags) {
+            const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
+            const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+            if (educatorTag) educatorName = educatorTag.replace('educator:', '').trim();
+        }
+        educatorName = educatorName || 'Da assegnare';
+
+        participations.push({
+            courseId: c.handle,
+            city: city || '',
+            dates: dateInfo ? dateInfo.display : '',
+            level: typeInfo.levelLabel,
+            levelClass: typeInfo.level,
+            delivery: typeInfo.deliveryLabel,
+            deliveryClass: typeInfo.delivery,
+            deliveryIcon: typeInfo.deliveryIcon,
+            color: typeInfo.color,
+            educator: educatorName,
+            orderDate: match.orderDate,
+            financialStatus: match.financialStatus,
+            studentName: match.name,
+            studentEmail: match.email,
+            isPast: !isFuture
         });
     });
 
