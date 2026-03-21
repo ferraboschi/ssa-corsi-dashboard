@@ -468,6 +468,47 @@
         .detail-body { padding: 24px 32px; }
         */
 
+        /* Student history modal */
+        .student-modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+            z-index: 300; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .student-modal-overlay.show { opacity: 1; pointer-events: all; }
+        .student-modal {
+            background: var(--card); width: 90%; max-width: 620px; max-height: 80vh;
+            border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+            transform: translateY(12px); transition: transform 0.2s;
+        }
+        .student-modal-overlay.show .student-modal { transform: translateY(0); }
+        .student-modal-header {
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .student-modal-header h3 { font-size: 15px; font-weight: 600; margin: 0; }
+        .student-modal-close {
+            width: 28px; height: 28px; border-radius: 6px; border: none;
+            background: transparent; cursor: pointer; font-size: 14px; color: var(--text-light);
+            display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+        }
+        .student-modal-close:hover { background: #fee2e2; color: var(--danger); }
+        .student-modal-body { padding: 16px 20px; overflow-y: auto; max-height: calc(80vh - 60px); }
+        .student-course-card {
+            display: flex; align-items: center; gap: 12px; padding: 12px;
+            border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+            cursor: pointer; transition: all 0.15s;
+        }
+        .student-course-card:hover { border-color: var(--accent); background: #f0f4ff; }
+        .student-course-card:last-child { margin-bottom: 0; }
+        .student-course-dot { width: 4px; height: 36px; border-radius: 2px; flex-shrink: 0; }
+        .student-course-info { flex: 1; min-width: 0; }
+        .student-course-info .city { font-weight: 600; font-size: 13px; }
+        .student-course-info .meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+        .student-summary { display: flex; gap: 16px; margin-bottom: 16px; padding: 12px; background: var(--bg); border-radius: 8px; }
+        .student-summary-item { text-align: center; flex: 1; }
+        .student-summary-item .val { font-size: 20px; font-weight: 700; color: var(--text); }
+        .student-summary-item .lbl { font-size: 10px; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
         /* Cost input styling */
         .cost-input {
             font-weight: 500;
@@ -1506,6 +1547,17 @@
     </div>
 </main>
 
+<!-- Student History Modal -->
+<div class="student-modal-overlay" id="studentModalOverlay" onclick="if(event.target===this)closeStudentModal()">
+    <div class="student-modal">
+        <div class="student-modal-header">
+            <h3 id="studentModalTitle">Storico Corsista</h3>
+            <button class="student-modal-close" onclick="closeStudentModal()" aria-label="Chiudi"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="student-modal-body" id="studentModalBody"></div>
+    </div>
+</div>
+
 <script>
 // =============================================
 // AUTH — Redirect to login on 401 responses
@@ -1911,8 +1963,13 @@ function renderStudentRowHTML(st, opts = {}) {
     const { showCourse = false } = opts;
     const initials = getInitials(st.name);
     const isPaid = st.financialStatus === 'paid';
-    return `<tr>
-        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name || '-'}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
+    // Count how many courses this student appears in
+    const emailKey = (st.email || '').toLowerCase().trim();
+    const courseCount = emailKey ? COURSES.filter(c => c.students.some(s => (s.email || '').toLowerCase().trim() === emailKey)).length : 0;
+    const courseCountBadge = courseCount > 1 ? `<span style="display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px;" title="${courseCount} corsi">${courseCount}</span>` : '';
+    const clickAttr = emailKey ? `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"` : '';
+    return `<tr ${clickAttr}>
+        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name || '-'}${courseCountBadge}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
         ${showCourse ? `<td>${st.courseCity || ''} - ${st.courseDates || ''}</td>` : ''}
         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
@@ -3572,6 +3629,100 @@ function exportCorsisti() {
     URL.revokeObjectURL(url);
     showToast('CSV scaricato!');
 }
+
+// =============================================
+// STUDENT HISTORY MODAL
+// =============================================
+
+function openStudentModal(email) {
+    const emailKey = (email || '').toLowerCase().trim();
+    if (!emailKey) return;
+
+    // Find all courses this student has participated in (past + active)
+    const allCourses = [...COURSES, ...(window.PAST_COURSES || [])];
+    const participations = [];
+    allCourses.forEach(c => {
+        c.students.forEach(st => {
+            if ((st.email || '').toLowerCase().trim() === emailKey) {
+                participations.push({
+                    courseId: c.id,
+                    city: c.city,
+                    dates: c.dates,
+                    level: c.courseType.levelLabel,
+                    levelClass: c.courseType.level,
+                    delivery: c.courseType.deliveryLabel,
+                    deliveryClass: c.courseType.delivery,
+                    deliveryIcon: c.courseType.deliveryIcon,
+                    color: c.courseType.color,
+                    educator: c.educator.name,
+                    orderDate: st.orderDate,
+                    financialStatus: st.financialStatus,
+                    studentName: st.name,
+                    studentEmail: st.email,
+                    isPast: !!(c.isPast)
+                });
+            }
+        });
+    });
+
+    // Sort by date (most recent first)
+    participations.sort((a, b) => {
+        const da = a.orderDate || '';
+        const db = b.orderDate || '';
+        return db.localeCompare(da);
+    });
+
+    const studentName = participations[0]?.studentName || emailKey;
+    const totalCourses = participations.length;
+    const uniqueTypes = [...new Set(participations.map(p => p.level))];
+    const uniqueCities = [...new Set(participations.map(p => p.city).filter(Boolean))];
+
+    document.getElementById('studentModalTitle').innerHTML = `<div style="display: flex; align-items: center; gap: 10px;"><span class="avatar" style="width: 32px; height: 32px; font-size: 12px;">${getInitials(studentName)}</span> ${studentName}</div>`;
+
+    let html = '';
+
+    // Summary bar
+    html += `<div class="student-summary">
+        <div class="student-summary-item"><div class="val">${totalCourses}</div><div class="lbl">${totalCourses === 1 ? 'Corso' : 'Corsi'}</div></div>
+        <div class="student-summary-item"><div class="val">${uniqueTypes.length}</div><div class="lbl">${uniqueTypes.length === 1 ? 'Tipologia' : 'Tipologie'}</div></div>
+        <div class="student-summary-item"><div class="val">${uniqueCities.length}</div><div class="lbl">${uniqueCities.length === 1 ? 'Città' : 'Città'}</div></div>
+    </div>`;
+
+    if (participations.length === 0) {
+        html += '<div style="text-align: center; padding: 20px; color: var(--text-light);">Nessuna partecipazione trovata</div>';
+    } else {
+        participations.forEach(p => {
+            const isPaid = p.financialStatus === 'paid';
+            const dateStr = p.orderDate ? new Date(p.orderDate).toLocaleDateString('it-IT') : '';
+            html += `<div class="student-course-card" onclick="closeStudentModal(); window.currentCourseId='${p.courseId}'; openCourseDetail('${p.courseId}')">
+                <div class="student-course-dot course-banner ${p.color}"></div>
+                <div class="student-course-info">
+                    <div class="city">${p.city || 'Corso'} <span class="badge ${p.levelClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;">${p.level}</span> <span class="badge ${p.deliveryClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;"><i class="fas ${p.deliveryIcon}" style="font-size: 8px; margin-right: 2px;"></i>${p.delivery}</span>${p.isPast ? ' <span style="font-size: 9px; color: var(--text-light);">(passato)</span>' : ''}</div>
+                    <div class="meta"><i class="far fa-calendar-alt"></i> ${p.dates} &bull; <i class="fas fa-chalkboard-teacher"></i> ${p.educator}${dateStr ? ` &bull; Iscritto il ${dateStr}` : ''}</div>
+                </div>
+                <div style="flex-shrink: 0;">
+                    <span class="badge ${isPaid ? 'paid' : 'pending'}" style="font-size: 9px; padding: 2px 6px;">${isPaid ? 'Pagato' : (p.financialStatus || 'In attesa')}</span>
+                </div>
+            </div>`;
+        });
+    }
+
+    document.getElementById('studentModalBody').innerHTML = html;
+    document.getElementById('studentModalOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeStudentModal() {
+    document.getElementById('studentModalOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+// Close on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('studentModalOverlay').classList.contains('show')) {
+        closeStudentModal();
+    }
+});
 
 // =============================================
 // EDUCATOR PAGE
