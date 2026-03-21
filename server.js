@@ -1586,15 +1586,66 @@ app.get('/api/sakecompany/products', async (req, res) => {
 // ============================================================================
 // SHARE TOKEN ROUTES
 // ============================================================================
-app.post('/api/share/:courseHandle', async (req, res) => {
+
+// Helper: parse course end date from title (e.g. "Corso Certificato Sake Sommelier - Maggio 2026, Milano")
+// Returns end-of-month + 10 days as expiry
+function computeShareExpiry(courseTitle) {
+  const italianMonths = {
+    'gennaio': 0, 'febbraio': 1, 'marzo': 2, 'aprile': 3, 'maggio': 4, 'giugno': 5,
+    'luglio': 6, 'agosto': 7, 'settembre': 8, 'ottobre': 9, 'novembre': 10, 'dicembre': 11
+  };
+  const match = (courseTitle || '').match(/(Gennaio|Febbraio|Marzo|Aprile|Maggio|Giugno|Luglio|Agosto|Settembre|Ottobre|Novembre|Dicembre)\s+(\d{4})/i);
+  if (match) {
+    const monthIdx = italianMonths[match[1].toLowerCase()];
+    const year = parseInt(match[2]);
+    // End of course month + 10 days
+    const endOfMonth = new Date(year, monthIdx + 1, 0); // last day of month
+    const expiry = new Date(endOfMonth.getTime() + 10 * 24 * 60 * 60 * 1000);
+    return expiry;
+  }
+  // Fallback: 60 days from now
+  return new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+}
+
+// GET /api/share-link/:courseHandle — auto-generate or return existing single link
+app.get('/api/share-link/:courseHandle', async (req, res) => {
   try {
     const { courseHandle } = req.params;
-    const { ttlDays } = req.body;
-    const ttl = (ttlDays || 7) * 24 * 60 * 60 * 1000; // Convert to milliseconds
+    const now = new Date();
+
+    // Find existing active token for this course
+    const existing = Object.values(shareTokens).find(
+      t => t.courseHandle === courseHandle && new Date(t.expiresAt) > now
+    );
+    if (existing) {
+      return res.json({
+        success: true,
+        token: existing.token,
+        courseHandle,
+        expiresAt: existing.expiresAt
+      });
+    }
+
+    // No active token — auto-create one
+    // Fetch course title to compute expiry
+    let courseTitle = req.query.title || '';
+    if (!courseTitle) {
+      try {
+        const products = await fetchAllShopifyProducts();
+        const product = products.find(p => p.handle === courseHandle);
+        if (product) courseTitle = product.title;
+      } catch (e) { /* use fallback expiry */ }
+    }
+
+    // Clean up old expired tokens for this course
+    Object.keys(shareTokens).forEach(k => {
+      if (shareTokens[k].courseHandle === courseHandle) {
+        delete shareTokens[k];
+      }
+    });
 
     const token = generateShareToken();
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + ttl);
+    const expiresAt = computeShareExpiry(courseTitle);
 
     shareTokens[token] = {
       token,
@@ -1613,6 +1664,12 @@ app.post('/api/share/:courseHandle', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// Legacy endpoints kept for backward compatibility
+app.post('/api/share/:courseHandle', async (req, res) => {
+  // Redirect to auto-generate
+  res.redirect(307, `/api/share-link/${req.params.courseHandle}`);
 });
 
 app.delete('/api/share/:token', (req, res) => {

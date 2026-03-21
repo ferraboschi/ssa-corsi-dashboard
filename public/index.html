@@ -2761,28 +2761,11 @@ function renderCourseDetailPage() {
                     </div>
                 </div>
 
-                <!-- Card 3: Condividi con Educator -->
+                <!-- Card 3: Link Educator (auto-generated, always visible) -->
                 <div style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                        <div>
-                            <div style="font-weight: 600; font-size: 14px; color: #1e40af;"><i class="fas fa-share-alt"></i> Condividi con Educator</div>
-                            <div style="font-size: 12px; color: #60a5fa;">Genera link di accesso per il docente</div>
-                        </div>
-                        <button onclick="toggleShareSection()" style="padding: 6px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; white-space: nowrap;"><i class="fas fa-cog"></i></button>
-                    </div>
-                    <div id="shareSection" style="display: none; margin-top: 10px; padding-top: 10px; border-top: 1px solid #bfdbfe;">
-                        <div style="margin-bottom: 10px;">
-                            <label style="display: block; font-size: 12px; font-weight: 600; color: var(--text-light); margin-bottom: 6px;">Durata del link (giorni)</label>
-                            <select id="shareTTLSelect" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;">
-                                <option value="7">7 giorni</option>
-                                <option value="14" selected>14 giorni</option>
-                                <option value="30">30 giorni</option>
-                            </select>
-                        </div>
-                        <button onclick="generateShareLink('${c.handle}')" style="width: 100%; padding: 8px; background: var(--primary); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 10px;">
-                            <i class="fas fa-plus"></i> Genera Link
-                        </button>
-                        <div id="shareLinksContainer" style="max-height: 200px; overflow-y: auto;"></div>
+                    <div style="font-weight: 600; font-size: 14px; color: #1e40af; margin-bottom: 8px;"><i class="fas fa-share-alt"></i> Link Educator</div>
+                    <div id="educatorLinkContainer" style="font-size: 12px; color: var(--text-light);">
+                        <i class="fas fa-spinner fa-spin"></i> Caricamento link...
                     </div>
                 </div>
 
@@ -2794,6 +2777,9 @@ function renderCourseDetailPage() {
 
     // Initialize and render program section
     initializeProgram();
+
+    // Auto-load educator share link
+    loadEducatorLink(c.handle, c.name);
 }
 
 function updateCostsSummary() {
@@ -3870,99 +3856,37 @@ function toggleCostsSection() {
 }
 
 // =============================================
-// SHARE LINK MANAGEMENT
+// EDUCATOR LINK (auto-generated, one per course)
 // =============================================
 
-function toggleShareSection() {
-    const section = document.getElementById('shareSection');
-    if (section) {
-        section.style.display = section.style.display === 'none' ? 'block' : 'none';
-        if (section.style.display === 'block') {
-            const c = COURSES.find(x => x.id === window.currentCourseId);
-            if (c) loadShareLinks(c.handle);
-        }
-    }
-}
+async function loadEducatorLink(courseHandle, courseTitle) {
+    const container = document.getElementById('educatorLinkContainer');
+    if (!container) return;
 
-async function loadShareLinks(courseHandle) {
     try {
-        const response = await fetch(`/api/share-tokens/${courseHandle}`);
-        if (!response.ok) throw new Error('Failed to load share tokens');
+        const response = await fetch(`/api/share-link/${courseHandle}?title=${encodeURIComponent(courseTitle || '')}`);
+        if (!response.ok) throw new Error('Errore nel caricamento');
         const result = await response.json();
-        const tokens = result.tokens || [];
 
-        const container = document.getElementById('shareLinksContainer');
-        if (!container) return;
+        const shareUrl = `${window.location.origin}/share/${result.token}`;
+        const expDate = new Date(result.expiresAt).toLocaleDateString('it-IT');
 
-        if (!tokens || tokens.length === 0) {
-            container.innerHTML = '<div style="color: var(--text-light); font-size: 12px; padding: 12px 0;">Nessun link attivo</div>';
-            return;
-        }
-
-        let html = '<div style="font-size: 12px;">';
-        tokens.forEach(token => {
-            const shareUrl = `${window.location.origin}/share/${token.token}`;
-            const expDate = new Date(token.expiresAt).toLocaleDateString('it-IT');
-            html += `
-                <div style="background: #f5f5f5; padding: 10px; border-radius: 6px; margin-bottom: 8px;">
-                    <div style="display: flex; gap: 6px; margin-bottom: 6px;">
-                        <input type="text" value="${shareUrl}" readonly style="flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 11px; font-family: monospace;" onclick="this.select()">
-                        <button onclick="copyShareLink('${token.token}')" style="padding: 6px 10px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;">
-                            <i class="fas fa-copy"></i>
-                        </button>
-                        <button onclick="revokeShareLink('${token.token}')" style="padding: 6px 10px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                    <div style="color: var(--text-light); font-size: 11px;">Scade: ${expDate}</div>
-                </div>
-            `;
-        });
-        html += '</div>';
-        container.innerHTML = html;
+        container.innerHTML = `
+            <div style="display: flex; gap: 6px; margin-bottom: 6px;">
+                <input type="text" value="${shareUrl}" readonly style="flex: 1; padding: 6px 8px; border: 1px solid #bfdbfe; border-radius: 4px; font-size: 11px; font-family: monospace; background: #fff;" onclick="this.select()">
+                <button onclick="copyEducatorLink('${result.token}')" style="padding: 6px 10px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;" title="Copia link">
+                    <i class="fas fa-copy"></i> Copia
+                </button>
+            </div>
+            <div style="color: #60a5fa; font-size: 11px;"><i class="fas fa-clock"></i> Scade: ${expDate} &nbsp;·&nbsp; <i class="fas fa-sync-alt"></i> Dati sempre aggiornati in tempo reale</div>
+        `;
     } catch (e) {
-        console.error('Error loading share links:', e);
-        document.getElementById('shareLinksContainer').innerHTML = '<div style="color: #dc3545; font-size: 12px;">Errore nel caricamento dei link</div>';
+        console.error('Error loading educator link:', e);
+        container.innerHTML = '<div style="color: #dc3545; font-size: 12px;">Errore nel caricamento del link</div>';
     }
 }
 
-async function generateShareLink(courseHandle) {
-    try {
-        const ttl = document.getElementById('shareTTLSelect')?.value || '14';
-        const response = await fetch(`/api/share/${courseHandle}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ttlDays: parseInt(ttl) })
-        });
-
-        if (!response.ok) throw new Error('Failed to generate share link');
-        await loadShareLinks(courseHandle);
-        showToast('Link di condivisione generato');
-    } catch (e) {
-        console.error('Error generating share link:', e);
-        showError('Errore nella generazione del link: ' + e.message);
-    }
-}
-
-async function revokeShareLink(token) {
-    if (!confirm('Sei sicuro di voler revocare questo link?')) return;
-
-    try {
-        const response = await fetch(`/api/share/${token}`, { method: 'DELETE' });
-        if (!response.ok) throw new Error('Failed to revoke token');
-
-        const c = COURSES.find(x => x.id === window.currentCourseId);
-        if (c) {
-            await loadShareLinks(c.handle);
-            showToast('Link revocato');
-        }
-    } catch (e) {
-        console.error('Error revoking share link:', e);
-        showError('Errore nella revoca del link: ' + e.message);
-    }
-}
-
-function copyShareLink(token) {
+function copyEducatorLink(token) {
     const shareUrl = `${window.location.origin}/share/${token}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
         showToast('Link copiato negli appunti');
