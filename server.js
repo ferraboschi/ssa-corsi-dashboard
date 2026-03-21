@@ -797,14 +797,20 @@ app.get('/api/courses', async (req, res) => {
 
     const courses = Array.from(courseMap.values());
 
-    // Apply phone overrides from saved config
+    // Apply phone overrides from saved config (per-order first, then email fallback)
     courses.forEach(course => {
-      const overrides = courseCosts[course.handle]?.phoneOverrides;
-      if (overrides && course.students) {
+      const byOrder = courseCosts[course.handle]?.phoneOverridesByOrder;
+      const byEmail = courseCosts[course.handle]?.phoneOverrides;
+      if ((byOrder || byEmail) && course.students) {
         course.students.forEach(st => {
-          const emailKey = (st.email || '').toLowerCase().trim();
-          if (emailKey && overrides[emailKey]) {
-            st.phone = overrides[emailKey];
+          // Per-order override takes priority (allows different phones for same email)
+          if (byOrder && st.orderNumber && byOrder[st.orderNumber]) {
+            st.phone = byOrder[st.orderNumber];
+          } else {
+            const emailKey = (st.email || '').toLowerCase().trim();
+            if (byEmail && emailKey && byEmail[emailKey]) {
+              st.phone = byEmail[emailKey];
+            }
           }
         });
       }
@@ -1212,12 +1218,17 @@ app.get('/api/export/course/:handle', async (req, res) => {
       });
     });
 
-    // Apply phone overrides
-    const overrides = courseCosts[handle]?.phoneOverrides;
-    if (overrides) {
+    // Apply phone overrides (per-order first, then email fallback)
+    const pByOrder = courseCosts[handle]?.phoneOverridesByOrder;
+    const pByEmail = courseCosts[handle]?.phoneOverrides;
+    if (pByOrder || pByEmail) {
       students.forEach(st => {
-        const ek = (st.email || '').toLowerCase().trim();
-        if (ek && overrides[ek]) st.phone = overrides[ek];
+        if (pByOrder && st.orderNumber && pByOrder[st.orderNumber]) {
+          st.phone = pByOrder[st.orderNumber];
+        } else {
+          const ek = (st.email || '').toLowerCase().trim();
+          if (pByEmail && ek && pByEmail[ek]) st.phone = pByEmail[ek];
+        }
       });
     }
 
@@ -1340,11 +1351,19 @@ app.post('/api/costs/:courseId', (req, res) => {
 // Phone overrides: save corrected phone numbers (keyed by email)
 app.post('/api/phone-overrides/:courseId', (req, res) => {
   const { courseId } = req.params;
-  const { email, phone } = req.body;
-  if (!email) return res.json({ success: false, error: 'email required' });
+  const { email, phone, orderNumber } = req.body;
+  if (!email && !orderNumber) return res.json({ success: false, error: 'email or orderNumber required' });
   if (!courseCosts[courseId]) courseCosts[courseId] = {};
-  if (!courseCosts[courseId].phoneOverrides) courseCosts[courseId].phoneOverrides = {};
-  courseCosts[courseId].phoneOverrides[email.toLowerCase().trim()] = phone;
+
+  // Prefer per-order phone overrides (allows different phones for same email)
+  if (orderNumber) {
+    if (!courseCosts[courseId].phoneOverridesByOrder) courseCosts[courseId].phoneOverridesByOrder = {};
+    courseCosts[courseId].phoneOverridesByOrder[orderNumber] = phone;
+  } else {
+    // Fallback: email-based (legacy)
+    if (!courseCosts[courseId].phoneOverrides) courseCosts[courseId].phoneOverrides = {};
+    courseCosts[courseId].phoneOverrides[email.toLowerCase().trim()] = phone;
+  }
   saveCostsToFile(courseCosts);
   res.json({ success: true });
 });
@@ -1844,13 +1863,18 @@ app.get('/api/shared/:token', async (req, res) => {
     });
     course.enrollmentCount = course.students.length;
 
-    // Apply phone overrides from saved config (same as main dashboard)
-    const phoneOverrides = courseCosts[courseProduct.handle]?.phoneOverrides;
-    if (phoneOverrides) {
+    // Apply phone overrides from saved config (per-order first, then email fallback)
+    const phoneByOrder = courseCosts[courseProduct.handle]?.phoneOverridesByOrder;
+    const phoneByEmail = courseCosts[courseProduct.handle]?.phoneOverrides;
+    if (phoneByOrder || phoneByEmail) {
       course.students.forEach(st => {
-        const emailKey = (st.email || '').toLowerCase().trim();
-        if (emailKey && phoneOverrides[emailKey]) {
-          st.phone = phoneOverrides[emailKey];
+        if (phoneByOrder && st.orderNumber && phoneByOrder[st.orderNumber]) {
+          st.phone = phoneByOrder[st.orderNumber];
+        } else {
+          const emailKey = (st.email || '').toLowerCase().trim();
+          if (phoneByEmail && emailKey && phoneByEmail[emailKey]) {
+            st.phone = phoneByEmail[emailKey];
+          }
         }
       });
     }

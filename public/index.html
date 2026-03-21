@@ -2715,7 +2715,7 @@ function renderCourseDetailPage() {
                     return `<tr>
                         <td><div class="name-cell"><span class="avatar">${displayInitials}</span><div class="name-info"><div class="name" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span class="editable-name" data-order="${st.orderNumber || ''}" data-course="${c.handle}" data-original="${st.name}" style="cursor: pointer;" onclick="editNameInline(this)" title="Clicca per modificare il nome">${displayName}</span>${isDup ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #fff7ed; color: #ea580c; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Stesso acquirente — ordine multiplo, verificare il nome"><i class="fas fa-clone" style="font-size: 8px;"></i> Doppio</span>' : ''}${mismatchHtml}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div>${origNameHtml}<div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">
-                            <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
+                            <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" data-order="${st.orderNumber || ''}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
                                 ${phoneIcon}
                                 <span class="phone-display">${st.phone || '<span style="color:#ccc; font-style:italic;">aggiungi</span>'}</span>
                             </div>
@@ -2878,6 +2878,7 @@ function editPhoneInline(cell) {
     const isPlaceholder = currentPhone === 'aggiungi' || currentPhone === '';
     const email = cell.getAttribute('data-email');
     const courseHandle = cell.getAttribute('data-course');
+    const orderNumber = cell.getAttribute('data-order');
 
     // Replace display with input
     const input = document.createElement('input');
@@ -2896,22 +2897,24 @@ function editPhoneInline(cell) {
 
     const save = async () => {
         const newPhone = input.value.trim();
-        if (!email) {
-            showToast('Email mancante, impossibile salvare');
+        if (!email && !orderNumber) {
+            showToast('Email/ordine mancante, impossibile salvare');
             renderCourseDetailPage();
             return;
         }
-        // Save to server
+        // Save to server (prefer per-order override for accuracy)
         try {
             await fetch(`/api/phone-overrides/${courseHandle}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, phone: newPhone })
+                body: JSON.stringify({ email, phone: newPhone, orderNumber: orderNumber || undefined })
             });
-            // Update local course data
+            // Update local course data (match by orderNumber for precision)
             const c = COURSES.find(x => x.handle === courseHandle);
             if (c) {
-                const st = c.students.find(s => s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim());
+                const st = orderNumber
+                    ? c.students.find(s => s.orderNumber === orderNumber)
+                    : c.students.find(s => s.email && s.email.toLowerCase().trim() === email.toLowerCase().trim());
                 if (st) st.phone = newPhone;
             }
             showToast('Telefono aggiornato');
