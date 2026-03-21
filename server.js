@@ -1719,10 +1719,11 @@ app.get('/api/shared/:token', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Token expired' });
     }
 
-    // Fetch course data by handle (parallel)
-    const [products, orders] = await Promise.all([
+    // Fetch course data by handle (parallel) — include registration lookup for consistency
+    const [products, orders, registrationLookup] = await Promise.all([
       fetchAllShopifyProducts(),
-      fetchAllShopifyOrders()
+      fetchAllShopifyOrders(),
+      fetchRegistrationStudents()
     ]);
 
     const courseProduct = products.find(p => p.handle === tokenData.courseHandle);
