@@ -361,7 +361,8 @@ async function fetchAllShopifyOrders() {
   if (cached) return cached;
 
   let allOrders = [];
-  let url = `/orders.json?limit=250&status=any`;
+  // Fetch ALL orders since Jan 2024 (Shopify defaults to last 60 days only)
+  let url = `/orders.json?limit=250&status=any&created_at_min=2024-01-01T00:00:00Z`;
 
   while (url) {
     const response = await shopifyFetch(url);
