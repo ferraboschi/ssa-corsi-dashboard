@@ -1640,18 +1640,25 @@ function setCache(key, data) {
 
 function deduplicateStudents(students) {
     const seenOrders = new Set();
-    const seenEmailCourse = new Set();
+    const emailCount = {};
     const result = [];
 
+    // First pass: count emails to detect duplicates
     for (const st of students) {
-        // Primary: deduplicate by orderNumber
+        const emailKey = (st.email || '').toLowerCase().trim();
+        if (emailKey) emailCount[emailKey] = (emailCount[emailKey] || 0) + 1;
+    }
+
+    for (const st of students) {
+        // Only deduplicate by orderNumber (true duplicates)
         if (st.orderNumber && seenOrders.has(st.orderNumber)) continue;
         if (st.orderNumber) seenOrders.add(st.orderNumber);
 
-        // Secondary: deduplicate by email (same person in same course)
+        // Flag same-email students (e.g. bought ticket for a friend)
         const emailKey = (st.email || '').toLowerCase().trim();
-        if (emailKey && seenEmailCourse.has(emailKey)) continue;
-        if (emailKey) seenEmailCourse.add(emailKey);
+        if (emailKey && emailCount[emailKey] > 1) {
+            st.isDuplicateEmail = true;
+        }
 
         result.push(st);
     }
@@ -2557,8 +2564,12 @@ function renderCourseDetailPage() {
                         phoneIcon = `<i class="fas fa-plus-circle" style="font-size: 10px; color: #ccc;"></i>`;
                       }
                     }
+                    const isDup = st.isDuplicateEmail;
+                    const displayName = st.nameOverride || st.name;
+                    const displayInitials = getInitials(displayName);
+                    const origNameHtml = st.nameOverride ? `<div style="font-size: 10px; color: #9ca3af; text-decoration: line-through;" title="Nome originale Shopify">${st.name}</div>` : '';
                     return `<tr>
-                        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div><div class="email">${st.email || ''}</div></div></div></td>
+                        <td><div class="name-cell"><span class="avatar">${displayInitials}</span><div class="name-info"><div class="name" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span class="editable-name" data-order="${st.orderNumber || ''}" data-course="${c.handle}" data-original="${st.name}" style="cursor: pointer;" onclick="editNameInline(this)" title="Clicca per modificare il nome">${displayName}</span>${isDup ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #fff7ed; color: #ea580c; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Stesso acquirente — ordine multiplo, verificare il nome"><i class="fas fa-clone" style="font-size: 8px;"></i> Doppio</span>' : ''}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div>${origNameHtml}<div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">
                             <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
                                 ${phoneIcon}
@@ -2787,6 +2798,76 @@ function editPhoneInline(cell) {
     });
 }
 
+function editNameInline(el) {
+    const currentName = el.textContent.trim();
+    const orderNumber = el.getAttribute('data-order');
+    const courseHandle = el.getAttribute('data-course');
+    const originalName = el.getAttribute('data-original');
+
+    if (!orderNumber) {
+        showToast('Ordine mancante, impossibile modificare');
+        return;
+    }
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.style.cssText = 'width: 180px; padding: 4px 8px; border: 2px solid var(--primary); border-radius: 6px; font-size: 13px; outline: none;';
+    input.placeholder = 'Nome corsista...';
+
+    el.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const save = async () => {
+        const newName = input.value.trim();
+        if (!newName) {
+            renderCourseDetailPage();
+            return;
+        }
+        if (newName === originalName) {
+            // Reset to original — remove override
+            try {
+                await fetch(`/api/name-overrides/${courseHandle}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderNumber, name: null })
+                });
+                const c = COURSES.find(x => x.handle === courseHandle);
+                if (c) {
+                    const st = c.students.find(s => s.orderNumber === orderNumber);
+                    if (st) delete st.nameOverride;
+                }
+                showToast('Nome ripristinato');
+            } catch (e) {
+                showError('Errore nel salvataggio');
+            }
+        } else if (newName !== currentName) {
+            try {
+                await fetch(`/api/name-overrides/${courseHandle}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ orderNumber, name: newName })
+                });
+                const c = COURSES.find(x => x.handle === courseHandle);
+                if (c) {
+                    const st = c.students.find(s => s.orderNumber === orderNumber);
+                    if (st) st.nameOverride = newName;
+                }
+                showToast('Nome aggiornato');
+            } catch (e) {
+                showError('Errore nel salvataggio');
+            }
+        }
+        renderCourseDetailPage();
+    };
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { renderCourseDetailPage(); }
+    });
+}
 
 async function saveCourseDetail(courseId) {
     const c = COURSES.find(x => x.id === courseId);

@@ -751,6 +751,18 @@ app.get('/api/courses', async (req, res) => {
       }
     });
 
+    // Apply name overrides from saved config (keyed by orderNumber)
+    courses.forEach(course => {
+      const nameOvr = courseCosts[course.handle]?.nameOverrides;
+      if (nameOvr && course.students) {
+        course.students.forEach(st => {
+          if (st.orderNumber && nameOvr[st.orderNumber]) {
+            st.nameOverride = nameOvr[st.orderNumber];
+          }
+        });
+      }
+    });
+
     // Enrich students with Twilio Lookup v2 WhatsApp data
     await enrichStudentsWithWhatsApp(courses);
 
@@ -1257,6 +1269,21 @@ app.post('/api/phone-overrides/:courseId', (req, res) => {
   res.json({ success: true });
 });
 
+// Name override per student (keyed by orderNumber)
+app.post('/api/name-overrides/:courseId', (req, res) => {
+  const { courseId } = req.params;
+  const { orderNumber, name } = req.body;
+  if (!orderNumber) return res.json({ success: false, error: 'orderNumber required' });
+  if (!courseCosts[courseId]) courseCosts[courseId] = {};
+  if (!courseCosts[courseId].nameOverrides) courseCosts[courseId].nameOverrides = {};
+  if (name === null || name === undefined) {
+    delete courseCosts[courseId].nameOverrides[orderNumber];
+  } else {
+    courseCosts[courseId].nameOverrides[orderNumber] = name;
+  }
+  saveCostsToFile(courseCosts);
+  res.json({ success: true });
+});
 
 // ============================================================================
 // TWILIO LOOKUP V2 PHONE VERIFICATION
@@ -1668,15 +1695,11 @@ app.get('/api/shared/:token', async (req, res) => {
       });
     });
 
-    // Deduplicate students (same logic as frontend)
+    // Deduplicate students by orderNumber only (allow same email for multiple tickets)
     const seenOrders = new Set();
-    const seenEmails = new Set();
     course.students = course.students.filter(st => {
       if (st.orderNumber && seenOrders.has(st.orderNumber)) return false;
       if (st.orderNumber) seenOrders.add(st.orderNumber);
-      const emailKey = (st.email || '').toLowerCase().trim();
-      if (emailKey && seenEmails.has(emailKey)) return false;
-      if (emailKey) seenEmails.add(emailKey);
       return true;
     });
     course.enrollmentCount = course.students.length;
