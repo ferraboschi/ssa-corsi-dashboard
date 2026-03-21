@@ -166,24 +166,23 @@
            ======================================== */
         .card {
             background: var(--card);
-            border-radius: 12px;
+            border-radius: 8px;
             border: 1px solid var(--border);
             overflow: hidden;
-            transition: box-shadow 0.2s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
 
         .card-header {
-            padding: 18px 24px;
+            padding: 16px 20px;
             border-bottom: 1px solid var(--border);
             display: flex; align-items: center; justify-content: space-between;
         }
         .card-header h2 {
-            font-size: 15px; font-weight: 600;
-            display: flex; align-items: center; gap: 10px;
+            font-size: 14px; font-weight: 600;
+            display: flex; align-items: center; gap: 8px;
         }
-        .card-header h2 i { color: var(--accent); }
-        .card-body { padding: 24px; }
+        .card-header h2 i { color: var(--text-light); font-size: 13px; }
+        .card-body { padding: 20px; }
 
         /* ========================================
            STATS CARDS
@@ -197,11 +196,12 @@
         .stat-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px 24px;
+            border-radius: 8px;
+            padding: 16px 20px;
             position: relative; overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
         .stat-card.gold::before { background: var(--primary); }
         .stat-card.green::before { background: var(--success); }
         .stat-card.blue::before { background: #3b82f6; }
@@ -211,7 +211,7 @@
             font-size: 12px; color: var(--text-light);
             text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
         }
-        .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-card .stat-value { font-size: 24px; font-weight: 700; }
         .stat-card .stat-sub { font-size: 12px; color: var(--text-light); margin-top: 4px; }
         .stat-card .stat-value { word-break: break-word; overflow-wrap: break-word; }
         .detail-stats { grid-template-columns: repeat(4, 1fr); }
@@ -228,13 +228,14 @@
         .course-card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 8px;
             overflow: hidden;
-            transition: all 0.2s;
+            transition: all 0.15s;
             cursor: pointer;
             position: relative;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
         }
-        .course-card:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+        .course-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
         .course-banner { height: 6px; }
         .course-banner.certificato { background: linear-gradient(90deg, var(--primary), #3b82f6); }
@@ -315,6 +316,9 @@
 
         .data-table td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; }
         .data-table tr:hover td { background: #f9fafb; }
+        .dash-course-row:hover td { background: #f0f4ff !important; }
+        .dash-course-row td { transition: background 0.1s; }
+        .dash-courses-table .course-banner { display: block; width: 4px; height: 32px; border-radius: 2px; padding: 0; }
 
         .data-table .avatar {
             width: 32px; height: 32px; border-radius: 50%;
@@ -1347,15 +1351,31 @@
                 <div class="stat-sub">sotto soglia minima</div>
             </div>
         </div>
-        <div class="section">
-            <div class="section-title"><i class="fas fa-graduation-cap"></i> Corsi Attivi &mdash; Panoramica</div>
-            <div class="courses-grid" id="dashCoursesGrid">
-                <div class="loading-spinner"><i class="fas fa-circle-notch"></i> Caricamento corsi da Shopify...</div>
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 14px; font-weight: 600; color: var(--text); margin: 0;">Corsi Attivi</h2>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <table class="data-table dash-courses-table" id="dashCoursesTable">
+                    <thead><tr>
+                        <th>Corso</th>
+                        <th>Tipologia</th>
+                        <th>Data</th>
+                        <th>Educator</th>
+                        <th style="text-align: center;">Iscritti</th>
+                        <th style="text-align: right;">Incasso</th>
+                        <th style="text-align: right;">Margine</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="dashCoursesBody">
+                        <tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
         <div class="two-cols">
             <div class="card">
-                <div class="card-header"><h2><i class="fas fa-chalkboard-teacher"></i> Educator</h2></div>
+                <div class="card-header"><h2 style="font-size: 14px; font-weight: 600; margin: 0;"><i class="fas fa-chalkboard-teacher"></i> Educator</h2></div>
                 <div class="card-body" style="padding: 0;">
                     <table class="data-table" id="dashEducatorTable">
                         <thead><tr><th>Educator</th><th>Corsi</th><th>Corsisti</th></tr></thead>
@@ -1364,7 +1384,7 @@
                 </div>
             </div>
             <div class="card">
-                <div class="card-header"><h2><i class="fas fa-user-plus"></i> Ultime Iscrizioni (Shopify)</h2></div>
+                <div class="card-header"><h2 style="font-size: 14px; font-weight: 600; margin: 0;"><i class="fas fa-user-plus"></i> Ultime Iscrizioni</h2></div>
                 <div class="card-body" style="padding: 0;">
                     <table class="data-table" id="dashRecentTable">
                         <thead><tr><th>Corsista</th><th>Corso</th><th>Data</th></tr></thead>
@@ -2220,14 +2240,14 @@ function renderCurrentPage() {
 
 function renderDashboard() {
     if (COURSES.length === 0 && !apiStatus.courses) {
-        document.getElementById('dashCoursesGrid').innerHTML =
-            '<div class="loading-spinner"><i class="fas fa-circle-notch"></i> Caricamento corsi da Shopify...</div>';
+        document.getElementById('dashCoursesBody').innerHTML =
+            '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>';
         return;
     }
 
     if (COURSES.length === 0) {
-        document.getElementById('dashCoursesGrid').innerHTML =
-            '<div class="empty-state"><i class="fas fa-calendar-times"></i><h3>Nessun corso futuro trovato</h3><p>Non ci sono corsi con date successive ad oggi su Shopify.</p></div>';
+        document.getElementById('dashCoursesBody').innerHTML =
+            '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-calendar-times"></i> Nessun corso futuro trovato</td></tr>';
     }
 
     // Stats
@@ -2241,9 +2261,40 @@ function renderDashboard() {
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('totalRisk').textContent = riskCount;
 
-    // Course cards (using shared template)
-    const grid = document.getElementById('dashCoursesGrid');
-    grid.innerHTML = COURSES.map(c => renderCourseCardHTML(c)).join('');
+    // Compact course table rows
+    const tbody = document.getElementById('dashCoursesBody');
+    tbody.innerHTML = COURSES.map(c => {
+        const s = c.sustainability;
+        const countdown = getCountdownInfo(c);
+        const pct = Math.min(100, Math.round((c.students.length / c.maxStudents) * 100));
+        const fillColor = s.status === 'sustainable' ? 'var(--success)' : s.status === 'warning' ? 'var(--warning)' : 'var(--danger)';
+        const countdownBadge = countdown ? `<span class="countdown-badge ${countdown.css}" style="margin-left: 0; margin-top: 0; font-size: 9px; padding: 2px 6px;">${countdown.text}</span>` : '';
+        return `<tr class="dash-course-row" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" style="cursor: pointer;">
+            <td>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 4px; height: 32px; border-radius: 2px; flex-shrink: 0;" class="course-banner ${c.courseType.color}"></div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 13px; color: var(--text);">${c.city}</div>
+                        ${countdownBadge}
+                    </div>
+                </div>
+            </td>
+            <td><span class="badge ${c.courseType.color}" style="font-size: 10px; padding: 2px 8px;">${c.courseType.label}</span></td>
+            <td style="font-size: 13px; white-space: nowrap;">${c.dates}</td>
+            <td style="font-size: 13px;">${c.educator.name}</td>
+            <td style="text-align: center;">
+                <div style="display: flex; align-items: center; gap: 6px; justify-content: center;">
+                    <span style="font-weight: 600; font-size: 13px;">${c.students.length}<span style="color: var(--text-light); font-weight: 400;">/${c.maxStudents}</span></span>
+                    <div style="width: 40px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden;">
+                        <div style="width: ${pct}%; height: 100%; border-radius: 2px; background: ${fillColor};"></div>
+                    </div>
+                </div>
+            </td>
+            <td style="text-align: right; font-size: 13px; font-weight: 500;">${formatCurrency(c.revenue)}</td>
+            <td style="text-align: right; font-size: 13px; font-weight: 600; color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatCurrency(s.profit)}</td>
+            <td style="text-align: right;"><i class="fas fa-chevron-right" style="font-size: 10px; color: var(--text-light);"></i></td>
+        </tr>`;
+    }).join('');
 
     // Educator table
     const edTable = document.querySelector('#dashEducatorTable tbody');
