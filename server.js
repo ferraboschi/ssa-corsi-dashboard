@@ -383,6 +383,10 @@ const AIRTABLE_API_KEY = process.env.AIRTABLE_API_KEY;
 const AIRTABLE_BASE_ID = process.env.AIRTABLE_BASE_ID || 'appwCWGRd0jXOCxMA';
 const AIRTABLE_TABLE_ID = process.env.AIRTABLE_TABLE_ID || 'tblnJO5Mf7EVmteRk';
 
+// Airtable "Form registrazione studenti SSA" base (student QR code registration)
+const AIRTABLE_REG_BASE_ID = 'app8OYdmX32x7Frjk';
+const AIRTABLE_REG_TABLE_ID = 'tblmHWvzfar6Wf0hw';
+
 async function airtableFetch(endpoint, options = {}) {
   if (!AIRTABLE_API_KEY) {
     throw new Error('AIRTABLE_API_KEY not configured');
@@ -402,6 +406,58 @@ async function airtableFetch(endpoint, options = {}) {
     throw new Error(`Airtable API Error (${response.status}): ${error}`);
   }
   return await response.json();
+}
+
+// ============================================================================
+// AIRTABLE STUDENT REGISTRATION FORM — fetch & cache (5 min)
+// ============================================================================
+let _regCache = { data: null, ts: 0 };
+const REG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function fetchRegistrationStudents() {
+  if (_regCache.data && Date.now() - _regCache.ts < REG_CACHE_TTL) {
+    return _regCache.data;
+  }
+  if (!AIRTABLE_API_KEY) return {};
+  try {
+    const allRecords = [];
+    let offset = null;
+    do {
+      const params = new URLSearchParams({ pageSize: '100' });
+      if (offset) params.set('offset', offset);
+      const url = `https://api.airtable.com/v0/${AIRTABLE_REG_BASE_ID}/${AIRTABLE_REG_TABLE_ID}?${params}`;
+      const resp = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` }
+      });
+      if (!resp.ok) {
+        console.error('Airtable registration fetch error:', resp.status, await resp.text());
+        return _regCache.data || {};
+      }
+      const json = await resp.json();
+      allRecords.push(...(json.records || []));
+      offset = json.offset || null;
+    } while (offset);
+
+    // Build lookup: email → { nome, cognome } (latest record wins)
+    const lookup = {};
+    for (const rec of allRecords) {
+      const f = rec.fields;
+      const email = (f['E-mail'] || '').toLowerCase().trim();
+      if (!email) continue;
+      const nome = (f['Nome'] || '').trim();
+      const cognome = (f['Cognome'] || '').trim();
+      const fullName = [nome, cognome].filter(Boolean).join(' ');
+      if (fullName) {
+        lookup[email] = { name: fullName, nome, cognome };
+      }
+    }
+    _regCache = { data: lookup, ts: Date.now() };
+    console.log(`Airtable registration cache: ${Object.keys(lookup).length} students loaded`);
+    return lookup;
+  } catch (err) {
+    console.error('Airtable registration fetch failed:', err.message);
+    return _regCache.data || {};
+  }
 }
 
 // ============================================================================
@@ -572,7 +628,7 @@ async function fetchCourseMetafields(courseProducts) {
   }
 
   const metafieldMap = {};
-  const MFBATCH = 4;
+  const MFBATCH = 8;
   for (let i = 0; i < courseProducts.length; i += MFBATCH) {
     const batch = courseProducts.slice(i, i + MFBATCH);
     await Promise.all(batch.map(async (product) => {
@@ -614,7 +670,7 @@ async function fetchCourseMetafields(courseProducts) {
     }));
     // Small delay between batches to avoid Shopify rate limits
     if (i + MFBATCH < courseProducts.length) {
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 
@@ -632,17 +688,19 @@ async function fetchCourseMetafields(courseProducts) {
 // ============================================================================
 app.get('/api/courses', async (req, res) => {
   try {
-    const products = await fetchAllShopifyProducts();
-    const orders = await fetchAllShopifyOrders();
+    // Parallel fetch: Shopify products + orders + educator profiles + Airtable registrations
+    const [products, orders, educatorProfiles, registrationLookup] = await Promise.all([
+      fetchAllShopifyProducts(),
+      fetchAllShopifyOrders(),
+      fetchEducatorProfiles(),
+      fetchRegistrationStudents()
+    ]);
 
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
 
     // Fetch metafields (cached 5 min) - includes rate limit retry
     const metafieldMap = await fetchCourseMetafields(courseProducts);
-
-    // Fetch educator profiles from Chi Siamo page (cached 24h)
-    const educatorProfiles = await fetchEducatorProfiles();
 
     // Build enrollment data from orders
     const courseMap = new Map();
@@ -763,9 +821,30 @@ app.get('/api/courses', async (req, res) => {
       }
     });
 
+    // Cross-reference with Airtable student registration form (QR code at course)
+    if (registrationLookup && Object.keys(registrationLookup).length > 0) {
+      courses.forEach(course => {
+        if (!course.students) return;
+        course.students.forEach(st => {
+          const emailKey = (st.email || '').toLowerCase().trim();
+          if (emailKey && registrationLookup[emailKey]) {
+            const reg = registrationLookup[emailKey];
+            st.registrationName = reg.name; // Name from QR code registration
+            // Flag mismatch: compare Shopify name vs registration name (case-insensitive)
+            const shopifyName = (st.name || '').toLowerCase().trim();
+            const regName = (reg.name || '').toLowerCase().trim();
+            if (shopifyName && regName && shopifyName !== regName) {
+              st.nameMismatch = true;
+            }
+          }
+        });
+      });
+    }
+
     // Enrich students with Twilio Lookup v2 WhatsApp data
     await enrichStudentsWithWhatsApp(courses);
 
+    res.set('Cache-Control', 'private, max-age=120'); // 2 min browser cache
     res.json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
@@ -1582,9 +1661,11 @@ app.get('/api/shared/:token', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Token expired' });
     }
 
-    // Fetch course data by handle
-    const products = await fetchAllShopifyProducts();
-    const orders = await fetchAllShopifyOrders();
+    // Fetch course data by handle (parallel)
+    const [products, orders] = await Promise.all([
+      fetchAllShopifyProducts(),
+      fetchAllShopifyOrders()
+    ]);
 
     const courseProduct = products.find(p => p.handle === tokenData.courseHandle);
     if (!courseProduct) {
