@@ -628,7 +628,7 @@ async function fetchCourseMetafields(courseProducts) {
   }
 
   const metafieldMap = {};
-  const MFBATCH = 8;
+  const MFBATCH = 4;
   for (let i = 0; i < courseProducts.length; i += MFBATCH) {
     const batch = courseProducts.slice(i, i + MFBATCH);
     await Promise.all(batch.map(async (product) => {
@@ -670,7 +670,7 @@ async function fetchCourseMetafields(courseProducts) {
     }));
     // Small delay between batches to avoid Shopify rate limits
     if (i + MFBATCH < courseProducts.length) {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 300));
     }
   }
 
