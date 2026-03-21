@@ -238,11 +238,11 @@
         .course-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
         .course-banner { height: 6px; }
-        .course-banner.certificato { background: linear-gradient(90deg, var(--primary), #3b82f6); }
-        .course-banner.introduttivo { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-        .course-banner.shochu { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
-        .course-banner.masterclass { background: linear-gradient(90deg, var(--success), #34d399); }
-        .course-banner.online { background: linear-gradient(90deg, #06b6d4, #22d3ee); }
+        .course-banner.certificato { background: #1e40af; }
+        .course-banner.introduttivo { background: #f59e0b; }
+        .course-banner.shochu { background: #7c3aed; }
+        .course-banner.masterclass { background: #059669; }
+        .course-banner.online { background: #0891b2; }
 
         .course-content { padding: 20px 24px; }
         .course-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
@@ -270,16 +270,26 @@
             font-size: 11px; font-weight: 600;
             text-transform: uppercase; letter-spacing: 0.5px;
         }
-        .badge.certificato { background: #dbeafe; color: #1e40af; }
-        .badge.introduttivo { background: #dbeafe; color: #1d4ed8; }
-        .badge.shochu { background: #ede9fe; color: #6d28d9; }
-        .badge.masterclass { background: #dcfce7; color: var(--success); }
-        .badge.online { background: #cffafe; color: #0e7490; }
+        /* Livello (level) badges */
+        .badge.certificato { background: #1e40af; color: #fff; }
+        .badge.introduttivo { background: #f59e0b; color: #fff; }
+        .badge.shochu { background: #7c3aed; color: #fff; }
+        .badge.masterclass { background: #059669; color: #fff; }
+        /* Modalità (delivery) badges */
+        .badge.online { background: #ecfeff; color: #0e7490; border: 1px solid #cffafe; }
+        .badge.presenza { background: #fef3f2; color: #c2410c; border: 1px solid #fde1d9; }
+        /* Status badges */
         .badge.paid { background: #dcfce7; color: var(--success); }
         .badge.pending { background: #fef3c7; color: #92400e; }
         .badge.sustainable { background: #dcfce7; color: var(--success); }
         .badge.warning { background: #fef3c7; color: #92400e; }
         .badge.critical { background: #fee2e2; color: var(--danger); }
+        /* Legend bar */
+        .legend-bar { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-light); }
+        .legend-group { display: flex; align-items: center; gap: 6px; }
+        .legend-group .legend-title { font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px; font-size: 10px; margin-right: 4px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+        .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); }
 
         /* ========================================
            COURSE STATS ROW
@@ -1355,11 +1365,27 @@
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="font-size: 14px; font-weight: 600; color: var(--text); margin: 0;">Corsi Attivi</h2>
             </div>
+            <div class="legend-bar">
+                <div class="legend-group">
+                    <span class="legend-title">Livello</span>
+                    <div class="legend-item"><span class="legend-dot" style="background: #1e40af;"></span> Certificato</div>
+                    <div class="legend-item"><span class="legend-dot" style="background: #f59e0b;"></span> Introduttivo</div>
+                    <div class="legend-item"><span class="legend-dot" style="background: #7c3aed;"></span> Shochu</div>
+                    <div class="legend-item"><span class="legend-dot" style="background: #059669;"></span> Masterclass</div>
+                </div>
+                <div style="width: 1px; height: 16px; background: var(--border);"></div>
+                <div class="legend-group">
+                    <span class="legend-title">Modalità</span>
+                    <div class="legend-item"><i class="fas fa-map-marker-alt" style="color: #c2410c; font-size: 10px;"></i> In Presenza</div>
+                    <div class="legend-item"><i class="fas fa-globe" style="color: #0e7490; font-size: 10px;"></i> Online</div>
+                </div>
+            </div>
             <div class="card-body" style="padding: 0;">
                 <table class="data-table dash-courses-table" id="dashCoursesTable">
                     <thead><tr>
                         <th>Corso</th>
-                        <th>Tipologia</th>
+                        <th>Livello</th>
+                        <th>Modalità</th>
                         <th>Data</th>
                         <th>Educator</th>
                         <th style="text-align: center;">Iscritti</th>
@@ -1368,7 +1394,7 @@
                         <th></th>
                     </tr></thead>
                     <tbody id="dashCoursesBody">
-                        <tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>
+                        <tr><td colspan="9" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -1401,12 +1427,14 @@
             <input type="text" id="corsiSearch" placeholder="Cerca corso..." aria-label="Cerca corso">
             <select id="corsiFilter" aria-label="Filtra per tipo">
                 <option value="all">Tutti i tipi</option>
-                <option value="certificato-presenza">In presenza Certificato</option>
-                <option value="introduttivo-presenza">In presenza Introduttivo</option>
+                <option value="certificato-presenza">In Presenza Certificato</option>
+                <option value="introduttivo-presenza">In Presenza Introduttivo</option>
                 <option value="certificato-online">Online Certificato</option>
                 <option value="introduttivo-online">Online Introduttivo</option>
-                <option value="shochu">Shochu Professional</option>
-                <option value="masterclass">Masterclass</option>
+                <option value="shochu-presenza">Shochu In Presenza</option>
+                <option value="shochu-online">Shochu Online</option>
+                <option value="masterclass-presenza">Masterclass In Presenza</option>
+                <option value="masterclass-online">Masterclass Online</option>
             </select>
         </div>
         <div class="active-filters" id="activeFilters"></div>
@@ -1694,23 +1722,23 @@ function parseCourseType(handle, title) {
     const h = (handle || '').toLowerCase();
     const t = (title || '').toLowerCase();
     const isOnline = h.includes('online') || t.includes('online');
+    const delivery = isOnline ? 'online' : 'presenza';
+    const deliveryLabel = isOnline ? 'Online' : 'In Presenza';
+    const deliveryIcon = isOnline ? 'fa-globe' : 'fa-map-marker-alt';
 
-    if (h.includes('shochu') || t.includes('shochu')) return { type: 'shochu', label: 'Shochu Professional', color: 'shochu' };
-    if (h.includes('masterclass') || t.includes('masterclass')) return { type: 'masterclass', label: 'Masterclass', color: 'masterclass' };
-    if (h.includes('mixology') || h.includes('bartending') || t.includes('mixology') || t.includes('bartending'))
-        return { type: 'masterclass', label: 'Masterclass', color: 'masterclass' };
+    if (h.includes('shochu') || t.includes('shochu')) return { type: 'shochu-' + delivery, level: 'shochu', levelLabel: 'Shochu', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Shochu', color: 'shochu' };
+    if (h.includes('masterclass') || t.includes('masterclass') || h.includes('mixology') || h.includes('bartending') || t.includes('mixology') || t.includes('bartending'))
+        return { type: 'masterclass-' + delivery, level: 'masterclass', levelLabel: 'Masterclass', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Masterclass', color: 'masterclass' };
 
     if (h.includes('certificato') || t.includes('certificato')) {
-        if (isOnline) return { type: 'certificato-online', label: 'Online Certificato', color: 'online' };
-        return { type: 'certificato-presenza', label: 'In Presenza Certificato', color: 'certificato' };
+        return { type: 'certificato-' + delivery, level: 'certificato', levelLabel: 'Certificato', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Certificato', color: 'certificato' };
     }
 
     if (h.includes('introduttivo') || h.includes('introductory') || t.includes('introduttivo')) {
-        if (isOnline) return { type: 'introduttivo-online', label: 'Online Introduttivo', color: 'online' };
-        return { type: 'introduttivo-presenza', label: 'In Presenza Introduttivo', color: 'introduttivo' };
+        return { type: 'introduttivo-' + delivery, level: 'introduttivo', levelLabel: 'Introduttivo', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Introduttivo', color: 'introduttivo' };
     }
 
-    return { type: 'altro', label: 'Altro', color: 'certificato' };
+    return { type: 'altro-' + delivery, level: 'certificato', levelLabel: 'Altro', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Altro', color: 'certificato' };
 }
 
 function parseCourseCity(handle, title) {
@@ -1842,7 +1870,10 @@ function renderCourseCardHTML(c, opts = {}) {
                     </div>
                     ${countdownHTML}
                 </div>
-                <span class="badge ${c.courseType.color}">${c.courseType.label}</span>
+                <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+                    <span class="badge ${c.courseType.level}">${c.courseType.levelLabel}</span>
+                    <span class="badge ${c.courseType.delivery}" style="font-size: 10px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right: 3px; font-size: 9px;"></i>${c.courseType.deliveryLabel}</span>
+                </div>
             </div>
             ${showDetails ? `
             <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 12px; color: var(--text-light);">
@@ -2241,13 +2272,13 @@ function renderCurrentPage() {
 function renderDashboard() {
     if (COURSES.length === 0 && !apiStatus.courses) {
         document.getElementById('dashCoursesBody').innerHTML =
-            '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>';
+            '<tr><td colspan="9" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-circle-notch fa-spin"></i> Caricamento corsi da Shopify...</td></tr>';
         return;
     }
 
     if (COURSES.length === 0) {
         document.getElementById('dashCoursesBody').innerHTML =
-            '<tr><td colspan="8" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-calendar-times"></i> Nessun corso futuro trovato</td></tr>';
+            '<tr><td colspan="9" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-calendar-times"></i> Nessun corso futuro trovato</td></tr>';
     }
 
     // Stats
@@ -2279,7 +2310,8 @@ function renderDashboard() {
                     </div>
                 </div>
             </td>
-            <td><span class="badge ${c.courseType.color}" style="font-size: 10px; padding: 2px 8px;">${c.courseType.label}</span></td>
+            <td><span class="badge ${c.courseType.level}" style="font-size: 10px; padding: 2px 8px;">${c.courseType.levelLabel}</span></td>
+            <td><span class="badge ${c.courseType.delivery}" style="font-size: 10px; padding: 2px 8px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right: 3px; font-size: 9px;"></i>${c.courseType.deliveryLabel}</span></td>
             <td style="font-size: 13px; white-space: nowrap;">${c.dates}</td>
             <td style="font-size: 13px;">${c.educator.name}</td>
             <td style="text-align: center;">
@@ -2513,8 +2545,9 @@ function renderCourseDetailPage() {
     document.getElementById('courseDetailBreadcrumb').textContent = c.name;
     document.getElementById('courseDetailContent').innerHTML = `
         <div style="display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
-            <span class="badge ${c.courseType.color}" style="font-size: 13px; padding: 6px 16px;">${c.courseType.label}</span>
-            <span class="badge" style="background: #dbeafe; color: #1d4ed8; font-size: 13px; padding: 6px 16px;"><i class="fas fa-map-marker-alt"></i> ${c.city}</span>
+            <span class="badge ${c.courseType.level}" style="font-size: 13px; padding: 6px 16px;">${c.courseType.levelLabel}</span>
+            <span class="badge ${c.courseType.delivery}" style="font-size: 13px; padding: 6px 16px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right: 4px;"></i>${c.courseType.deliveryLabel}</span>
+            <span class="badge" style="background: #f1f5f9; color: #475569; font-size: 13px; padding: 6px 16px;"><i class="fas fa-map-marker-alt"></i> ${c.city}</span>
             <span class="integration-badge shopify" style="font-size: 11px;"><i class="fab fa-shopify"></i> ID: ${c.shopifyId}</span>
         </div>
 
