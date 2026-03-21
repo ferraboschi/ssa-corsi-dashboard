@@ -1843,6 +1843,40 @@ app.get('/api/shared/:token', async (req, res) => {
     });
     course.enrollmentCount = course.students.length;
 
+    // Apply phone overrides from saved config (same as main dashboard)
+    const phoneOverrides = courseCosts[courseProduct.handle]?.phoneOverrides;
+    if (phoneOverrides) {
+      course.students.forEach(st => {
+        const emailKey = (st.email || '').toLowerCase().trim();
+        if (emailKey && phoneOverrides[emailKey]) {
+          st.phone = phoneOverrides[emailKey];
+        }
+      });
+    }
+
+    // Apply name overrides from saved config (same as main dashboard)
+    const nameOverrides = courseCosts[courseProduct.handle]?.nameOverrides;
+    if (nameOverrides) {
+      course.students.forEach(st => {
+        if (st.orderNumber && nameOverrides[st.orderNumber]) {
+          st.originalName = st.name;
+          st.name = nameOverrides[st.orderNumber];
+        }
+      });
+    }
+
+    // Cross-reference with Airtable student registration (QR code data)
+    if (registrationLookup && Object.keys(registrationLookup).length > 0) {
+      course.students.forEach(st => {
+        const emailKey = (st.email || '').toLowerCase().trim();
+        if (emailKey && registrationLookup[emailKey]) {
+          const reg = registrationLookup[emailKey];
+          if (reg.name) st.registrationName = reg.name;
+          if (reg.phone && !st.phone) st.phone = reg.phone;
+        }
+      });
+    }
+
     res.json({ success: true, data: course });
   } catch (error) {
     console.error('Error in /api/shared/:token:', error.message);
