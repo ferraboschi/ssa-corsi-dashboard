@@ -1640,29 +1640,30 @@ function setCache(key, data) {
 
 function deduplicateStudents(students) {
     const seenOrders = new Set();
-    const emailCount = {};
     const result = [];
-
-    // First pass: count emails to detect duplicates
-    for (const st of students) {
-        const emailKey = (st.email || '').toLowerCase().trim();
-        if (emailKey) emailCount[emailKey] = (emailCount[emailKey] || 0) + 1;
-    }
 
     for (const st of students) {
         // Only deduplicate by orderNumber (true duplicates)
         if (st.orderNumber && seenOrders.has(st.orderNumber)) continue;
         if (st.orderNumber) seenOrders.add(st.orderNumber);
 
-        // Flag same-email students (e.g. bought ticket for a friend)
-        const emailKey = (st.email || '').toLowerCase().trim();
-        if (emailKey && emailCount[emailKey] > 1) {
-            st.isDuplicateEmail = true;
-        }
-
         result.push(st);
     }
     return result;
+}
+
+// Count duplicate emails within a course's students (same buyer, multiple tickets)
+function getDuplicateEmails(students) {
+    const emailCount = {};
+    for (const st of students) {
+        const emailKey = (st.email || '').toLowerCase().trim();
+        if (emailKey) emailCount[emailKey] = (emailCount[emailKey] || 0) + 1;
+    }
+    const dupes = {};
+    for (const [email, count] of Object.entries(emailCount)) {
+        if (count > 1) dupes[email] = true;
+    }
+    return dupes;
 }
 
 // =============================================
@@ -2536,7 +2537,7 @@ function renderCourseDetailPage() {
         <table class="data-table" style="min-width: 700px;">
             <thead><tr><th>Corsista</th><th>Telefono</th><th>Importo</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine</th></tr></thead>
             <tbody>
-                ${c.students.map(st => {
+                ${(() => { const _dupEmails = getDuplicateEmails(c.students); return c.students.map(st => {
                     const initials = getInitials(st.name);
                     const isPaid = st.financialStatus === 'paid';
                     const cleanPhone = st.phone ? st.phone.replace(/\D/g, '') : '';
@@ -2564,7 +2565,7 @@ function renderCourseDetailPage() {
                         phoneIcon = `<i class="fas fa-plus-circle" style="font-size: 10px; color: #ccc;"></i>`;
                       }
                     }
-                    const isDup = st.isDuplicateEmail;
+                    const isDup = _dupEmails[(st.email || '').toLowerCase().trim()];
                     const displayName = st.nameOverride || st.name;
                     const displayInitials = getInitials(displayName);
                     const origNameHtml = st.nameOverride ? `<div style="font-size: 10px; color: #9ca3af; text-decoration: line-through;" title="Nome originale Shopify">${st.name}</div>` : '';
@@ -2581,7 +2582,7 @@ function renderCourseDetailPage() {
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
                         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
                     </tr>`;
-                }).join('')}
+                }).join(''); })()}
             </tbody>
         </table>
         </div>` : `
