@@ -1515,14 +1515,15 @@
 
     <!-- PAST COURSES PAGE -->
     <div id="page-passati" class="page-hidden">
-        <div class="section-title"><i class="fas fa-history"></i> Corsi Passati &mdash; Ultimi 6 Mesi</div>
+        <div class="section-title"><i class="fas fa-history"></i> Storico Corsi</div>
         <div class="card">
             <div class="card-body" style="padding: 0;">
                 <table class="data-table" id="pastCoursesTable">
                     <thead><tr>
+                        <th>Stato</th>
                         <th>Tipo Corso</th>
                         <th>Città</th>
-                        <th>Date</th>
+                        <th style="cursor: pointer; user-select: none;" onclick="sortPastCourses('date')" id="pastSortDate">Date <i class="fas fa-sort" style="font-size: 10px; opacity: 0.5;"></i></th>
                         <th>Educator</th>
                         <th>Iscritti</th>
                         <th>Incasso</th>
@@ -3981,32 +3982,38 @@ function copyWhatsAppInvite(courseHandle, courseName) {
 // PAST COURSES RENDERING
 // =============================================
 
-function renderPastCoursesPage() {
-    // Build array of courses that ended in the last 6 months
-    const sixMonthsAgo = new Date();
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+// Sorting state for past courses
+let pastCourseSortDir = 'desc'; // desc = most recent first
+let pastCoursesData = [];
 
+function renderPastCoursesPage() {
     const allCoursesData = getCached('courses') || [];
-    const PAST_COURSES = allCoursesData
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    pastCoursesData = allCoursesData
         .filter(c => {
             const dateInfo = parseCourseDate(c.handle);
-            if (!dateInfo) return false;
-            const endDate = new Date(dateInfo.end + 'T23:59:59');
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            // Course has ended AND is within last 6 months
-            return endDate < today && endDate >= sixMonthsAgo;
+            return !!dateInfo;
         })
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
 
-            // Get educator name (same logic as in loadApiData)
-            let educatorName = '';
-            if (c.educatorName) {
-                educatorName = c.educatorName;
+            // Determine status: Eseguito / In Corso / Da fare
+            const startDate = new Date(dateInfo.start + 'T00:00:00');
+            const endDate = new Date(dateInfo.end + 'T23:59:59');
+            let status = 'eseguito';
+            if (startDate > today) {
+                status = 'da_fare';
+            } else if (endDate >= today) {
+                status = 'in_corso';
             }
+
+            // Get educator name
+            let educatorName = '';
+            if (c.educatorName) educatorName = c.educatorName;
             if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
                 educatorName = COURSE_COSTS[c.handle].educatorName;
             }
@@ -4028,7 +4035,6 @@ function renderPastCoursesPage() {
             // Compute sustainability
             const costs = COURSE_COSTS[c.handle] || {};
             const totalCosts = getTotalCosts(costs);
-            const profit = revenue - totalCosts;
             const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
             let sustainabilityStatus = 'safe';
             if (ratio < 1.2) sustainabilityStatus = 'critical';
@@ -4041,40 +4047,71 @@ function renderPastCoursesPage() {
                 city: city || CONFIG.LOCATION_MAP[c.handle] || '',
                 startDate: dateInfo?.start || '',
                 endDate: dateInfo?.end || '',
+                startDateObj: startDate,
                 educatorName: educatorName,
                 studentCount: students.length,
                 revenue: revenue,
-                sustainabilityStatus: sustainabilityStatus
+                sustainabilityStatus: sustainabilityStatus,
+                status: status
             };
         });
 
+    // Sort by date (default: most recent first)
+    pastCoursesData.sort((a, b) => {
+        const da = new Date(a.startDate), db = new Date(b.startDate);
+        return pastCourseSortDir === 'desc' ? db - da : da - db;
+    });
+
+    renderPastCoursesTable();
+}
+
+function sortPastCourses(column) {
+    if (column === 'date') {
+        pastCourseSortDir = pastCourseSortDir === 'desc' ? 'asc' : 'desc';
+        const icon = pastCourseSortDir === 'desc' ? 'fa-sort-down' : 'fa-sort-up';
+        const th = document.getElementById('pastSortDate');
+        if (th) th.innerHTML = `Date <i class="fas ${icon}" style="font-size: 10px;"></i>`;
+    }
+    pastCoursesData.sort((a, b) => {
+        const da = new Date(a.startDate), db = new Date(b.startDate);
+        return pastCourseSortDir === 'desc' ? db - da : da - db;
+    });
+    renderPastCoursesTable();
+}
+
+function renderPastCoursesTable() {
     const tableBody = document.querySelector('#pastCoursesTable tbody');
     if (!tableBody) return;
 
-    if (PAST_COURSES.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="7" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso passato negli ultimi 6 mesi</td></tr>';
+    if (pastCoursesData.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="8" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso trovato</td></tr>';
         return;
     }
 
     let html = '';
-    PAST_COURSES.forEach(course => {
+    pastCoursesData.forEach(course => {
+        // Status badge
+        let statusIcon, statusText, statusBg, statusColor;
+        if (course.status === 'da_fare') {
+            statusIcon = 'fa-clock'; statusText = 'Da fare'; statusBg = '#eff6ff'; statusColor = '#2563eb';
+        } else if (course.status === 'in_corso') {
+            statusIcon = 'fa-play-circle'; statusText = 'In corso'; statusBg = '#fef3c7'; statusColor = '#d97706';
+        } else {
+            statusIcon = 'fa-check-circle'; statusText = 'Eseguito'; statusBg = '#f0fdf4'; statusColor = '#16a34a';
+        }
+        const statusBadge = `<span style="display: inline-flex; align-items: center; gap: 4px; background: ${statusBg}; color: ${statusColor}; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap;"><i class="fas ${statusIcon}" style="font-size: 10px;"></i> ${statusText}</span>`;
+
         const typeBadge = course.type.includes('certificato') ? 'Certificato' : 'Introduttivo';
         const typeColor = course.type.includes('certificato') ? '#2563eb' : '#059669';
         const dateRange = `${new Date(course.startDate).toLocaleDateString('it-IT')} - ${new Date(course.endDate).toLocaleDateString('it-IT')}`;
 
-        let sustainabilityBadge = '';
-        let badgeColor = '#10b981';
-        let badgeText = 'Sostenibile';
-        if (course.sustainabilityStatus === 'critical') {
-            badgeColor = '#dc2626';
-            badgeText = 'Critico';
-        } else if (course.sustainabilityStatus === 'warning') {
-            badgeColor = '#f59e0b';
-            badgeText = 'Attenzione';
-        }
-        sustainabilityBadge = `<span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${badgeText}</span>`;
+        let badgeColor = '#10b981', badgeText = 'Sostenibile';
+        if (course.sustainabilityStatus === 'critical') { badgeColor = '#dc2626'; badgeText = 'Critico'; }
+        else if (course.sustainabilityStatus === 'warning') { badgeColor = '#f59e0b'; badgeText = 'Attenzione'; }
+        const sustainabilityBadge = `<span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${badgeText}</span>`;
 
-        html += `<tr>
+        html += `<tr style="${course.status === 'da_fare' ? 'background: #fafbff;' : course.status === 'in_corso' ? 'background: #fffbeb;' : ''}">
+            <td>${statusBadge}</td>
             <td><span style="display: inline-block; background: ${typeColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${typeBadge}</span></td>
             <td>${course.city}</td>
             <td style="font-size: 12px;">${dateRange}</td>
