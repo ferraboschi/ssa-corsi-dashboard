@@ -4041,6 +4041,7 @@ function renderPastCoursesPage() {
             else if (ratio < 1.5) sustainabilityStatus = 'warning';
 
             return {
+                id: c.id,
                 handle: c.handle,
                 name: c.name,
                 type: typeInfo.type,
@@ -4110,7 +4111,7 @@ function renderPastCoursesTable() {
         else if (course.sustainabilityStatus === 'warning') { badgeColor = '#f59e0b'; badgeText = 'Attenzione'; }
         const sustainabilityBadge = `<span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${badgeText}</span>`;
 
-        html += `<tr style="${course.status === 'da_fare' ? 'background: #fafbff;' : course.status === 'in_corso' ? 'background: #fffbeb;' : ''}">
+        html += `<tr onclick="window.currentCourseId='${course.id}'; openCourseDetail('${course.id}')" style="cursor: pointer; ${course.status === 'da_fare' ? 'background: #fafbff;' : course.status === 'in_corso' ? 'background: #fffbeb;' : ''}" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='${course.status === 'da_fare' ? '#fafbff' : course.status === 'in_corso' ? '#fffbeb' : ''}'">
             <td>${statusBadge}</td>
             <td><span style="display: inline-block; background: ${typeColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${typeBadge}</span></td>
             <td>${course.city}</td>
