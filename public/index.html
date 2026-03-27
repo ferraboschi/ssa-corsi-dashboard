@@ -2488,6 +2488,8 @@ function renderCourseDetailPage() {
                 if (educatorTag) educator = educatorTag.replace('educator:', '').trim();
             }
             educator = educator || 'Da assegnare';
+            const educatorInitials = educator !== 'Da assegnare' ? educator.split(' ').map(w => w[0]).join('').toUpperCase() : '?';
+            const educatorObj = { name: educator, region: '', initials: educatorInitials };
             const costs = COURSE_COSTS[raw.handle] || {
                 educator_fee: isCert ? 600 : 200,
                 ssa_fee: isCert ? 900 : 300,
@@ -2508,7 +2510,8 @@ function renderCourseDetailPage() {
                 dates: dateInfo ? dateInfo.display : '',
                 startDate: dateInfo ? dateInfo.start : '',
                 endDate: dateInfo ? dateInfo.end : '',
-                educator,
+                educator: educatorObj,
+                educatorName: educator,
                 price,
                 minStudents: typeInfo.type.includes('online') ? 3 : 6,
                 maxStudents: typeInfo.type.includes('online') ? 50 : 20,
