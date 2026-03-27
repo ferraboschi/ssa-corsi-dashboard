@@ -2465,7 +2465,12 @@ function renderCourseDetailPage() {
     const courseId = window.currentCourseId;
     if (!courseId) return;
 
-    const c = COURSES.find(x => x.id === courseId);
+    let c = COURSES.find(x => x.id === courseId);
+    // If not in active COURSES, search all cached courses (includes past courses)
+    if (!c) {
+        const allCourses = getCached('courses') || [];
+        c = allCourses.find(x => x.id === courseId);
+    }
     if (!c) {
         document.getElementById('courseDetailContent').innerHTML =
             '<div class="empty-state"><i class="fas fa-exclamation-circle" style="font-size: 32px;"></i><h3>Corso non trovato</h3></div>';
