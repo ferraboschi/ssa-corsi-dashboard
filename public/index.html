@@ -2467,9 +2467,60 @@ function renderCourseDetailPage() {
 
     let c = COURSES.find(x => x.id === courseId);
     // If not in active COURSES, search all cached courses (includes past courses)
+    // Raw cached data has a different shape, so normalize it to match COURSES format
     if (!c) {
         const allCourses = getCached('courses') || [];
-        c = allCourses.find(x => x.id === courseId);
+        const raw = allCourses.find(x => x.handle === courseId);
+        if (raw) {
+            const typeInfo = parseCourseType(raw.handle, raw.title);
+            const city = parseCourseCity(raw.handle, raw.title);
+            const dateInfo = parseCourseDate(raw.handle);
+            const location = raw.handle.includes('online') ? 'Online' : city;
+            const rawStudents = raw.students || [];
+            const students = deduplicateStudents(rawStudents);
+            const isCert = typeInfo.type.includes('certificato');
+            let educator = '';
+            if (raw.educatorName) educator = raw.educatorName;
+            if (!educator && COURSE_COSTS[raw.handle]?.educatorName) educator = COURSE_COSTS[raw.handle].educatorName;
+            if (!educator && raw.tags) {
+                const tagsArray = typeof raw.tags === 'string' ? raw.tags.split(',').map(t => t.trim()) : (Array.isArray(raw.tags) ? raw.tags : []);
+                const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+                if (educatorTag) educator = educatorTag.replace('educator:', '').trim();
+            }
+            educator = educator || 'Da assegnare';
+            const costs = COURSE_COSTS[raw.handle] || {
+                educator_fee: isCert ? 600 : 200,
+                ssa_fee: isCert ? 900 : 300,
+                food: typeInfo.type.includes('online') ? 0 : 250,
+                sake: typeInfo.type.includes('online') ? 150 : 300,
+                adv: 200
+            };
+            const totalCosts = getTotalCosts(costs);
+            const price = raw.price || (students.length > 0 ? (parseFloat(students[0].amount) || 0) : 0);
+            c = {
+                id: raw.handle,
+                shopifyId: raw.shopifyId,
+                name: raw.title,
+                handle: raw.handle,
+                city,
+                location,
+                courseType: typeInfo,
+                dates: dateInfo ? dateInfo.display : '',
+                startDate: dateInfo ? dateInfo.start : '',
+                endDate: dateInfo ? dateInfo.end : '',
+                educator,
+                price,
+                minStudents: typeInfo.type.includes('online') ? 3 : 6,
+                maxStudents: typeInfo.type.includes('online') ? 50 : 20,
+                costs,
+                totalCosts,
+                students,
+                enrollmentCount: raw.enrollmentCount || 0,
+                revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
+                tags: raw.tags || ''
+            };
+            c.sustainability = computeSustainability(c);
+        }
     }
     if (!c) {
         document.getElementById('courseDetailContent').innerHTML =
@@ -4046,7 +4097,7 @@ function renderPastCoursesPage() {
             else if (ratio < 1.5) sustainabilityStatus = 'warning';
 
             return {
-                id: c.id,
+                id: c.handle,
                 handle: c.handle,
                 name: c.name,
                 type: typeInfo.type,
