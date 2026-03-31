@@ -4078,6 +4078,22 @@ let pastFilters = { city: '', educator: '', month: '', year: '', tab: 'all' };
 
 function renderPastCoursesPage() {
     const allCoursesData = getCached('courses') || [];
+
+    // If no cached data, trigger a load and re-render when ready
+    if (allCoursesData.length === 0 && !window._pastCoursesLoading) {
+        window._pastCoursesLoading = true;
+        loadApiData().then(() => {
+            window._pastCoursesLoading = false;
+            renderPastCoursesPage();
+        }).catch(() => { window._pastCoursesLoading = false; });
+        // Show loading state
+        const tableBody = document.querySelector('#pastCoursesTable tbody');
+        if (tableBody) tableBody.innerHTML = '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text-light);"><i class="fas fa-spinner fa-spin"></i> Caricamento corsi...</td></tr>';
+        const countEl = document.getElementById('pastFilterCount');
+        if (countEl) countEl.textContent = 'Caricamento...';
+        return;
+    }
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
