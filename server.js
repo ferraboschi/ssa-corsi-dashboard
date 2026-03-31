@@ -629,7 +629,7 @@ async function fetchCourseMetafields(courseProducts) {
   }
 
   const metafieldMap = {};
-  const MFBATCH = 4;
+  const MFBATCH = 8; // Increased batch size for faster loading
   for (let i = 0; i < courseProducts.length; i += MFBATCH) {
     const batch = courseProducts.slice(i, i + MFBATCH);
     await Promise.all(batch.map(async (product) => {
@@ -671,7 +671,7 @@ async function fetchCourseMetafields(courseProducts) {
     }));
     // Small delay between batches to avoid Shopify rate limits
     if (i + MFBATCH < courseProducts.length) {
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 150));
     }
   }
 
@@ -689,6 +689,15 @@ async function fetchCourseMetafields(courseProducts) {
 // ============================================================================
 app.get('/api/courses', async (req, res) => {
   try {
+    // Check full response cache first (avoids all processing on repeated requests)
+    const fullCacheKey = 'api_courses_full_response';
+    const cachedResponse = getCache(fullCacheKey);
+    if (cachedResponse && !req.query.nocache) {
+      res.set('Cache-Control', 'private, max-age=120');
+      return res.json(cachedResponse);
+    }
+
+    const apiStart = Date.now();
     // Parallel fetch: Shopify products + orders + educator profiles + Airtable registrations
     const [products, orders, educatorProfiles, registrationLookup] = await Promise.all([
       fetchAllShopifyProducts(),
@@ -696,6 +705,7 @@ app.get('/api/courses', async (req, res) => {
       fetchEducatorProfiles(),
       fetchRegistrationStudents()
     ]);
+    console.log(`API parallel fetch took ${Date.now() - apiStart}ms`);
 
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
@@ -851,8 +861,13 @@ app.get('/api/courses', async (req, res) => {
     // Enrich students with Twilio Lookup v2 WhatsApp data
     await enrichStudentsWithWhatsApp(courses);
 
+    const responseData = { success: true, count: courses.length, data: courses };
+    // Cache the full response for 5 minutes
+    setCache(fullCacheKey, responseData, 300);
+    console.log(`API /api/courses total time: ${Date.now() - apiStart}ms (${courses.length} courses)`);
+
     res.set('Cache-Control', 'private, max-age=120'); // 2 min browser cache
-    res.json({ success: true, count: courses.length, data: courses });
+    res.json(responseData);
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -1382,6 +1397,16 @@ app.post('/api/name-overrides/:courseId', (req, res) => {
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true });
+});
+
+// Toggle "fatturato" (invoiced) status for a course
+app.post('/api/fatturato/:courseId', (req, res) => {
+  const { courseId } = req.params;
+  const { fatturato } = req.body; // boolean
+  if (!courseCosts[courseId]) courseCosts[courseId] = {};
+  courseCosts[courseId].fatturato = !!fatturato;
+  saveCostsToFile(courseCosts);
+  res.json({ success: true, fatturato: !!fatturato });
 });
 
 // ============================================================================
@@ -2264,6 +2289,27 @@ async function startServer() {
     console.log(`Shopify Store: ${SHOPIFY_STORE}`);
     console.log(`Airtable Base: ${AIRTABLE_BASE_ID}`);
     console.log(`Airtable Persistence: ${airtablePersistenceActive ? 'ACTIVE' : 'DISABLED (file-only)'}`);
+
+    // Warm-up: pre-fetch and cache all Shopify + Airtable data in background
+    // so the first user request is fast (doesn't need to wait for cold API calls)
+    console.log('Starting background warm-up of API data...');
+    (async () => {
+      try {
+        const warmStart = Date.now();
+        const [products, orders, , registrationLookup] = await Promise.all([
+          fetchAllShopifyProducts(),
+          fetchAllShopifyOrders(),
+          fetchEducatorProfiles(),
+          fetchRegistrationStudents()
+        ]);
+        // Also pre-warm metafields (the slowest part)
+        const courseProducts = products.filter(isCourseProduct);
+        await fetchCourseMetafields(courseProducts);
+        console.log(`Warm-up complete in ${Date.now() - warmStart}ms: ${products.length} products, ${orders.length} orders, ${courseProducts.length} course metafields cached`);
+      } catch (err) {
+        console.log('Warm-up failed (non-critical):', err.message);
+      }
+    })();
   });
 }
 

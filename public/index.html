@@ -1516,10 +1516,37 @@
     <!-- PAST COURSES PAGE -->
     <div id="page-passati" class="page-hidden">
         <div class="section-title"><i class="fas fa-history"></i> Storico Corsi</div>
+
+        <!-- Fatturati / Da Fatturare tabs -->
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button id="pastTabAll" onclick="setPastFilter('tab','all')" style="padding: 6px 16px; border-radius: 20px; border: 1px solid #d1d5db; background: #1e40af; color: white; font-size: 12px; font-weight: 600; cursor: pointer;">Tutti</button>
+            <button id="pastTabFatturati" onclick="setPastFilter('tab','fatturati')" style="padding: 6px 16px; border-radius: 20px; border: 1px solid #d1d5db; background: white; color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;">Fatturati</button>
+            <button id="pastTabDaFatturare" onclick="setPastFilter('tab','da_fatturare')" style="padding: 6px 16px; border-radius: 20px; border: 1px solid #d1d5db; background: white; color: #374151; font-size: 12px; font-weight: 600; cursor: pointer;">Da Fatturare</button>
+        </div>
+
+        <!-- Filters row -->
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+            <select id="pastFilterCity" onchange="setPastFilter('city', this.value)" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                <option value="">Tutte le città</option>
+            </select>
+            <select id="pastFilterEducator" onchange="setPastFilter('educator', this.value)" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                <option value="">Tutti gli educator</option>
+            </select>
+            <select id="pastFilterMonth" onchange="setPastFilter('month', this.value)" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                <option value="">Tutti i mesi</option>
+            </select>
+            <select id="pastFilterYear" onchange="setPastFilter('year', this.value)" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                <option value="">Tutti gli anni</option>
+            </select>
+            <button onclick="resetPastFilters()" style="padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: #f9fafb; cursor: pointer; color: #6b7280;"><i class="fas fa-times"></i> Reset</button>
+            <span id="pastFilterCount" style="font-size: 12px; color: #6b7280; margin-left: auto;"></span>
+        </div>
+
         <div class="card">
             <div class="card-body" style="padding: 0;">
                 <table class="data-table" id="pastCoursesTable">
                     <thead><tr>
+                        <th style="width: 40px; text-align: center;">Fatt.</th>
                         <th>Stato</th>
                         <th>Tipo Corso</th>
                         <th>Città</th>
@@ -4038,12 +4065,16 @@ function copyWhatsAppInvite(courseHandle, courseName) {
 }
 
 // =============================================
-// PAST COURSES RENDERING
+// PAST COURSES RENDERING (with filters & fatturato)
 // =============================================
 
-// Sorting state for past courses
-let pastCourseSortDir = 'desc'; // desc = most recent first
-let pastCoursesData = [];
+let pastCourseSortDir = 'desc';
+let pastCoursesData = []; // all past courses (unfiltered)
+let pastCoursesFiltered = []; // after filters applied
+const MONTH_NAMES_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+// Active filters
+let pastFilters = { city: '', educator: '', month: '', year: '', tab: 'all' };
 
 function renderPastCoursesPage() {
     const allCoursesData = getCached('courses') || [];
@@ -4060,17 +4091,12 @@ function renderPastCoursesPage() {
             const city = parseCourseCity(c.handle, c.title);
             const dateInfo = parseCourseDate(c.handle);
 
-            // Determine status: Eseguito / In Corso / Da fare
             const startDate = new Date(dateInfo.start + 'T00:00:00');
             const endDate = new Date(dateInfo.end + 'T23:59:59');
             let status = 'eseguito';
-            if (startDate > today) {
-                status = 'da_fare';
-            } else if (endDate >= today) {
-                status = 'in_corso';
-            }
+            if (startDate > today) status = 'da_fare';
+            else if (endDate >= today) status = 'in_corso';
 
-            // Get educator name
             let educatorName = '';
             if (c.educatorName) educatorName = c.educatorName;
             if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
@@ -4086,18 +4112,18 @@ function renderPastCoursesPage() {
             }
             educatorName = educatorName || 'Da assegnare';
 
-            // Get students and revenue
             const rawStudents = c.students || [];
             const students = deduplicateStudents(rawStudents);
             const revenue = students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0);
 
-            // Compute sustainability
             const costs = COURSE_COSTS[c.handle] || {};
             const totalCosts = getTotalCosts(costs);
             const ratio = totalCosts > 0 ? revenue / totalCosts : 0;
             let sustainabilityStatus = 'safe';
             if (ratio < 1.2) sustainabilityStatus = 'critical';
             else if (ratio < 1.5) sustainabilityStatus = 'warning';
+
+            const fatturato = !!(COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].fatturato);
 
             return {
                 id: c.handle,
@@ -4108,19 +4134,112 @@ function renderPastCoursesPage() {
                 startDate: dateInfo?.start || '',
                 endDate: dateInfo?.end || '',
                 startDateObj: startDate,
+                startMonth: startDate.getMonth(),
+                startYear: startDate.getFullYear(),
                 educatorName: educatorName,
                 studentCount: students.length,
                 revenue: revenue,
                 sustainabilityStatus: sustainabilityStatus,
-                status: status
+                status: status,
+                fatturato: fatturato
             };
         });
 
-    // Sort by date (default: most recent first)
-    pastCoursesData.sort((a, b) => {
+    // Populate filter dropdowns
+    populatePastFilters();
+
+    // Apply filters and sort
+    applyPastFilters();
+}
+
+function populatePastFilters() {
+    // Cities
+    const cities = [...new Set(pastCoursesData.map(c => c.city).filter(Boolean))].sort();
+    const citySelect = document.getElementById('pastFilterCity');
+    if (citySelect) {
+        const currentVal = citySelect.value;
+        citySelect.innerHTML = '<option value="">Tutte le città</option>' +
+            cities.map(c => `<option value="${c}" ${c === currentVal ? 'selected' : ''}>${c}</option>`).join('');
+    }
+
+    // Educators
+    const educators = [...new Set(pastCoursesData.map(c => c.educatorName).filter(n => n && n !== 'Da assegnare'))].sort();
+    const educatorSelect = document.getElementById('pastFilterEducator');
+    if (educatorSelect) {
+        const currentVal = educatorSelect.value;
+        educatorSelect.innerHTML = '<option value="">Tutti gli educator</option>' +
+            educators.map(e => `<option value="${e}" ${e === currentVal ? 'selected' : ''}>${e}</option>`).join('');
+    }
+
+    // Months
+    const monthSelect = document.getElementById('pastFilterMonth');
+    if (monthSelect) {
+        const currentVal = monthSelect.value;
+        monthSelect.innerHTML = '<option value="">Tutti i mesi</option>' +
+            MONTH_NAMES_IT.map((name, i) => `<option value="${i}" ${String(i) === currentVal ? 'selected' : ''}>${name}</option>`).join('');
+    }
+
+    // Years
+    const years = [...new Set(pastCoursesData.map(c => c.startYear))].sort((a, b) => b - a);
+    const yearSelect = document.getElementById('pastFilterYear');
+    if (yearSelect) {
+        const currentVal = yearSelect.value;
+        yearSelect.innerHTML = '<option value="">Tutti gli anni</option>' +
+            years.map(y => `<option value="${y}" ${String(y) === currentVal ? 'selected' : ''}>${y}</option>`).join('');
+    }
+}
+
+function setPastFilter(key, value) {
+    pastFilters[key] = value;
+
+    // Update tab button styles
+    if (key === 'tab') {
+        ['All', 'Fatturati', 'DaFatturare'].forEach(name => {
+            const btn = document.getElementById('pastTab' + name);
+            if (btn) {
+                const isActive = (name === 'All' && value === 'all') ||
+                                 (name === 'Fatturati' && value === 'fatturati') ||
+                                 (name === 'DaFatturare' && value === 'da_fatturare');
+                btn.style.background = isActive ? '#1e40af' : 'white';
+                btn.style.color = isActive ? 'white' : '#374151';
+            }
+        });
+    }
+
+    applyPastFilters();
+}
+
+function resetPastFilters() {
+    pastFilters = { city: '', educator: '', month: '', year: '', tab: 'all' };
+    document.getElementById('pastFilterCity').value = '';
+    document.getElementById('pastFilterEducator').value = '';
+    document.getElementById('pastFilterMonth').value = '';
+    document.getElementById('pastFilterYear').value = '';
+    setPastFilter('tab', 'all');
+}
+
+function applyPastFilters() {
+    pastCoursesFiltered = pastCoursesData.filter(c => {
+        if (pastFilters.city && c.city !== pastFilters.city) return false;
+        if (pastFilters.educator && c.educatorName !== pastFilters.educator) return false;
+        if (pastFilters.month !== '' && String(c.startMonth) !== String(pastFilters.month)) return false;
+        if (pastFilters.year && String(c.startYear) !== String(pastFilters.year)) return false;
+        if (pastFilters.tab === 'fatturati' && !c.fatturato) return false;
+        if (pastFilters.tab === 'da_fatturare' && c.fatturato) return false;
+        return true;
+    });
+
+    // Sort
+    pastCoursesFiltered.sort((a, b) => {
         const da = new Date(a.startDate), db = new Date(b.startDate);
         return pastCourseSortDir === 'desc' ? db - da : da - db;
     });
+
+    // Update count
+    const countEl = document.getElementById('pastFilterCount');
+    if (countEl) {
+        countEl.textContent = `${pastCoursesFiltered.length} di ${pastCoursesData.length} corsi`;
+    }
 
     renderPastCoursesTable();
 }
@@ -4132,25 +4251,47 @@ function sortPastCourses(column) {
         const th = document.getElementById('pastSortDate');
         if (th) th.innerHTML = `Date <i class="fas ${icon}" style="font-size: 10px;"></i>`;
     }
-    pastCoursesData.sort((a, b) => {
+    pastCoursesFiltered.sort((a, b) => {
         const da = new Date(a.startDate), db = new Date(b.startDate);
         return pastCourseSortDir === 'desc' ? db - da : da - db;
     });
     renderPastCoursesTable();
 }
 
+async function toggleFatturato(handle, checkbox, event) {
+    event.stopPropagation(); // Don't trigger row click
+    const newVal = checkbox.checked;
+    try {
+        await fetch(`/api/fatturato/${handle}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fatturato: newVal })
+        });
+        // Update local data
+        if (!COURSE_COSTS[handle]) COURSE_COSTS[handle] = {};
+        COURSE_COSTS[handle].fatturato = newVal;
+        const item = pastCoursesData.find(c => c.handle === handle);
+        if (item) item.fatturato = newVal;
+        const filteredItem = pastCoursesFiltered.find(c => c.handle === handle);
+        if (filteredItem) filteredItem.fatturato = newVal;
+        showToast(newVal ? 'Segnato come fatturato' : 'Rimosso da fatturati');
+    } catch (e) {
+        checkbox.checked = !newVal; // revert
+        showError('Errore nel salvataggio');
+    }
+}
+
 function renderPastCoursesTable() {
     const tableBody = document.querySelector('#pastCoursesTable tbody');
     if (!tableBody) return;
 
-    if (pastCoursesData.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="8" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso trovato</td></tr>';
+    if (pastCoursesFiltered.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text-light);">Nessun corso trovato</td></tr>';
         return;
     }
 
     let html = '';
-    pastCoursesData.forEach(course => {
-        // Status badge
+    pastCoursesFiltered.forEach(course => {
         let statusIcon, statusText, statusBg, statusColor;
         if (course.status === 'da_fare') {
             statusIcon = 'fa-clock'; statusText = 'Da fare'; statusBg = '#eff6ff'; statusColor = '#2563eb';
@@ -4170,7 +4311,10 @@ function renderPastCoursesTable() {
         else if (course.sustainabilityStatus === 'warning') { badgeColor = '#f59e0b'; badgeText = 'Attenzione'; }
         const sustainabilityBadge = `<span style="display: inline-block; background: ${badgeColor}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${badgeText}</span>`;
 
+        const checkedAttr = course.fatturato ? 'checked' : '';
+
         html += `<tr onclick="window.currentCourseId='${course.id}'; openCourseDetail('${course.id}')" style="cursor: pointer; ${course.status === 'da_fare' ? 'background: #fafbff;' : course.status === 'in_corso' ? 'background: #fffbeb;' : ''}" onmouseover="this.style.background='#f0f4ff'" onmouseout="this.style.background='${course.status === 'da_fare' ? '#fafbff' : course.status === 'in_corso' ? '#fffbeb' : ''}'">
+            <td style="text-align: center;" onclick="event.stopPropagation()"><input type="checkbox" ${checkedAttr} onchange="toggleFatturato('${course.handle}', this, event)" style="width: 16px; height: 16px; cursor: pointer; accent-color: #16a34a;" title="${course.fatturato ? 'Fatturato' : 'Da fatturare'}"></td>
             <td>${statusBadge}</td>
             <td><span style="display: inline-block; background: ${typeColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${typeBadge}</span></td>
             <td>${course.city}</td>
