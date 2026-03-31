@@ -479,7 +479,8 @@ function isCourseProduct(product) {
   // Exclude known non-course products
   if (handle.startsWith('canvas-') || handle.startsWith('poster-') || handle.startsWith('puzzle-') ||
       handle.startsWith('bottiglia-') || handle.startsWith('gift-card') || handle.startsWith('guida-') ||
-      handle === 'corsi-ed-eventi-2024-25' || handle.startsWith('copy-of-')) {
+      handle === 'corsi-ed-eventi-2024-25' || handle.startsWith('copy-of-') ||
+      handle.startsWith('bundle-') || handle.startsWith('pacchetto-')) {
     return false;
   }
   return COURSE_HANDLE_PATTERNS.some(pattern => handle.includes(pattern));

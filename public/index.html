@@ -1838,7 +1838,7 @@ function parseCourseCity(handle, title) {
     return '';
 }
 
-function parseCourseDate(handle) {
+function parseCourseDate(handle, courseObj) {
     if (CONFIG.DATE_MAP[handle]) return CONFIG.DATE_MAP[handle];
 
     const months = {
@@ -1857,6 +1857,21 @@ function parseCourseDate(handle) {
             }
         }
     }
+
+    // Fallback: use Shopify created_at date for courses without dates in handle (e.g. Masterclass)
+    if (courseObj) {
+        const fallbackDate = courseObj.created_at || courseObj.published_at || courseObj.updated_at;
+        if (fallbackDate) {
+            const d = new Date(fallbackDate);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${m}-${day}`;
+            const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+            return { start: dateStr, end: dateStr, display: `${day} ${monthNames[d.getMonth()]} ${y}`, fromShopify: true };
+        }
+    }
+
     return null;
 }
 
@@ -2069,7 +2084,7 @@ async function loadApiData() {
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
-            const dateInfo = parseCourseDate(c.handle);
+            const dateInfo = parseCourseDate(c.handle, c);
             // Read educator: 1) Shopify metafield, 2) saved config (Airtable), 3) Shopify tags, 4) default
             let educatorName = '';
             // Priority 1: Shopify product metafield "Sake Educator" (from server)
@@ -2501,7 +2516,7 @@ function renderCourseDetailPage() {
         if (raw) {
             const typeInfo = parseCourseType(raw.handle, raw.title);
             const city = parseCourseCity(raw.handle, raw.title);
-            const dateInfo = parseCourseDate(raw.handle);
+            const dateInfo = parseCourseDate(raw.handle, raw);
             const location = raw.handle.includes('online') ? 'Online' : city;
             const rawStudents = raw.students || [];
             const students = deduplicateStudents(rawStudents);
@@ -3726,7 +3741,7 @@ function openStudentModal(email) {
 
         const typeInfo = parseCourseType(c.handle, c.title);
         const city = parseCourseCity(c.handle, c.title);
-        const dateInfo = parseCourseDate(c.handle);
+        const dateInfo = parseCourseDate(c.handle, c);
         const isFuture = isFutureCourse(c.handle);
 
         // Resolve educator name
@@ -4112,13 +4127,13 @@ function renderPastCoursesPage() {
 
     pastCoursesData = allCoursesData
         .filter(c => {
-            const dateInfo = parseCourseDate(c.handle);
+            const dateInfo = parseCourseDate(c.handle, c);
             return !!dateInfo;
         })
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title);
-            const dateInfo = parseCourseDate(c.handle);
+            const dateInfo = parseCourseDate(c.handle, c);
 
             const startDate = new Date(dateInfo.start + 'T00:00:00');
             const endDate = new Date(dateInfo.end + 'T23:59:59');
