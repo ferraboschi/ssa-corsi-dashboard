@@ -4079,19 +4079,32 @@ let pastFilters = { city: '', educator: '', month: '', year: '', tab: 'all' };
 function renderPastCoursesPage() {
     const allCoursesData = getCached('courses') || [];
 
-    // If no cached data, trigger a load and re-render when ready
-    if (allCoursesData.length === 0 && !window._pastCoursesLoading) {
-        window._pastCoursesLoading = true;
-        loadApiData().then(() => {
-            window._pastCoursesLoading = false;
-            renderPastCoursesPage();
-        }).catch(() => { window._pastCoursesLoading = false; });
-        // Show loading state
+    // If no cached data, show loading spinner and poll until data arrives
+    if (allCoursesData.length === 0) {
         const tableBody = document.querySelector('#pastCoursesTable tbody');
         if (tableBody) tableBody.innerHTML = '<tr><td colspan="9" style="padding: 24px; text-align: center; color: var(--text-light);"><i class="fas fa-spinner fa-spin"></i> Caricamento corsi...</td></tr>';
         const countEl = document.getElementById('pastFilterCount');
         if (countEl) countEl.textContent = 'Caricamento...';
+
+        // Poll every 2 seconds until data is available (loadApiData from window.onload will fill the cache)
+        if (!window._pastCoursesPolling) {
+            window._pastCoursesPolling = setInterval(() => {
+                const data = getCached('courses');
+                if (data && data.length > 0 && currentPage === 'passati') {
+                    clearInterval(window._pastCoursesPolling);
+                    window._pastCoursesPolling = null;
+                    renderPastCoursesPage();
+                }
+            }, 2000);
+            // Also trigger a load if none is running (e.g. navigated directly via URL)
+            if (!apiStatus.courses) loadApiData();
+        }
         return;
+    }
+    // Clear polling if data arrived
+    if (window._pastCoursesPolling) {
+        clearInterval(window._pastCoursesPolling);
+        window._pastCoursesPolling = null;
     }
 
     const today = new Date();
