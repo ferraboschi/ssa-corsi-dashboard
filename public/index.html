@@ -1821,7 +1821,7 @@ function parseCourseType(handle, title) {
     return { type: 'altro-' + delivery, level: 'certificato', levelLabel: 'Altro', delivery, deliveryLabel, deliveryIcon, label: deliveryLabel + ' Altro', color: 'certificato' };
 }
 
-function parseCourseCity(handle, title) {
+function parseCourseCity(handle, title, tags) {
     const cities = {
         'milano': 'Milano', 'roma': 'Roma', 'torino': 'Torino',
         'napoli': 'Napoli', 'bolzano': 'Bolzano', 'vercelli': 'Vercelli',
@@ -1831,7 +1831,8 @@ function parseCourseCity(handle, title) {
     };
     const h = (handle || '').toLowerCase();
     const t = (title || '').toLowerCase();
-    if (h.includes('online') || t.includes('online')) return 'Online';
+    const tagStr = (typeof tags === 'string' ? tags : (Array.isArray(tags) ? tags.join(',') : '')).toLowerCase();
+    if (h.includes('online') || t.includes('online') || tagStr.includes('online')) return 'Online';
     for (const [key, city] of Object.entries(cities)) {
         if (h.includes(key) || t.includes(key)) return city;
     }
@@ -2083,7 +2084,7 @@ async function loadApiData() {
         .filter(c => isFutureCourse(c.handle))
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
-            const city = parseCourseCity(c.handle, c.title);
+            const city = parseCourseCity(c.handle, c.title, c.tags);
             const dateInfo = parseCourseDate(c.handle, c);
             // Read educator: 1) Shopify metafield, 2) saved config (Airtable), 3) Shopify tags, 4) default
             let educatorName = '';
@@ -2515,9 +2516,9 @@ function renderCourseDetailPage() {
         const raw = allCourses.find(x => x.handle === courseId);
         if (raw) {
             const typeInfo = parseCourseType(raw.handle, raw.title);
-            const city = parseCourseCity(raw.handle, raw.title);
+            const city = parseCourseCity(raw.handle, raw.title, raw.tags);
             const dateInfo = parseCourseDate(raw.handle, raw);
-            const location = raw.handle.includes('online') ? 'Online' : city;
+            const location = city === 'Online' ? 'Online' : (raw.handle.includes('online') ? 'Online' : city);
             const rawStudents = raw.students || [];
             const students = deduplicateStudents(rawStudents);
             const isCert = typeInfo.type.includes('certificato');
@@ -3740,7 +3741,7 @@ function openStudentModal(email) {
         if (!match) return;
 
         const typeInfo = parseCourseType(c.handle, c.title);
-        const city = parseCourseCity(c.handle, c.title);
+        const city = parseCourseCity(c.handle, c.title, c.tags);
         const dateInfo = parseCourseDate(c.handle, c);
         const isFuture = isFutureCourse(c.handle);
 
@@ -4132,7 +4133,7 @@ function renderPastCoursesPage() {
         })
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
-            const city = parseCourseCity(c.handle, c.title);
+            const city = parseCourseCity(c.handle, c.title, c.tags);
             const dateInfo = parseCourseDate(c.handle, c);
 
             const startDate = new Date(dateInfo.start + 'T00:00:00');
@@ -4346,8 +4347,11 @@ function renderPastCoursesTable() {
         }
         const statusBadge = `<span style="display: inline-flex; align-items: center; gap: 4px; background: ${statusBg}; color: ${statusColor}; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap;"><i class="fas ${statusIcon}" style="font-size: 10px;"></i> ${statusText}</span>`;
 
-        const typeBadge = course.type.includes('certificato') ? 'Certificato' : 'Introduttivo';
-        const typeColor = course.type.includes('certificato') ? '#2563eb' : '#059669';
+        let typeBadge = 'Altro', typeColor = '#6b7280';
+        if (course.type.includes('certificato')) { typeBadge = 'Certificato'; typeColor = '#2563eb'; }
+        else if (course.type.includes('introduttivo')) { typeBadge = 'Introduttivo'; typeColor = '#f59e0b'; }
+        else if (course.type.includes('masterclass') || course.type.includes('mixology') || course.type.includes('bartending')) { typeBadge = 'Masterclass'; typeColor = '#059669'; }
+        else if (course.type.includes('shochu')) { typeBadge = 'Shochu'; typeColor = '#7c3aed'; }
         const dateRange = `${new Date(course.startDate).toLocaleDateString('it-IT')} - ${new Date(course.endDate).toLocaleDateString('it-IT')}`;
 
         let badgeColor = '#10b981', badgeText = 'Sostenibile';
