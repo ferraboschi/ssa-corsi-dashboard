@@ -1418,7 +1418,7 @@ app.get('/api/export/sake/:handle', async (req, res) => {
     program.forEach(group => {
       (group.sakes || []).forEach(sake => {
         ws.addRow([
-          sake.sku || '',
+          sake.code || sake.sku || '',
           sake.name || sake.title || '',
           sake.qty || 1
         ]);
