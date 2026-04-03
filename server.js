@@ -350,7 +350,7 @@ async function fetchAllShopifyProducts() {
     url = `/products.json?limit=250&since_id=${lastId}`;
   }
 
-  setCache(cacheKey, allProducts, 300);
+  setCache(cacheKey, allProducts, 900); // 15 min cache (products rarely change)
   return allProducts;
 }
 
@@ -373,7 +373,7 @@ async function fetchAllShopifyOrders() {
     url = `/orders.json?limit=250&status=any&since_id=${lastId}`;
   }
 
-  setCache(cacheKey, allOrders, 300);
+  setCache(cacheKey, allOrders, 600); // 10 min cache
   return allOrders;
 }
 
@@ -413,7 +413,7 @@ async function airtableFetch(endpoint, options = {}) {
 // AIRTABLE STUDENT REGISTRATION FORM — fetch & cache (5 min)
 // ============================================================================
 let _regCache = { data: null, ts: 0 };
-const REG_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const REG_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 async function fetchRegistrationStudents() {
   if (_regCache.data && Date.now() - _regCache.ts < REG_CACHE_TTL) {
@@ -621,7 +621,7 @@ function matchEducatorProfile(rawName, profiles) {
 // ============================================================================
 let cachedMetafieldMap = null;
 let metafieldMapCacheTime = 0;
-const METAFIELD_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const METAFIELD_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (metafields rarely change)
 
 async function fetchCourseMetafields(courseProducts) {
   // Return cached if fresh
@@ -630,7 +630,7 @@ async function fetchCourseMetafields(courseProducts) {
   }
 
   const metafieldMap = {};
-  const MFBATCH = 8; // Increased batch size for faster loading
+  const MFBATCH = 12; // Large batches for faster loading
   for (let i = 0; i < courseProducts.length; i += MFBATCH) {
     const batch = courseProducts.slice(i, i + MFBATCH);
     await Promise.all(batch.map(async (product) => {
@@ -672,7 +672,7 @@ async function fetchCourseMetafields(courseProducts) {
     }));
     // Small delay between batches to avoid Shopify rate limits
     if (i + MFBATCH < courseProducts.length) {
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 100));
     }
   }
 
@@ -859,16 +859,23 @@ app.get('/api/courses', async (req, res) => {
       });
     }
 
-    // Enrich students with Twilio Lookup v2 WhatsApp data
-    await enrichStudentsWithWhatsApp(courses);
+    // Apply cached Twilio data immediately (non-blocking — no new API calls)
+    applyCachedTwilioData(courses);
 
     const responseData = { success: true, count: courses.length, data: courses };
-    // Cache the full response for 5 minutes
-    setCache(fullCacheKey, responseData, 300);
+    // Cache the full response for 10 minutes
+    setCache(fullCacheKey, responseData, 600);
     console.log(`API /api/courses total time: ${Date.now() - apiStart}ms (${courses.length} courses)`);
 
     res.set('Cache-Control', 'private, max-age=120'); // 2 min browser cache
     res.json(responseData);
+
+    // Enrich Twilio data in background (doesn't block the response)
+    enrichStudentsWithWhatsApp(courses).then(() => {
+      // Update cache with enriched data
+      const enrichedData = { success: true, count: courses.length, data: courses };
+      setCache(fullCacheKey, enrichedData, 600);
+    }).catch(err => console.log('Background Twilio enrichment failed:', err.message));
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -1461,6 +1468,27 @@ async function checkSingleTwilioLookup(phoneWithPlus) {
     console.debug(`Twilio Lookup error for ${phoneWithPlus}:`, e.message);
     return null; // error - don't cache
   }
+}
+
+// Apply ONLY cached Twilio data (no API calls — instant)
+function applyCachedTwilioData(courses) {
+  if (!hasTwilioConfig()) return;
+  let applied = 0;
+  courses.forEach(course => {
+    (course.students || []).forEach(st => {
+      if (!st.phone) { st.hasWhatsApp = undefined; return; }
+      const phone = st.phone.trim();
+      if (!phone.startsWith('+')) { st.hasWhatsApp = undefined; return; }
+      if (twilioLookupCache[phone] !== undefined && twilioLookupTimestamps[phone] &&
+          Date.now() - twilioLookupTimestamps[phone] < TWILIO_CACHE_TTL) {
+        st.hasWhatsApp = twilioLookupCache[phone];
+        applied++;
+      } else {
+        st.hasWhatsApp = undefined;
+      }
+    });
+  });
+  console.log(`Applied ${applied} cached Twilio results`);
 }
 
 // Batch check: enrich an array of students with hasWhatsApp field
@@ -2297,19 +2325,58 @@ async function startServer() {
     (async () => {
       try {
         const warmStart = Date.now();
-        const [products, orders, , registrationLookup] = await Promise.all([
+        // Trigger a full /api/courses build so the first user request is instant
+        const fakeReq = { query: {} };
+        const fakeRes = {
+          set: () => {},
+          json: (data) => {
+            console.log(`Warm-up: /api/courses response ready (${data.count} courses) in ${Date.now() - warmStart}ms`);
+          },
+          status: () => ({ json: () => {} })
+        };
+        // Use internal route handler simulation - just fetch the data to populate all caches
+        const [products, orders, educatorProfiles, registrationLookup] = await Promise.all([
           fetchAllShopifyProducts(),
           fetchAllShopifyOrders(),
           fetchEducatorProfiles(),
           fetchRegistrationStudents()
         ]);
-        // Also pre-warm metafields (the slowest part)
         const courseProducts = products.filter(isCourseProduct);
         await fetchCourseMetafields(courseProducts);
-        console.log(`Warm-up complete in ${Date.now() - warmStart}ms: ${products.length} products, ${orders.length} orders, ${courseProducts.length} course metafields cached`);
+        console.log(`Warm-up phase 1 complete in ${Date.now() - warmStart}ms: ${products.length} products, ${orders.length} orders, ${courseProducts.length} course metafields cached`);
+
+        // Now trigger an actual /api/courses request to populate the full response cache
+        try {
+          const http = require('http');
+          http.get(`http://localhost:${PORT}/api/courses`, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+              console.log(`Warm-up phase 2: /api/courses response cached in ${Date.now() - warmStart}ms`);
+            });
+          }).on('error', () => {});
+        } catch (e) {}
       } catch (err) {
         console.log('Warm-up failed (non-critical):', err.message);
       }
+
+      // Auto-refresh cache every 8 minutes to keep data fresh
+      setInterval(async () => {
+        try {
+          console.log('Background cache refresh starting...');
+          const refreshStart = Date.now();
+          const http = require('http');
+          http.get(`http://localhost:${PORT}/api/courses?nocache=1`, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+              console.log(`Background cache refresh done in ${Date.now() - refreshStart}ms`);
+            });
+          }).on('error', () => {});
+        } catch (e) {
+          console.log('Background refresh error:', e.message);
+        }
+      }, 8 * 60 * 1000); // Every 8 minutes
     })();
   });
 }

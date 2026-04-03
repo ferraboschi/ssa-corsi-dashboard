@@ -1604,7 +1604,7 @@ window.fetch = async function(...args) {
 // TODO: Move these to Airtable or API in the future so changes don't require code edits
 // =============================================
 const CONFIG = {
-    CACHE_TTL: 5 * 60 * 1000, // 5 minutes
+    CACHE_TTL: 30 * 60 * 1000, // 30 minutes (avoids unnecessary re-fetches)
     DEBOUNCE_MS: 300,
     SAKE_PAGE_SIZE: 50,
 
