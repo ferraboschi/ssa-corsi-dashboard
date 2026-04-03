@@ -2745,6 +2745,16 @@ function renderCourseDetailPage() {
             <div class="program-hint">
                 <i class="fas fa-info-circle"></i> Stima: 1 bottiglia ogni 15 partecipanti
             </div>
+            <!-- Copy sake from another course -->
+            <div id="copySakeSection" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+                <i class="fas fa-copy" style="color: #0284c7; font-size: 14px;"></i>
+                <select id="copySakeSource" style="flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
+                    <option value="">Copia sake da un altro corso...</option>
+                </select>
+                <button onclick="copySakeFromCourse()" style="padding: 6px 14px; background: #0284c7; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'">
+                    <i class="fas fa-paste"></i> COPIA SAKE
+                </button>
+            </div>
             <div id="programContainer"></div>
             <div class="program-total" id="programTotal">Totale Sake Programma: €0.00</div>
             <button onclick="saveCourseDetail('${c.id}')" style="width: 100%; margin-top: 12px; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s;">
@@ -2851,7 +2861,16 @@ function renderCourseDetailPage() {
                     <button onclick="exportCourseExcel('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="padding: 8px 16px; background: #16a34a; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap;">Scarica .xlsx</button>
                 </div>
 
-                <!-- Card 2: WhatsApp Group -->
+                <!-- Card 2: Export Sake Program -->
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;">
+                    <div>
+                        <div style="font-weight: 600; font-size: 14px; color: #1e40af;"><i class="fas fa-wine-bottle"></i> Scarica Sake</div>
+                        <div style="font-size: 12px; color: #60a5fa;">File Excel con elenco sake del corso</div>
+                    </div>
+                    <button onclick="exportSakeExcel('${c.handle}', '${c.name.replace(/'/g, "\\'")}')" style="padding: 8px 16px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; white-space: nowrap;">Scarica Sake .xlsx</button>
+                </div>
+
+                <!-- Card 3: WhatsApp Group -->
                 <div style="padding: 12px 16px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px;">
                     <div style="margin-bottom: 10px;">
                         <div style="font-weight: 600; font-size: 14px; color: #166534;"><i class="fab fa-whatsapp"></i> Gruppo WhatsApp</div>
@@ -2972,6 +2991,33 @@ async function exportCourseExcel(handle, courseName) {
     } catch (e) {
         console.error('Export error:', e);
         showError('Errore nell\'export');
+    }
+}
+
+async function exportSakeExcel(handle, courseName) {
+    // Check if program has any sake
+    const program = COURSE_COSTS[handle]?.program || [];
+    const totalSakes = program.reduce((sum, g) => sum + (g.sakes?.length || 0), 0);
+    if (totalSakes === 0) {
+        showToast('Nessun sake nel programma di questo corso');
+        return;
+    }
+    showToast('Generazione Excel Sake...');
+    try {
+        const resp = await fetch(`/api/export/sake/${handle}`);
+        if (!resp.ok) { showError('Errore nell\'export sake'); return; }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = courseName.replace(/[^a-zA-Z0-9àèéìòù\s-]/g, '').replace(/\s+/g, '-').substring(0, 50);
+        a.download = `sake-${safeName}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('File Sake Excel scaricato');
+    } catch (e) {
+        console.error('Sake export error:', e);
+        showError('Errore nell\'export sake');
     }
 }
 
@@ -3227,8 +3273,79 @@ function renderProgram() {
 
     document.getElementById('programContainer').innerHTML = html;
     updateProgramTotal();
+    populateCopySakeDropdown();
 
     // Inline event handler helpers (called from onclick/onchange attributes)
+}
+
+function populateCopySakeDropdown() {
+    const select = document.getElementById('copySakeSource');
+    if (!select) return;
+    const currentHandle = COURSES.find(x => x.id === window.currentCourseId)?.handle;
+
+    // Collect all courses that have sake programs (from COURSE_COSTS)
+    const coursesWithSake = [];
+    for (const [handle, costs] of Object.entries(COURSE_COSTS)) {
+        if (handle === currentHandle) continue;
+        const program = costs.program || [];
+        const totalSakes = program.reduce((sum, g) => sum + (g.sakes?.length || 0), 0);
+        if (totalSakes > 0) {
+            // Find course name from COURSES or cached data
+            let name = handle;
+            const c = COURSES.find(x => x.handle === handle);
+            if (c) name = c.name || c.handle;
+            else {
+                const allCourses = getCached('courses') || [];
+                const raw = allCourses.find(x => x.handle === handle);
+                if (raw) name = raw.title || handle;
+            }
+            coursesWithSake.push({ handle, name, sakeCount: totalSakes });
+        }
+    }
+
+    // Sort by name
+    coursesWithSake.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Build options
+    select.innerHTML = '<option value="">Copia sake da un altro corso...</option>';
+    coursesWithSake.forEach(c => {
+        select.innerHTML += `<option value="${c.handle}">${c.name} (${c.sakeCount} sake)</option>`;
+    });
+
+    // Hide section if no courses with sake exist
+    const section = document.getElementById('copySakeSection');
+    if (section) section.style.display = coursesWithSake.length > 0 ? 'flex' : 'none';
+}
+
+function copySakeFromCourse() {
+    const select = document.getElementById('copySakeSource');
+    const sourceHandle = select?.value;
+    if (!sourceHandle) {
+        showToast('Seleziona un corso da cui copiare');
+        return;
+    }
+
+    const currentCourse = COURSES.find(x => x.id === window.currentCourseId);
+    if (!currentCourse) return;
+
+    const sourceProgram = COURSE_COSTS[sourceHandle]?.program;
+    if (!sourceProgram || sourceProgram.length === 0) {
+        showToast('Il corso selezionato non ha sake');
+        return;
+    }
+
+    // Deep clone the program
+    const clonedProgram = JSON.parse(JSON.stringify(sourceProgram));
+
+    // Initialize costs if needed
+    if (!COURSE_COSTS[currentCourse.handle]) COURSE_COSTS[currentCourse.handle] = {};
+    COURSE_COSTS[currentCourse.handle].program = clonedProgram;
+
+    renderProgram();
+
+    const totalSakes = clonedProgram.reduce((sum, g) => sum + (g.sakes?.length || 0), 0);
+    const sourceName = select.options[select.selectedIndex]?.text || sourceHandle;
+    showToast(`Copiati ${totalSakes} sake da ${sourceName}`);
 }
 
 function updateGroupName(groupIdx, value) {

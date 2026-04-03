@@ -1330,6 +1330,122 @@ app.get('/api/export/course/:handle', async (req, res) => {
 });
 
 // ============================================================================
+// SAKE PROGRAM EXPORT (Excel with sake list for a course)
+// ============================================================================
+app.get('/api/export/sake/:handle', async (req, res) => {
+  try {
+    const handle = req.params.handle;
+    const costs = courseCosts[handle];
+    const program = costs?.program || [];
+
+    // Get course info
+    const products = await fetchAllShopifyProducts();
+    const product = products.find(p => p.handle === handle);
+    const courseTitle = product ? product.title : handle;
+
+    // Parse date and city from handle
+    const months = {'gennaio':'Gennaio','febbraio':'Febbraio','marzo':'Marzo','aprile':'Aprile','maggio':'Maggio','giugno':'Giugno','luglio':'Luglio','agosto':'Agosto','settembre':'Settembre','ottobre':'Ottobre','novembre':'Novembre','dicembre':'Dicembre'};
+    let courseDate = '';
+    const h = handle.toLowerCase();
+    for (const [mName, mLabel] of Object.entries(months)) {
+      if (h.includes(mName)) {
+        const ym = h.match(/(\d{4})/);
+        courseDate = ym ? `${mLabel} ${ym[1]}` : mLabel;
+        break;
+      }
+    }
+    if (!courseDate && product?.created_at) {
+      const d = new Date(product.created_at);
+      courseDate = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+    }
+
+    // Get educator name
+    let educator = costs?.educatorName || '';
+    if (!educator && product) {
+      const metafieldMap = await fetchCourseMetafields([product]);
+      if (metafieldMap[product.id]?.name) educator = metafieldMap[product.id].name;
+    }
+
+    // Get city/address
+    const cities = {'milano':'Milano','roma':'Roma','torino':'Torino','napoli':'Napoli','bolzano':'Bolzano','vercelli':'Vercelli','firenze':'Firenze','castelfranco':'Castelfranco Veneto','tortona':'Tortona','colli-del-tronto':'Colli del Tronto','piacenza':'Piacenza'};
+    let courseCity = '';
+    for (const [key, city] of Object.entries(cities)) {
+      if (h.includes(key)) { courseCity = city; break; }
+    }
+    if (h.includes('online')) courseCity = 'Online';
+
+    // Build Excel
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'SSA Gestione Corsi';
+    const ws = wb.addWorksheet('Sake Programma');
+
+    // Row 1: Course name
+    ws.mergeCells('A1:C1');
+    ws.getCell('A1').value = courseTitle;
+    ws.getCell('A1').font = { bold: true, size: 14 };
+
+    // Row 2: Date
+    ws.mergeCells('A2:C2');
+    ws.getCell('A2').value = `Data: ${courseDate || 'Da definire'}`;
+    ws.getCell('A2').font = { size: 11, color: { argb: 'FF555555' } };
+
+    // Row 3: Address/City
+    ws.mergeCells('A3:C3');
+    ws.getCell('A3').value = `Luogo: ${courseCity || 'Da definire'}`;
+    ws.getCell('A3').font = { size: 11, color: { argb: 'FF555555' } };
+
+    // Row 4: Educator
+    ws.mergeCells('A4:C4');
+    ws.getCell('A4').value = `Educator: ${educator || 'Da assegnare'}`;
+    ws.getCell('A4').font = { size: 11, color: { argb: 'FF555555' } };
+
+    // Row 5: Empty separator
+    ws.addRow([]);
+
+    // Row 6: Headers
+    const headerRow = ws.addRow(['Codice', 'Nome Sake', 'N. Bottiglie']);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+    headerRow.alignment = { horizontal: 'center' };
+
+    // Column widths
+    ws.getColumn(1).width = 16;
+    ws.getColumn(2).width = 45;
+    ws.getColumn(3).width = 14;
+
+    // Data rows: flatten all groups → sakes
+    let totalBottles = 0;
+    program.forEach(group => {
+      (group.sakes || []).forEach(sake => {
+        ws.addRow([
+          sake.sku || '',
+          sake.name || sake.title || '',
+          sake.qty || 1
+        ]);
+        totalBottles += (sake.qty || 1);
+      });
+    });
+
+    // Total row
+    const totalRow = ws.addRow(['', 'TOTALE BOTTIGLIE', totalBottles]);
+    totalRow.font = { bold: true };
+    totalRow.getCell(3).alignment = { horizontal: 'center' };
+
+    // Format
+    ws.getColumn(3).alignment = { horizontal: 'center' };
+
+    const safeName = courseTitle.replace(/[^a-zA-Z0-9àèéìòù\s-]/g, '').replace(/\s+/g, '-').substring(0, 50);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="sake-${safeName}.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Sake export error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
 // COURSE COSTS API
 // ============================================================================
 app.get('/api/costs', (req, res) => {
