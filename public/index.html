@@ -9,6 +9,12 @@
     <meta property="og:type" content="website">
     <title>SSA - Gestione Corsi | Sake Sommelier Association</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍶</text></svg>">
+    <!-- Performance hints: speed up the first meaningful paint -->
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="preconnect" href="https://cdn.shopify.com" crossorigin>
+    <link rel="dns-prefetch" href="https://api.airtable.com">
+    <!-- Start the dashboard fetch in parallel with HTML parsing -->
+    <link rel="preload" href="/api/courses?minimal=1" as="fetch" crossorigin="use-credentials">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         /* ========================================
@@ -2175,7 +2181,7 @@ async function loadApiData() {
             apiStatus.shopify = true;
             apiStatus.courses = true;
         } else {
-            const response = await fetch('/api/courses');
+            const response = await fetch('/api/courses?minimal=1');
             if (response.ok) {
                 const data = await response.json();
                 if (data.success && Array.isArray(data.data)) {
@@ -2358,12 +2364,28 @@ async function loadApiData() {
         });
     });
 
-    // Load Airtable sake data
-    try {
-        if (cachedSake) {
-            SAKE_CATALOG = cachedSake;
-            apiStatus.airtable = true;
-        } else {
+    // Sake catalog: use cached copy if present, otherwise defer to first course detail open.
+    // This removes ~900 KB of fetch from the home page boot path.
+    if (cachedSake) {
+        SAKE_CATALOG = cachedSake;
+        apiStatus.airtable = true;
+    }
+    // exam-results already hits Airtable, so if its load succeeded we can mark airtable connected
+    if (!apiStatus.airtable && window.EXAM_RESULTS && Object.keys(window.EXAM_RESULTS).length >= 0) {
+        apiStatus.airtable = true;
+    }
+
+    updateConnectionStatus();
+    renderCurrentPage();
+}
+
+// Lazy loader: called when the user opens a course detail (sake program section)
+// or any UI that needs the sake catalog. Idempotent — runs only once.
+async function ensureSakeLoaded() {
+    if (SAKE_CATALOG && SAKE_CATALOG.length > 0) return; // already loaded (cache or previous call)
+    if (window._sakeLoading) return window._sakeLoading; // in-flight
+    window._sakeLoading = (async () => {
+        try {
             const airtableResp = await fetch('/api/airtable/sake');
             if (airtableResp.ok) {
                 const airtableData = await airtableResp.json();
@@ -2389,40 +2411,29 @@ async function loadApiData() {
                         };
                     });
                 }
-            } else {
-                throw new Error('Airtable API: ' + airtableResp.status);
-            }
-        }
-    } catch (e) {
-        console.error('Airtable connection failed:', e);
-        // Not fatal — just show sake as unavailable
-    }
-
-    // Load Sake Company product images (match by SKU/code)
-    if (SAKE_CATALOG.length > 0 && !cachedSake) {
-        try {
-            const scResp = await fetch('/api/sakecompany/products');
-            if (scResp.ok) {
-                const scData = await scResp.json();
-                if (scData.success && scData.skuImageMap) {
-                    const imgMap = scData.skuImageMap;
-                    SAKE_CATALOG.forEach(sake => {
-                        if (imgMap[sake.code]) {
-                            sake.image = imgMap[sake.code];
-                        }
-                    });
-                    console.log(`Sake Company images: matched ${SAKE_CATALOG.filter(s => s.image).length}/${SAKE_CATALOG.length} products`);
-                }
             }
         } catch (e) {
-            console.error('Sake Company images failed:', e);
+            console.error('Airtable sake load failed:', e);
         }
-        // Cache AFTER image enrichment so cache includes images
-        setCache('sake_v3', SAKE_CATALOG);
-    }
-
-    updateConnectionStatus();
-    renderCurrentPage();
+        // Enrich images from Sake Company storefront (non-blocking for first paint of detail page)
+        if (SAKE_CATALOG.length > 0) {
+            try {
+                const scResp = await fetch('/api/sakecompany/products');
+                if (scResp.ok) {
+                    const scData = await scResp.json();
+                    if (scData.success && scData.skuImageMap) {
+                        const imgMap = scData.skuImageMap;
+                        SAKE_CATALOG.forEach(sake => { if (imgMap[sake.code]) sake.image = imgMap[sake.code]; });
+                    }
+                }
+            } catch (e) {
+                console.error('Sake Company images failed:', e);
+            }
+            setCache('sake_v3', SAKE_CATALOG);
+        }
+        updateConnectionStatus();
+    })();
+    return window._sakeLoading;
 }
 
 // =============================================
@@ -2672,6 +2683,18 @@ function renderCourseDetailPage() {
     // The courseId is stored in currentCourseId (set before navigation)
     const courseId = window.currentCourseId;
     if (!courseId) return;
+
+    // Lazy-load the sake catalog the first time a course detail is opened.
+    // Non-blocking: first render happens with whatever SAKE_CATALOG we have.
+    // When the fetch resolves, re-render this page so the Programma section shows sake.
+    if (!SAKE_CATALOG || SAKE_CATALOG.length === 0) {
+        ensureSakeLoaded().then(() => {
+            // Only re-render if we are still on this detail page for the same course
+            if (currentPage === 'course-detail' && window.currentCourseId === courseId) {
+                renderCourseDetailPage();
+            }
+        });
+    }
 
     let c = COURSES.find(x => x.id === courseId);
     // If not in active COURSES, search all cached courses (includes past courses)

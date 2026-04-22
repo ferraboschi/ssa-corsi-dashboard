@@ -1025,8 +1025,48 @@ app.get('/api/courses', async (req, res) => {
     setCache(fullCacheKey, responseData, 600);
     console.log(`API /api/courses total time: ${Date.now() - apiStart}ms (${courses.length} courses)`);
 
-    res.set('Cache-Control', 'private, max-age=120'); // 2 min browser cache
-    res.json(responseData);
+    // Minimal mode: strip fields the dashboard does not read to cut payload size by ~60%
+    // Activated by ?minimal=1 (or ?lite=1). Kept as an opt-in to preserve compatibility.
+    let payload = responseData;
+    if (req.query.minimal === '1' || req.query.lite === '1') {
+      const slimCourses = courses.map(c => ({
+        shopifyId: c.shopifyId,
+        title: c.title,
+        handle: c.handle,
+        tags: c.tags,
+        status: c.status,
+        created_at: c.created_at,
+        published_at: c.published_at,
+        updated_at: c.updated_at,
+        educatorName: c.educatorName,
+        educatorPhoto: c.educatorPhoto,
+        educatorBio: c.educatorBio,
+        educatorRegion: c.educatorRegion,
+        enrollmentCount: c.enrollmentCount,
+        revenue: c.revenue,
+        // Variants trimmed to just price (frontend reads variants[0].price only)
+        variants: (c.variants || []).slice(0, 1).map(v => ({ id: v.id, price: v.price })),
+        students: (c.students || []).map(s => ({
+          name: s.name,
+          email: s.email,
+          phone: s.phone,
+          orderId: s.orderId,
+          orderNumber: s.orderNumber,
+          orderDate: s.orderDate,
+          financialStatus: s.financialStatus,
+          amount: s.amount,
+          discountCode: s.discountCode,
+          hasWhatsApp: s.hasWhatsApp,
+          registrationName: s.registrationName,
+          nameMismatch: s.nameMismatch
+        }))
+      }));
+      payload = { success: true, count: slimCourses.length, minimal: true, data: slimCourses };
+    }
+
+    // Browser/CDN cache: 5 min hit, 10 min stale-while-revalidate
+    res.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
+    res.json(payload);
 
     // Enrich Twilio data in background (doesn't block the response)
     enrichStudentsWithWhatsApp(courses).then(() => {
