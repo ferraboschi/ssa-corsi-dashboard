@@ -1846,7 +1846,9 @@ app.get('/api/costs/:courseId', (req, res) => {
 app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
   const { location, educator, food, sake, adv, program, lines, educatorName, whatsappGroupLink } = req.body;
+  const existing = courseCosts[courseId] || {};
   courseCosts[courseId] = {
+    ...existing, // preserve sibling fields (notebook, phoneOverrides, nameOverrides, fatturato, ...)
     location: parseFloat(location) || 0,
     educator: parseFloat(educator) || 0,
     food: parseFloat(food) || 0,
@@ -1871,6 +1873,86 @@ app.post('/api/costs/:courseId', (req, res) => {
   }
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
+});
+
+// ============================================================================
+// NOTEBOOK — admin-facing (authenticated) notes + tags + planned action
+// Per-course subobject persisted inside courseCosts[handle].notebook.
+// Structure:
+//   {
+//     notes:          [{ id, author:"admin", text, createdAt, updatedAt, visibility:"admin" }, ...]
+//     educatorNotes:  [{ id, shareToken, educatorName, text, createdAt, updatedAt }, ...]
+//     tags:           ["tag1", "tag2"]
+//     plannedAction:  "monitor" | "spingere" | "posticipare" | "cancellare" | "in-traiettoria" | null
+//     plannedActionDeadline: "YYYY-MM-DD" | null
+//   }
+// ============================================================================
+
+// Append a single admin note
+app.post('/api/notebook/:courseId/notes', (req, res) => {
+  try {
+    const courseId = req.params.courseId;
+    const { text } = req.body || {};
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'text required' });
+    }
+    const existing = courseCosts[courseId] || {};
+    const notebook = existing.notebook || {};
+    const notes = Array.isArray(notebook.notes) ? notebook.notes.slice() : [];
+    const note = {
+      id: crypto.randomUUID(),
+      author: 'admin',
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+      visibility: 'admin',
+    };
+    notes.push(note);
+    courseCosts[courseId] = { ...existing, notebook: { ...notebook, notes } };
+    saveCostsToFile(courseCosts);
+    airtableConfigSet('course_costs', courseCosts).catch(() => {});
+    res.json({ success: true, note });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Delete an admin note by id
+app.delete('/api/notebook/:courseId/notes/:noteId', (req, res) => {
+  try {
+    const { courseId, noteId } = req.params;
+    const existing = courseCosts[courseId];
+    if (!existing || !existing.notebook) return res.status(404).json({ success: false });
+    const notes = (existing.notebook.notes || []).filter(n => n.id !== noteId);
+    courseCosts[courseId] = { ...existing, notebook: { ...existing.notebook, notes } };
+    saveCostsToFile(courseCosts);
+    airtableConfigSet('course_costs', courseCosts).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Set tags and plannedAction (atomic PATCH to avoid races)
+app.post('/api/notebook/:courseId/meta', (req, res) => {
+  try {
+    const courseId = req.params.courseId;
+    const { tags, plannedAction, plannedActionDeadline } = req.body || {};
+    const existing = courseCosts[courseId] || {};
+    const notebook = existing.notebook || {};
+    const next = { ...notebook };
+    if (Array.isArray(tags)) next.tags = tags.filter(t => typeof t === 'string').slice(0, 10);
+    if (typeof plannedAction === 'string' || plannedAction === null) next.plannedAction = plannedAction || null;
+    if (typeof plannedActionDeadline === 'string' || plannedActionDeadline === null) {
+      next.plannedActionDeadline = plannedActionDeadline || null;
+    }
+    courseCosts[courseId] = { ...existing, notebook: next };
+    saveCostsToFile(courseCosts);
+    airtableConfigSet('course_costs', courseCosts).catch(() => {});
+    res.json({ success: true, notebook: next });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
 });
 
 // Phone overrides: save corrected phone numbers (keyed by email)
