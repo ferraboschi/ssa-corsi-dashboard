@@ -1522,6 +1522,7 @@
         <div class="status-pills" id="corsiStatusPills" role="tablist" aria-label="Stato corso" style="margin-bottom: 12px;">
             <span class="status-pill active" data-status="attivi" role="tab">Attivi <span class="count" id="countAttivi">0</span></span>
             <span class="status-pill" data-status="non-attivi" role="tab">Non attivi <span class="count" id="countNonAttivi">0</span></span>
+            <span class="status-pill" data-status="passati" role="tab" title="Apri la pagina Passati">Passati <span class="count" id="countPassati">—</span></span>
         </div>
         <div class="active-filters" id="activeFilters"></div>
         <div class="courses-grid" id="corsiGrid"></div>
@@ -2685,8 +2686,19 @@ function renderCorsiPage() {
     const countNonAttivi = COURSES.length - countAttivi;
     const countAttiviEl = document.getElementById('countAttivi');
     const countNonAttiviEl = document.getElementById('countNonAttivi');
+    const countPassatiEl = document.getElementById('countPassati');
     if (countAttiviEl) countAttiviEl.textContent = countAttivi;
     if (countNonAttiviEl) countNonAttiviEl.textContent = countNonAttivi;
+    if (countPassatiEl) {
+        const rawAll = getCached('courses') || [];
+        const today = new Date(); today.setHours(0,0,0,0);
+        const pastCount = rawAll.filter(raw => {
+            const dateInfo = parseCourseDate(raw.handle, raw);
+            if (!dateInfo) return false;
+            return new Date(dateInfo.end + 'T23:59:59') < today;
+        }).length;
+        countPassatiEl.textContent = pastCount;
+    }
 
     // Sync pill visual "active" state
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
@@ -2727,6 +2739,11 @@ function renderCorsiPage() {
 }
 
 function setCorsiStatusFilter(status) {
+    // "Passati" is a shortcut to the dedicated Past Courses page (different data set)
+    if (status === 'passati') {
+        navigateTo('passati');
+        return;
+    }
     window.corsiStatusFilter = status;
     renderCorsiPage();
 }
@@ -4010,13 +4027,36 @@ function backFromCourseDetail() {
 // =============================================
 
 function renderCorsistiPage() {
-    // Populate course filter dropdown
+    // Populate course filter dropdown (future + past courses from raw cache)
     const courseFilter = document.getElementById('corsistiCourseFilter');
     if (courseFilter.options.length <= 1) {
+        const seen = new Set();
+        // Future/active first
         COURSES.forEach(c => {
             const opt = document.createElement('option');
             opt.value = c.id;
             opt.textContent = `${c.city} - ${c.dates}`;
+            courseFilter.appendChild(opt);
+            seen.add(c.id);
+        });
+        // Past (from raw cache) grouped at bottom with a visual marker
+        const rawAll = getCached('courses') || [];
+        const pastOptions = [];
+        rawAll.forEach(raw => {
+            if (seen.has(raw.handle)) return;
+            if (!(raw.students && raw.students.length > 0)) return; // only courses with enrollees
+            const dateInfo = parseCourseDate(raw.handle, raw);
+            const city = parseCourseCity(raw.handle, raw.title, raw.tags) || '—';
+            pastOptions.push({
+                value: raw.handle,
+                text: `${city} - ${dateInfo ? dateInfo.display : (raw.title || '').slice(0, 40)} (passato)`
+            });
+        });
+        pastOptions.sort((a, b) => b.text.localeCompare(a.text));
+        pastOptions.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.value;
+            opt.textContent = o.text;
             courseFilter.appendChild(opt);
         });
     }
@@ -4027,13 +4067,36 @@ function renderCorsistiPage() {
     const examF = examFilterEl ? examFilterEl.value : 'all';
     const sourceFilter = window.corsistiSourceFilter || 'attuali';
 
-    const currentStudents = COURSES.flatMap(c =>
+    // "Attuali" covers ALL Shopify-side students: future/active courses (COURSES)
+    // PLUS past courses still in the raw cache (so people who already took a
+    // course in 2024-2025 show up here, not lost with the past-courses view).
+    const futureStudents = COURSES.flatMap(c =>
         c.students.map(st => ({
             ...st,
             courseId: c.id, courseName: c.name,
             courseCity: c.city, courseDates: c.dates
         }))
     );
+    const rawAll = getCached('courses') || [];
+    const futureHandles = new Set(COURSES.map(c => c.handle));
+    const pastStudents = [];
+    rawAll.forEach(raw => {
+        if (futureHandles.has(raw.handle)) return; // already in futureStudents
+        const dateInfo = parseCourseDate(raw.handle, raw);
+        const city = parseCourseCity(raw.handle, raw.title, raw.tags);
+        const dedupedStudents = deduplicateStudents(raw.students || []);
+        dedupedStudents.forEach(st => {
+            pastStudents.push({
+                ...st,
+                courseId: raw.handle,
+                courseName: raw.title,
+                courseCity: city,
+                courseDates: dateInfo ? dateInfo.display : '',
+                isPastCourse: true
+            });
+        });
+    });
+    const currentStudents = [...futureStudents, ...pastStudents];
     const historicalStudents = window.HISTORICAL_STUDENTS || [];
 
     // Update source pill counts + visual active state
