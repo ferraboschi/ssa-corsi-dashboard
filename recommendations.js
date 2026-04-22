@@ -227,6 +227,61 @@ function buildReasoning(metrics, baseline, course) {
   return parts.join(' ');
 }
 
+// ---- Top-level API ----
+
+// Given the full course list (mix of future and past) and a `now` Date,
+// return { byHandle: { [handle]: recommendation } } for every FUTURE course
+// that has enough data to analyse.
+//
+// getCourseDate(course) is a callback that returns a Date for when the course
+// runs. The dashboard already has parseCourseDate() on the frontend; server.js
+// will reuse the equivalent logic when calling analyse().
+function analyse(allCourses, now, getCourseDate) {
+  // Split past vs future based on event date
+  const pastBySegment = new Map();
+  const future = [];
+  for (const c of allCourses) {
+    const d = getCourseDate(c);
+    if (!d) continue;
+    if (d < now) {
+      const key = segmentKey(c);
+      if (!pastBySegment.has(key)) pastBySegment.set(key, []);
+      // Attach the event date to the course for historicalBaselineAtDays
+      const withDate = Object.assign({}, c, { eventDate: d.toISOString() });
+      pastBySegment.get(key).push(withDate);
+    } else {
+      future.push({ course: c, courseDate: d });
+    }
+  }
+
+  const byHandle = {};
+  for (const { course, courseDate } of future) {
+    const metrics = courseMetrics(course, courseDate, now);
+    const segment = segmentKey(course);
+    const past = pastBySegment.get(segment) || [];
+    const baseline = past.length
+      ? historicalBaselineAtDays(past, metrics.daysSinceOpening || 1)
+      : { sampleSize: 0, medianAtPoint: null };
+    const { verdict, confidence } = computeVerdict(metrics, baseline);
+    const reasoning = buildReasoning(metrics, baseline, course);
+    byHandle[course.handle] = {
+      handle: course.handle,
+      verdict,
+      confidence,
+      metrics,
+      baseline: {
+        sampleSize: baseline.sampleSize,
+        medianAtPoint: baseline.medianAtPoint,
+        finalMedian: baseline.finalMedian,
+        happenedRate: baseline.happenedRate,
+      },
+      reasoning,
+      similarCourses: past.slice(0, 10).map(p => p.handle),
+    };
+  }
+  return { byHandle, count: Object.keys(byHandle).length, generatedAt: now.toISOString() };
+}
+
 module.exports = {
   MIN_STUDENTS_PRESENZA,
   MIN_STUDENTS_ONLINE,
@@ -240,4 +295,5 @@ module.exports = {
   historicalBaselineAtDays,
   computeVerdict,
   buildReasoning,
+  analyse,
 };
