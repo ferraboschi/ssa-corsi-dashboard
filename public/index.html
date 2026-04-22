@@ -379,6 +379,41 @@
         .filter-pill .remove { cursor: pointer; opacity: 0.7; }
         .filter-pill .remove:hover { opacity: 1; }
 
+        /* Status toggle pills (active/inactive) */
+        .status-pills { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+        .status-pill {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: white; color: var(--text);
+            border: 1px solid var(--border);
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.15s;
+            user-select: none;
+        }
+        .status-pill:hover { border-color: var(--accent); color: var(--accent); }
+        .status-pill.active {
+            background: var(--accent); color: white; border-color: var(--accent);
+        }
+        .status-pill .count {
+            background: rgba(255,255,255,0.25); color: inherit;
+            padding: 1px 6px; border-radius: 10px; font-size: 10px;
+        }
+        .status-pill:not(.active) .count { background: #f3f4f6; color: var(--text-light); }
+
+        /* Course state badges (on card / row) */
+        .state-badge {
+            display: inline-flex; align-items: center; gap: 3px;
+            font-size: 10px; font-weight: 700;
+            padding: 2px 8px; border-radius: 10px;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .state-badge.bozza { background: #ede9fe; color: #6d28d9; }
+        .state-badge.cancellato { background: #fee2e2; color: #b91c1c; }
+        .state-badge.refund-alert {
+            background: #fef3c7; color: #92400e;
+            border: 1px solid #fbbf24;
+        }
+
         /* ========================================
            EDUCATOR CARDS
            ======================================== */
@@ -1478,6 +1513,10 @@
                 <option value="masterclass-online">Masterclass Online</option>
             </select>
         </div>
+        <div class="status-pills" id="corsiStatusPills" role="tablist" aria-label="Stato corso" style="margin-bottom: 12px;">
+            <span class="status-pill active" data-status="attivi" role="tab">Attivi <span class="count" id="countAttivi">0</span></span>
+            <span class="status-pill" data-status="non-attivi" role="tab">Non attivi <span class="count" id="countNonAttivi">0</span></span>
+        </div>
         <div class="active-filters" id="activeFilters"></div>
         <div class="courses-grid" id="corsiGrid"></div>
     </div>
@@ -1963,13 +2002,29 @@ function renderCourseCardHTML(c, opts = {}) {
         ? `<div class="countdown-badge ${countdown.css}"><i class="fas fa-clock"></i> ${countdown.text}</div>`
         : '';
 
+    // State badges (bozza / cancellato) + refund alert if cancelled course has paying students
+    let stateBadgeHTML = '';
+    if (c.businessState === 'bozza') {
+        stateBadgeHTML = '<span class="state-badge bozza" title="Corso in bozza su Shopify">Bozza</span>';
+    } else if (c.businessState === 'cancellato') {
+        stateBadgeHTML = '<span class="state-badge cancellato" title="Corso cancellato su Shopify (archived)">Cancellato</span>';
+    }
+    const paidStudents = (c.students || []).filter(st => st.financialStatus === 'paid').length;
+    const refundAlertHTML = (c.businessState === 'cancellato' && paidStudents > 0)
+        ? `<span class="state-badge refund-alert" title="${paidStudents} iscritti hanno pagato: verificare rimborsi o spostamento corso"><i class="fas fa-exclamation-triangle" style="font-size: 9px;"></i> ${paidStudents} da rimborsare/spostare</span>`
+        : '';
+
     return `
     <div class="course-card" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" role="button" tabindex="0" aria-label="Dettaglio ${c.name}">
         <div class="course-banner ${c.courseType.color}"></div>
         <div class="course-content">
             <div class="course-top">
                 <div>
-                    <div class="course-title">${c.name}</div>
+                    <div class="course-title" style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span>${c.name}</span>
+                        ${stateBadgeHTML}
+                        ${refundAlertHTML}
+                    </div>
                     <div class="course-dates">
                         <i class="far fa-calendar-alt"></i> ${c.dates}
                         &bull; <i class="fas fa-map-marker-alt"></i> ${c.city}
@@ -2203,6 +2258,15 @@ async function loadApiData() {
             }
             const totalCosts = getTotalCosts(costs);
 
+            // Shopify product status -> business state
+            //   active   -> 'pubblicato' (default, course is running)
+            //   draft    -> 'bozza'      (still being prepared, shown with badge)
+            //   archived -> 'cancellato' (course will not happen in this date)
+            const shopifyStatus = (c.status || 'active').toLowerCase();
+            let businessState = 'pubblicato';
+            if (shopifyStatus === 'draft') businessState = 'bozza';
+            else if (shopifyStatus === 'archived') businessState = 'cancellato';
+
             const course = {
                 id: c.handle,
                 shopifyId: c.shopifyId,
@@ -2224,6 +2288,8 @@ async function loadApiData() {
                 enrollmentCount: c.enrollmentCount || 0,
                 // Revenue = sum of actual student amounts (after deduplication), not server total
                 revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
+                shopifyStatus,
+                businessState,
                 status: 'active'
             };
 
@@ -2442,31 +2508,36 @@ function renderDashboard() {
             '<tr><td colspan="9" style="text-align:center; padding: 40px; color: var(--text-light);"><i class="fas fa-calendar-times"></i> Nessun corso futuro trovato</td></tr>';
     }
 
-    // Stats
-    const totalStudents = COURSES.reduce((sum, c) => sum + c.students.length, 0);
-    const totalRevenue = COURSES.reduce((sum, c) => sum + c.revenue, 0);
-    const riskCount = COURSES.filter(c => c.sustainability.status === 'critical').length;
+    // Dashboard shows only ATTIVI (pubblicato + bozza, NOT cancellato).
+    // Cancellati are still in COURSES and accessible via the "Corsi" page "Non attivi" pill.
+    const attiviCourses = COURSES.filter(c => c.businessState !== 'cancellato');
 
-    document.getElementById('totalCorsi').textContent = COURSES.length;
+    // Stats (active courses only)
+    const totalStudents = attiviCourses.reduce((sum, c) => sum + c.students.length, 0);
+    const totalRevenue = attiviCourses.reduce((sum, c) => sum + c.revenue, 0);
+    const riskCount = attiviCourses.filter(c => c.sustainability.status === 'critical').length;
+
+    document.getElementById('totalCorsi').textContent = attiviCourses.length;
     document.getElementById('totalCorsiSub').textContent = 'con date future';
     document.getElementById('totalCorsisti').textContent = totalStudents;
     document.getElementById('totalRevenue').textContent = formatCurrency(totalRevenue);
     document.getElementById('totalRisk').textContent = riskCount;
 
-    // Compact course table rows
+    // Compact course table rows (only attivi)
     const tbody = document.getElementById('dashCoursesBody');
-    tbody.innerHTML = COURSES.map(c => {
+    tbody.innerHTML = attiviCourses.map(c => {
         const s = c.sustainability;
         const countdown = getCountdownInfo(c);
         const pct = Math.min(100, Math.round((c.students.length / c.maxStudents) * 100));
         const fillColor = s.status === 'sustainable' ? 'var(--success)' : s.status === 'warning' ? 'var(--warning)' : 'var(--danger)';
         const countdownBadge = countdown ? `<span class="countdown-badge ${countdown.css}" style="margin-left: 0; margin-top: 0; font-size: 9px; padding: 2px 6px;">${countdown.text}</span>` : '';
+        const bozzaBadge = c.businessState === 'bozza' ? '<span class="state-badge bozza" style="margin-left: 6px;">Bozza</span>' : '';
         return `<tr class="dash-course-row" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" style="cursor: pointer;">
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 4px; height: 32px; border-radius: 2px; flex-shrink: 0;" class="course-banner ${c.courseType.color}"></div>
                     <div>
-                        <div style="font-weight: 600; font-size: 13px; color: var(--text);">${c.city}</div>
+                        <div style="font-weight: 600; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 6px;">${c.city}${bozzaBadge}</div>
                         ${countdownBadge}
                     </div>
                 </div>
@@ -2524,9 +2595,32 @@ function renderDashboard() {
 // CORSI PAGE
 // =============================================
 
+// Current Corsi status pill selection: 'attivi' (default) | 'non-attivi'
+window.corsiStatusFilter = window.corsiStatusFilter || 'attivi';
+
+function isCorsoAttivo(c) {
+    // Attivi = pubblicato OR bozza. Non attivi = cancellato.
+    return c.businessState !== 'cancellato';
+}
+
 function renderCorsiPage() {
     const search = (document.getElementById('corsiSearch').value || '').toLowerCase();
     const filter = document.getElementById('corsiFilter').value;
+    const statusFilter = window.corsiStatusFilter || 'attivi';
+
+    // Update status pill counts (based on unfiltered COURSES, so counts are stable)
+    const countAttivi = COURSES.filter(isCorsoAttivo).length;
+    const countNonAttivi = COURSES.length - countAttivi;
+    const countAttiviEl = document.getElementById('countAttivi');
+    const countNonAttiviEl = document.getElementById('countNonAttivi');
+    if (countAttiviEl) countAttiviEl.textContent = countAttivi;
+    if (countNonAttiviEl) countNonAttiviEl.textContent = countNonAttivi;
+
+    // Sync pill visual "active" state
+    document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
+        el.classList.toggle('active', el.dataset.status === statusFilter);
+        el.setAttribute('aria-selected', el.dataset.status === statusFilter ? 'true' : 'false');
+    });
 
     // Update active filter pills
     const filtersDiv = document.getElementById('activeFilters');
@@ -2539,6 +2633,10 @@ function renderCorsiPage() {
     filtersDiv.innerHTML = pillsHTML;
 
     const filtered = COURSES.filter(c => {
+        // Status pill
+        const isAttivo = isCorsoAttivo(c);
+        if (statusFilter === 'attivi' && !isAttivo) return false;
+        if (statusFilter === 'non-attivi' && isAttivo) return false;
         if (search && !c.name.toLowerCase().includes(search) && !c.city.toLowerCase().includes(search) && !c.educator.name.toLowerCase().includes(search)) return false;
         if (filter !== 'all' && c.courseType.type !== filter) return false;
         return true;
@@ -2546,11 +2644,19 @@ function renderCorsiPage() {
 
     const grid = document.getElementById('corsiGrid');
     if (filtered.length === 0) {
-        grid.innerHTML = '<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun corso trovato</h3><p>Prova a cambiare i filtri di ricerca.</p></div>';
+        const msg = statusFilter === 'non-attivi'
+            ? 'Nessun corso cancellato nel periodo visualizzato.'
+            : 'Prova a cambiare i filtri di ricerca.';
+        grid.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun corso trovato</h3><p>${msg}</p></div>`;
         return;
     }
 
     grid.innerHTML = filtered.map(c => renderCourseCardHTML(c, { showDetails: true })).join('');
+}
+
+function setCorsiStatusFilter(status) {
+    window.corsiStatusFilter = status;
+    renderCorsiPage();
 }
 
 // =============================================
@@ -4113,6 +4219,9 @@ function closeMobileNav() {
 
     document.getElementById('corsiSearch').addEventListener('input', debouncedCorsi);
     document.getElementById('corsiFilter').addEventListener('change', debouncedCorsi);
+    document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
+        el.addEventListener('click', () => setCorsiStatusFilter(el.dataset.status));
+    });
     document.getElementById('corsistiSearch').addEventListener('input', debouncedCorsisti);
     document.getElementById('corsistiCourseFilter').addEventListener('change', debouncedCorsisti);
     const examFilterEl = document.getElementById('corsistiExamFilter');
