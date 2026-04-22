@@ -148,6 +148,85 @@ function historicalBaselineAtDays(pastCourses, targetDaysSinceOpening) {
   };
 }
 
+// ---- Verdict ----
+
+// Given the raw metrics for a FUTURE course + a baseline computed on the
+// matching segment of past courses, emit a verdict string.
+//
+// Verdicts:
+//   in-traiettoria      — projection >= min * 1.2  (comfortably above minimum)
+//   monitor             — projection >= min        (above minimum but thin)
+//   rischio             — projection <  min        (will not make it at current pace)
+//   critico             — projection <  min * 0.5  AND daysUntilCourse < 14
+//   insufficient-data   — baseline sampleSize < 3 (we do not issue strong verdicts)
+//
+// Confidence is derived from baseline sample size and how far the data-window
+// ratio is from 1:
+//   high    — sampleSize >= 7 and daysSinceOpening > 0
+//   medium  — sampleSize >= 4
+//   low     — everything else
+function computeVerdict(metrics, baseline) {
+  const { min, projection, daysUntilCourse } = metrics;
+  const sampleSize = baseline ? baseline.sampleSize : 0;
+
+  let confidence = 'low';
+  if (sampleSize >= 7) confidence = 'high';
+  else if (sampleSize >= 4) confidence = 'medium';
+
+  // Without enough history we still say something useful based on projection only,
+  // but we flag the lack of context.
+  if (sampleSize < 3) {
+    if (projection >= min * 1.2) return { verdict: 'in-traiettoria', confidence: 'low' };
+    if (projection >= min) return { verdict: 'monitor', confidence: 'low' };
+    if (projection < min * 0.5 && daysUntilCourse != null && daysUntilCourse < 14) {
+      return { verdict: 'critico', confidence: 'low' };
+    }
+    return { verdict: 'rischio', confidence: 'low' };
+  }
+
+  if (projection < min * 0.5 && daysUntilCourse != null && daysUntilCourse < 14) {
+    return { verdict: 'critico', confidence };
+  }
+  if (projection < min) return { verdict: 'rischio', confidence };
+  if (projection >= min * 1.2) return { verdict: 'in-traiettoria', confidence };
+  return { verdict: 'monitor', confidence };
+}
+
+function buildReasoning(metrics, baseline, course) {
+  const parts = [];
+  const {
+    enrolled, min, velocity, projection, daysSinceOpening, daysUntilCourse,
+  } = metrics;
+  if (velocity != null) {
+    parts.push(
+      `Al ritmo di ${velocity.toFixed(2)} iscritti/giorno` +
+      (daysUntilCourse != null ? `, tra ${daysUntilCourse} giorni arriveresti a circa ${projection} iscritti.` : '.')
+    );
+  } else {
+    parts.push(`Attualmente ${enrolled} iscritti.`);
+  }
+  if (baseline && baseline.sampleSize >= 3 && baseline.medianAtPoint != null) {
+    parts.push(
+      `Corsi simili (${baseline.sampleSize} osservazioni) a ${daysSinceOpening} giorni dall'apertura ` +
+      `avevano una mediana di ${baseline.medianAtPoint.toFixed(1)} iscritti.`
+    );
+    const delta = enrolled - baseline.medianAtPoint;
+    if (Math.abs(delta) >= 1) {
+      parts.push(
+        delta > 0
+          ? `Sei ${delta.toFixed(0)} iscritti sopra la mediana storica.`
+          : `Sei ${Math.abs(delta).toFixed(0)} iscritti sotto la mediana storica.`
+      );
+    }
+  } else if (baseline && baseline.sampleSize > 0) {
+    parts.push(`Solo ${baseline.sampleSize} corsi storici simili: campione troppo piccolo per un confronto solido.`);
+  } else {
+    parts.push(`Nessun corso storico simile: il sistema non ha ancora basi di confronto per questo tipo.`);
+  }
+  parts.push(`Minimo per farsi: ${min}.`);
+  return parts.join(' ');
+}
+
 module.exports = {
   MIN_STUDENTS_PRESENZA,
   MIN_STUDENTS_ONLINE,
@@ -159,4 +238,6 @@ module.exports = {
   courseMetrics,
   segmentKey,
   historicalBaselineAtDays,
+  computeVerdict,
+  buildReasoning,
 };
