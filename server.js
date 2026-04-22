@@ -1424,6 +1424,33 @@ app.get('/api/exam-results/by-email/:email', async (req, res) => {
 });
 
 // ============================================================================
+// HISTORICAL STUDENTS (pre-2024 Eventbrite archive + legacy passed/failed lists)
+// Data file produced by scripts/import-historical.py; served as-is.
+// ============================================================================
+const HISTORICAL_FILE = path.join(__dirname, 'data', 'historical-students.json');
+let _historicalCache = null;
+let _historicalMtime = 0;
+
+function loadHistoricalStudents() {
+  try {
+    const stats = fs.statSync(HISTORICAL_FILE);
+    if (_historicalCache && stats.mtimeMs === _historicalMtime) return _historicalCache;
+    const raw = fs.readFileSync(HISTORICAL_FILE, 'utf-8');
+    _historicalCache = JSON.parse(raw);
+    _historicalMtime = stats.mtimeMs;
+    return _historicalCache;
+  } catch (e) {
+    return { count: 0, students: [], error: e.code === 'ENOENT' ? 'file-not-found' : e.message };
+  }
+}
+
+app.get('/api/historical-students', (req, res) => {
+  const data = loadHistoricalStudents();
+  res.set('Cache-Control', 'private, max-age=600');
+  res.json({ success: !data.error, ...data });
+});
+
+// ============================================================================
 // EDUCATOR ROUTE
 // ============================================================================
 app.get('/api/educator/:id', async (req, res) => {

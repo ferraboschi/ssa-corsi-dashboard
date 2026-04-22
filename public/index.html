@@ -1543,6 +1543,11 @@
             </select>
             <button class="link-btn" onclick="exportCorsisti()" aria-label="Esporta lista corsisti in CSV"><i class="fas fa-download"></i> Esporta CSV</button>
         </div>
+        <div class="status-pills" id="corsistiSourcePills" role="tablist" aria-label="Origine corsisti" style="margin-bottom: 12px;">
+            <span class="status-pill active" data-source="attuali" role="tab">Attuali (Shopify) <span class="count" id="countAttuali">0</span></span>
+            <span class="status-pill" data-source="storici" role="tab">Storici (pre-2024) <span class="count" id="countStorici">0</span></span>
+            <span class="status-pill" data-source="tutti" role="tab">Tutti <span class="count" id="countTuttiCorsisti">0</span></span>
+        </div>
         <div class="card">
             <div class="card-body" style="padding: 0;">
                 <table class="data-table" id="corsistiTable">
@@ -2082,13 +2087,26 @@ function renderStudentRowHTML(st, opts = {}) {
     const emailKey = (st.email || '').toLowerCase().trim();
     const courseCount = emailKey ? COURSES.filter(c => c.students.some(s => (s.email || '').toLowerCase().trim() === emailKey)).length : 0;
     const courseCountBadge = courseCount > 1 ? `<span style="display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px;" title="${courseCount} corsi">${courseCount}</span>` : '';
-    const examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
-    const clickAttr = emailKey ? `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"` : '';
-    return `<tr ${clickAttr}>
-        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${st.name || '-'}${courseCountBadge}${examBadgeHtml}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
-        ${showCourse ? `<td>${st.courseCity || ''} - ${st.courseDates || ''}</td>` : ''}
+    // Historical students carry their own result; current students go through exam-results
+    let examBadgeHtml;
+    if (st.isHistorical) {
+        const map = {
+            passed: ` <span class="state-badge" style="background:#dcfce7;color:#15803d;" title="Promosso (storico pre-2024 — fonte: ${st.historicalSource || '?'})"><i class="fas fa-award" style="font-size:8px;"></i> Promosso</span>`,
+            failed: ` <span class="state-badge" style="background:#fee2e2;color:#b91c1c;" title="Bocciato (storico pre-2024 — fonte: ${st.historicalSource || '?'})"><i class="fas fa-times-circle" style="font-size:8px;"></i> Bocciato</span>`,
+            enrolled: ` <span class="state-badge" style="background:#e0e7ff;color:#3730a3;" title="Iscritto (Eventbrite — esito sconosciuto)"><i class="fas fa-user-graduate" style="font-size:8px;"></i> Iscritto</span>`
+        };
+        examBadgeHtml = map[st.historicalResult] || '';
+    } else {
+        examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
+    }
+    const historicalBadge = st.isHistorical ? ' <span class="state-badge" style="background:#f3f4f6;color:#4b5563;font-size:9px;" title="Corsista storico pre-2024">Storico</span>' : '';
+    const clickAttr = (emailKey && !st.isHistorical) ? `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"` : '';
+    const rowStyle = st.isHistorical ? 'background: #fafafa;' : '';
+    return `<tr ${clickAttr} style="${rowStyle}">
+        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${st.name || '-'}${courseCountBadge}${historicalBadge}${examBadgeHtml}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
+        ${showCourse ? `<td>${st.courseCity || ''} ${st.courseDates ? ('- ' + (st.courseDates.slice ? st.courseDates.slice(0,10) : st.courseDates)) : ''}</td>` : ''}
         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
-        <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
+        <td>${st.isHistorical ? '<span style="color:#9ca3af;font-size:12px;">—</span>' : `<span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span>`}</td>
         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
     </tr>`;
 }
@@ -2113,6 +2131,45 @@ async function loadCourseCosts() {
 
 // Exam results map: emailLower -> { result: 'passed'|'retrial'|'failed'|'unknown', score, examDate, courseName, attempts }
 window.EXAM_RESULTS = {};
+
+// Historical (pre-2024) student list loaded from /api/historical-students
+window.HISTORICAL_STUDENTS = [];
+// Current source filter on Corsisti page: 'attuali' | 'storici' | 'tutti'
+window.corsistiSourceFilter = window.corsistiSourceFilter || 'attuali';
+
+async function loadHistoricalStudents() {
+    try {
+        const resp = await fetch('/api/historical-students');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && Array.isArray(data.students)) {
+            // Normalize to the same shape as current students so the table row renderer works
+            window.HISTORICAL_STUDENTS = data.students.map(s => ({
+                name: [s.firstName, s.lastName].filter(Boolean).join(' ').trim(),
+                email: s.email || '',
+                phone: s.phone || '',
+                orderNumber: '',
+                orderDate: s.courseDate || '',
+                financialStatus: s.result === 'passed' ? 'paid' : (s.result === 'failed' ? 'paid' : ''),
+                amount: 0,
+                courseName: `Corso ${(s.courseDate || '').slice(0,4)}${s.location ? ' — ' + s.location : ''}`,
+                courseCity: s.location || '',
+                courseDates: s.courseDate || '',
+                historicalResult: s.result,       // passed | failed | enrolled
+                historicalSource: s.source,
+                isHistorical: true
+            }));
+            console.log(`Historical students loaded: ${window.HISTORICAL_STUDENTS.length}`);
+        }
+    } catch (e) {
+        console.error('Could not load historical students:', e);
+    }
+}
+
+function setCorsistiSourceFilter(source) {
+    window.corsistiSourceFilter = source;
+    renderCorsistiPage();
+}
 
 async function loadExamResults() {
     try {
@@ -2173,6 +2230,10 @@ async function loadApiData() {
     // Load exam results (Airtable Socrative pipeline) — non-blocking for UI,
     // but we await so COURSES render has exam data on first paint.
     await loadExamResults();
+
+    // Load historical students (pre-2024). Fire-and-forget: small JSON, served
+    // by Node directly from disk, doesn't block anything.
+    loadHistoricalStudents();
 
     // Load courses
     try {
@@ -3964,22 +4025,51 @@ function renderCorsistiPage() {
     const courseF = document.getElementById('corsistiCourseFilter').value;
     const examFilterEl = document.getElementById('corsistiExamFilter');
     const examF = examFilterEl ? examFilterEl.value : 'all';
+    const sourceFilter = window.corsistiSourceFilter || 'attuali';
 
-    let allStudents = COURSES.flatMap(c =>
+    const currentStudents = COURSES.flatMap(c =>
         c.students.map(st => ({
             ...st,
             courseId: c.id, courseName: c.name,
             courseCity: c.city, courseDates: c.dates
         }))
     );
+    const historicalStudents = window.HISTORICAL_STUDENTS || [];
+
+    // Update source pill counts + visual active state
+    const countAttualiEl = document.getElementById('countAttuali');
+    const countStoriciEl = document.getElementById('countStorici');
+    const countTuttiEl = document.getElementById('countTuttiCorsisti');
+    if (countAttualiEl) countAttualiEl.textContent = currentStudents.length;
+    if (countStoriciEl) countStoriciEl.textContent = historicalStudents.length;
+    if (countTuttiEl) countTuttiEl.textContent = currentStudents.length + historicalStudents.length;
+    document.querySelectorAll('#corsistiSourcePills .status-pill').forEach(el => {
+        el.classList.toggle('active', el.dataset.source === sourceFilter);
+        el.setAttribute('aria-selected', el.dataset.source === sourceFilter ? 'true' : 'false');
+    });
+
+    let allStudents;
+    if (sourceFilter === 'storici') allStudents = historicalStudents.slice();
+    else if (sourceFilter === 'tutti') allStudents = [...currentStudents, ...historicalStudents];
+    else allStudents = currentStudents;
 
     allStudents = allStudents.filter(st => {
         if (search && !(st.name || '').toLowerCase().includes(search) && !(st.email || '').toLowerCase().includes(search)) return false;
         if (courseF !== 'all' && st.courseId !== courseF) return false;
         if (examF !== 'all') {
-            const exam = getExamResultForStudent(st);
-            if (examF === 'none') { if (exam) return false; }
-            else { if (!exam || exam.result !== examF) return false; }
+            // Historical students carry their own historicalResult; current students go through exam-results lookup
+            if (st.isHistorical) {
+                const hr = st.historicalResult;
+                // Map "passed"/"failed"/"enrolled" to the same filter keys
+                if (examF === 'passed' && hr !== 'passed') return false;
+                if (examF === 'failed' && hr !== 'failed') return false;
+                if (examF === 'retrial') return false;          // no retrial concept in historical data
+                if (examF === 'none' && (hr === 'passed' || hr === 'failed')) return false;
+            } else {
+                const exam = getExamResultForStudent(st);
+                if (examF === 'none') { if (exam) return false; }
+                else { if (!exam || exam.result !== examF) return false; }
+            }
         }
         return true;
     });
@@ -4249,6 +4339,9 @@ function closeMobileNav() {
     document.getElementById('corsistiCourseFilter').addEventListener('change', debouncedCorsisti);
     const examFilterEl = document.getElementById('corsistiExamFilter');
     if (examFilterEl) examFilterEl.addEventListener('change', debouncedCorsisti);
+    document.querySelectorAll('#corsistiSourcePills .status-pill').forEach(el => {
+        el.addEventListener('click', () => setCorsistiSourceFilter(el.dataset.source));
+    });
 
     // Corsisti column sorting
     document.querySelectorAll('#corsistiTable th.sortable').forEach(th => {
