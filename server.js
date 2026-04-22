@@ -289,6 +289,158 @@ function setCache(key, value, ttlSeconds = 300) {
 }
 
 // ============================================================================
+// EXAM RESULTS (Airtable "SSA Sommelier database" — Socrative pipeline)
+// Reads student exam outcomes processed by the Airtable script and exposes
+// them as a map keyed by email (lowercase, trimmed) for matching with Shopify
+// customer data on the dashboard.
+// ============================================================================
+const EXAM_BASE_ID = process.env.AIRTABLE_EXAM_BASE_ID || 'appj4DEH3RYFqct1Q';
+const EXAM_STUDENTS_TABLE = process.env.AIRTABLE_EXAM_STUDENTS_TABLE || 'tblq6DIMSpZumpB6S';
+const EXAM_COURSES_TABLE = process.env.AIRTABLE_EXAM_COURSES_TABLE || 'tblhsCnD5AJbkmWjR';
+const EXAM_THRESHOLDS_TABLE = process.env.AIRTABLE_EXAM_THRESHOLDS_TABLE || 'tblalXmeAnhXWYawM';
+
+// Result priority: higher wins when student has multiple exam attempts (retrial)
+const RESULT_PRIORITY = { passed: 3, retrial: 2, failed: 1, unknown: 0 };
+
+// Map Airtable threshold name -> normalized outcome
+function normalizeResultName(name) {
+  const n = (name || '').toLowerCase();
+  if (n.includes('pass')) return 'passed';
+  if (n.includes('retrial') || n.includes('retr')) return 'retrial';
+  if (n.includes('fail')) return 'failed';
+  return 'unknown';
+}
+
+async function airtableFetchAll(baseId, tableId, params = {}) {
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  if (!apiKey) return [];
+  const all = [];
+  let offset = null;
+  let pages = 0;
+  do {
+    const qp = new URLSearchParams({ pageSize: '100', ...params });
+    if (offset) qp.set('offset', offset);
+    const resp = await fetch(`https://api.airtable.com/v0/${baseId}/${tableId}?${qp.toString()}`, {
+      headers: { 'Authorization': `Bearer ${apiKey}` }
+    });
+    if (!resp.ok) {
+      console.error(`Airtable fetch ${tableId} failed: ${resp.status}`);
+      return all;
+    }
+    const data = await resp.json();
+    all.push(...(data.records || []));
+    offset = data.offset || null;
+    pages++;
+    if (pages > 50) break; // safety
+  } while (offset);
+  return all;
+}
+
+async function fetchExamResults() {
+  const cacheKey = 'exam_results';
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
+  const apiKey = process.env.AIRTABLE_API_KEY;
+  if (!apiKey) {
+    console.log('Exam results: AIRTABLE_API_KEY not configured');
+    return { byEmail: {}, count: 0, lastUpdated: null };
+  }
+
+  try {
+    const t0 = Date.now();
+    // Parallel fetch: thresholds (3 records) + courses (~120) + students (~200)
+    const [thresholds, courses, students] = await Promise.all([
+      airtableFetchAll(EXAM_BASE_ID, EXAM_THRESHOLDS_TABLE),
+      airtableFetchAll(EXAM_BASE_ID, EXAM_COURSES_TABLE),
+      airtableFetchAll(EXAM_BASE_ID, EXAM_STUDENTS_TABLE, {
+        filterByFormula: 'AND({Is finished}=TRUE(), NOT({Email}=""))'
+      })
+    ]);
+
+    // Build lookup maps
+    const thresholdMap = {};
+    thresholds.forEach(r => { thresholdMap[r.id] = normalizeResultName(r.fields.Name); });
+
+    const courseMap = {};
+    courses.forEach(r => {
+      const f = r.fields || {};
+      courseMap[r.id] = {
+        name: f.Name || '',
+        startTime: f['Start time'] || null
+      };
+    });
+
+    // Aggregate by email — keep best result per student (priority) + count attempts
+    const byEmail = {};
+    students.forEach(r => {
+      const f = r.fields || {};
+      const emailKey = (f.Email || '').toLowerCase().trim();
+      if (!emailKey) return;
+      const resultIds = f.Result || [];
+      const resultName = resultIds.length ? (thresholdMap[resultIds[0]] || 'unknown') : 'unknown';
+      // Parse score: Airtable returns "90%" as string
+      let scorePct = null;
+      const sRaw = f['Score, %'];
+      if (typeof sRaw === 'string') {
+        const m = sRaw.match(/(\d+)/);
+        if (m) scorePct = parseInt(m[1], 10);
+      } else if (typeof sRaw === 'number') {
+        scorePct = sRaw;
+      }
+      const courseIds = f.Course || [];
+      const courseInfo = courseIds.length ? courseMap[courseIds[0]] : null;
+      const examDate = courseInfo ? courseInfo.startTime : null;
+      const courseName = courseInfo ? courseInfo.name : '';
+
+      const entry = {
+        fullName: f['Full Name'] || '',
+        result: resultName,
+        score: scorePct,
+        examDate,
+        courseName,
+        recordId: r.id,
+        attempts: 1
+      };
+
+      const existing = byEmail[emailKey];
+      if (!existing) {
+        byEmail[emailKey] = entry;
+      } else {
+        // More attempts detected
+        existing.attempts += 1;
+        // Keep entry with highest priority; if tie, keep most recent examDate
+        const prOld = RESULT_PRIORITY[existing.result] || 0;
+        const prNew = RESULT_PRIORITY[entry.result] || 0;
+        let replace = false;
+        if (prNew > prOld) replace = true;
+        else if (prNew === prOld) {
+          if ((entry.examDate || '') > (existing.examDate || '')) replace = true;
+        }
+        if (replace) {
+          entry.attempts = existing.attempts;
+          byEmail[emailKey] = entry;
+        }
+      }
+    });
+
+    const result = {
+      byEmail,
+      count: Object.keys(byEmail).length,
+      totalAttempts: students.length,
+      lastUpdated: new Date().toISOString()
+    };
+
+    setCache(cacheKey, result, 900); // 15 min
+    console.log(`[exam-results] fetched ${students.length} attempts, ${result.count} unique students in ${Date.now() - t0}ms`);
+    return result;
+  } catch (e) {
+    console.error('fetchExamResults failed:', e.message);
+    return { byEmail: {}, count: 0, error: e.message };
+  }
+}
+
+// ============================================================================
 // SHOPIFY API UTILITIES
 // ============================================================================
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE || 'sakesommelierassociation.myshopify.com';
@@ -1202,6 +1354,30 @@ app.get('/api/educator-profiles', async (req, res) => {
     }
     const profiles = await fetchEducatorProfiles();
     res.json({ success: true, count: Object.keys(profiles).length, profiles });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// EXAM RESULTS ROUTES (read-only, Airtable Socrative pipeline)
+// ============================================================================
+app.get('/api/exam-results', async (req, res) => {
+  try {
+    if (req.query.refresh) cache.delete('exam_results');
+    const data = await fetchExamResults();
+    res.json({ success: true, ...data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/exam-results/by-email/:email', async (req, res) => {
+  try {
+    const data = await fetchExamResults();
+    const key = (req.params.email || '').toLowerCase().trim();
+    const entry = data.byEmail[key] || null;
+    res.json({ success: true, email: key, found: !!entry, data: entry });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
