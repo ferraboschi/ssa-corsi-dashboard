@@ -710,6 +710,12 @@ app.get('/api/courses', async (req, res) => {
 
     // Filter to only course products
     const courseProducts = products.filter(isCourseProduct);
+    // Diagnostic log: helps investigating Shopify<->dashboard course mismatches
+    const statusBreakdown = courseProducts.reduce((acc, p) => {
+      acc[p.status || 'unknown'] = (acc[p.status || 'unknown'] || 0) + 1;
+      return acc;
+    }, {});
+    console.log(`[courses] shopify_products=${products.length} course_products=${courseProducts.length} status=${JSON.stringify(statusBreakdown)}`);
 
     // Fetch metafields (cached 5 min) - includes rate limit retry
     const metafieldMap = await fetchCourseMetafields(courseProducts);
@@ -878,6 +884,67 @@ app.get('/api/courses', async (req, res) => {
     }).catch(err => console.log('Background Twilio enrichment failed:', err.message));
   } catch (error) {
     console.error('Error in /api/courses:', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// DEBUG: Diff Shopify products vs course filter
+// Usage: /api/debug/course-products-diff  or  ?status=archived  ?included=false
+// ============================================================================
+app.get('/api/debug/course-products-diff', async (req, res) => {
+  try {
+    const products = await fetchAllShopifyProducts();
+    const reasonFor = (p) => {
+      const h = (p.handle || '').toLowerCase();
+      if (h.startsWith('canvas-')) return 'excluded:canvas-';
+      if (h.startsWith('poster-')) return 'excluded:poster-';
+      if (h.startsWith('puzzle-')) return 'excluded:puzzle-';
+      if (h.startsWith('bottiglia-')) return 'excluded:bottiglia-';
+      if (h.startsWith('gift-card')) return 'excluded:gift-card';
+      if (h.startsWith('guida-')) return 'excluded:guida-';
+      if (h === 'corsi-ed-eventi-2024-25') return 'excluded:corsi-ed-eventi-2024-25';
+      if (h.startsWith('copy-of-')) return 'excluded:copy-of-';
+      if (h.startsWith('bundle-')) return 'excluded:bundle-';
+      if (h.startsWith('pacchetto-')) return 'excluded:pacchetto-';
+      const matchedPattern = COURSE_HANDLE_PATTERNS.find(pat => h.includes(pat));
+      if (matchedPattern) return `included:pattern=${matchedPattern}`;
+      return 'excluded:no-pattern-match';
+    };
+    const rows = products.map(p => ({
+      shopifyId: p.id,
+      handle: p.handle,
+      title: p.title,
+      status: p.status,
+      created_at: p.created_at,
+      updated_at: p.updated_at,
+      reason: reasonFor(p),
+      included: isCourseProduct(p)
+    }));
+
+    // Optional filters via query string
+    let filtered = rows;
+    if (req.query.status) filtered = filtered.filter(r => r.status === req.query.status);
+    if (req.query.included === 'true') filtered = filtered.filter(r => r.included);
+    if (req.query.included === 'false') filtered = filtered.filter(r => !r.included);
+
+    // Summary
+    const summary = {
+      total_products: products.length,
+      included_as_courses: rows.filter(r => r.included).length,
+      by_status: rows.reduce((acc, r) => { acc[r.status || 'unknown'] = (acc[r.status || 'unknown'] || 0) + 1; return acc; }, {}),
+      by_reason: rows.reduce((acc, r) => { acc[r.reason] = (acc[r.reason] || 0) + 1; return acc; }, {}),
+      included_by_status: rows.filter(r => r.included).reduce((acc, r) => { acc[r.status || 'unknown'] = (acc[r.status || 'unknown'] || 0) + 1; return acc; }, {})
+    };
+
+    res.json({
+      success: true,
+      patterns: COURSE_HANDLE_PATTERNS,
+      summary,
+      count: filtered.length,
+      products: filtered.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+    });
+  } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
