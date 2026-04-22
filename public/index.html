@@ -406,6 +406,15 @@
         }
         .status-pill:not(.active) .count { background: #f3f4f6; color: var(--text-light); }
 
+        /* When multiple sort keys are active, show primary/secondary order number */
+        .status-pill[data-sort-order]::after {
+            content: attr(data-sort-order) "°";
+            background: rgba(255,255,255,0.4); color: inherit;
+            padding: 1px 5px; border-radius: 8px;
+            font-size: 9px; font-weight: 700;
+            margin-left: 4px;
+        }
+
         /* Course state badges (on card / row) */
         .state-badge {
             display: inline-flex; align-items: center; gap: 3px;
@@ -1523,6 +1532,15 @@
             <span class="status-pill active" data-status="attivi" role="tab">Attivi <span class="count" id="countAttivi">0</span></span>
             <span class="status-pill" data-status="non-attivi" role="tab">Non attivi <span class="count" id="countNonAttivi">0</span></span>
             <span class="status-pill" data-status="passati" role="tab" title="Apri la pagina Passati">Passati <span class="count" id="countPassati">—</span></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+            <span style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Ordina:</span>
+            <div class="status-pills" id="corsiSortPills" aria-label="Ordinamento corsi">
+                <span class="status-pill" data-sort="vicinanza" role="button" title="Ordina dal corso più vicino al più lontano"><i class="far fa-calendar-check" style="font-size:10px;"></i> Vicinanza ad oggi</span>
+                <span class="status-pill" data-sort="iscritti" role="button" title="Ordina per numero di iscritti (più in alto)"><i class="fas fa-users" style="font-size:10px;"></i> Iscritti</span>
+                <span class="status-pill" data-sort="raggruppa" role="button" title="Raggruppa le card per tipologia corso"><i class="fas fa-layer-group" style="font-size:10px;"></i> Raggruppa per tipo</span>
+            </div>
+            <button id="corsiSortReset" type="button" onclick="resetCorsiSort()" style="display:none;background:none;border:1px solid var(--border);border-radius:14px;padding:4px 10px;font-size:11px;color:var(--text-light);cursor:pointer;">Azzera</button>
         </div>
         <div class="active-filters" id="activeFilters"></div>
         <div class="courses-grid" id="corsiGrid"></div>
@@ -2940,6 +2958,64 @@ function renderDashboard() {
 // Current Corsi status pill selection: 'attivi' (default) | 'non-attivi'
 window.corsiStatusFilter = window.corsiStatusFilter || 'attivi';
 
+// Sort / group toggles on the Corsi page. Multiple can be active at once.
+// `keys` is the ordered list of active sort keys ('vicinanza', 'iscritti')
+// — order = click order, so the user decides primary/secondary sort key.
+// `raggruppa` is a separate boolean because grouping changes layout, not order.
+function _loadCorsiSortState() {
+    try {
+        const raw = sessionStorage.getItem('ssa_corsi_sort');
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || !Array.isArray(obj.keys)) return null;
+        return obj;
+    } catch (e) { return null; }
+}
+window.corsiSort = window.corsiSort || _loadCorsiSortState() || { keys: [], raggruppa: false };
+
+function _persistCorsiSort() {
+    try { sessionStorage.setItem('ssa_corsi_sort', JSON.stringify(window.corsiSort)); } catch (e) {}
+}
+
+function toggleCorsiSort(key) {
+    if (key === 'raggruppa') {
+        window.corsiSort.raggruppa = !window.corsiSort.raggruppa;
+    } else {
+        const i = window.corsiSort.keys.indexOf(key);
+        if (i >= 0) window.corsiSort.keys.splice(i, 1);
+        else window.corsiSort.keys.push(key);
+    }
+    _persistCorsiSort();
+    renderCorsiPage();
+}
+
+function resetCorsiSort() {
+    window.corsiSort = { keys: [], raggruppa: false };
+    _persistCorsiSort();
+    renderCorsiPage();
+}
+
+// Compare two courses by a single sort key; return -1, 0, 1.
+function _compareBySortKey(a, b, key) {
+    if (key === 'vicinanza') {
+        // Ascending: closest first. Empty startDate goes to the end.
+        const da = a.startDate || '9999-12-31';
+        const db = b.startDate || '9999-12-31';
+        return da.localeCompare(db);
+    }
+    if (key === 'iscritti') {
+        // Descending: more students first.
+        return (b.students.length || 0) - (a.students.length || 0);
+    }
+    return 0;
+}
+
+// Level label used for grouping
+function _groupLabelFor(c) {
+    const lvl = (c.courseType && c.courseType.levelLabel) ? c.courseType.levelLabel : 'Altro';
+    return lvl;
+}
+
 function isCorsoAttivo(c) {
     // Attivi = pubblicato OR bozza. Non attivi = cancellato.
     return c.businessState !== 'cancellato';
@@ -2995,6 +3071,39 @@ function renderCorsiPage() {
         return true;
     });
 
+    // Apply multi-key sort. Keys are evaluated in click order so the user
+    // controls primary/secondary sorting. Each key returns a numeric diff;
+    // the first non-zero diff wins.
+    const sortKeys = (window.corsiSort && window.corsiSort.keys) || [];
+    if (sortKeys.length > 0) {
+        filtered.sort((a, b) => {
+            for (const k of sortKeys) {
+                const diff = _compareBySortKey(a, b, k);
+                if (diff !== 0) return diff;
+            }
+            return 0;
+        });
+    }
+
+    // Sync sort-pill visual state + reset button visibility
+    document.querySelectorAll('#corsiSortPills .status-pill').forEach(el => {
+        const k = el.dataset.sort;
+        const on = k === 'raggruppa'
+            ? !!(window.corsiSort && window.corsiSort.raggruppa)
+            : sortKeys.includes(k);
+        el.classList.toggle('active', on);
+        // Annotate primary/secondary when multiple sort keys active
+        if (k !== 'raggruppa' && on && sortKeys.length > 1) {
+            const idx = sortKeys.indexOf(k);
+            el.setAttribute('data-sort-order', String(idx + 1));
+        } else {
+            el.removeAttribute('data-sort-order');
+        }
+    });
+    const anyActive = sortKeys.length > 0 || (window.corsiSort && window.corsiSort.raggruppa);
+    const resetBtn = document.getElementById('corsiSortReset');
+    if (resetBtn) resetBtn.style.display = anyActive ? 'inline-flex' : 'none';
+
     const grid = document.getElementById('corsiGrid');
     if (filtered.length === 0) {
         const msg = statusFilter === 'non-attivi'
@@ -3004,7 +3113,29 @@ function renderCorsiPage() {
         return;
     }
 
-    grid.innerHTML = filtered.map(c => renderCourseCardHTML(c, { showDetails: true })).join('');
+    // Render: either a flat grid or grouped sections.
+    if (window.corsiSort && window.corsiSort.raggruppa) {
+        const groups = new Map();
+        for (const c of filtered) {
+            const label = _groupLabelFor(c);
+            if (!groups.has(label)) groups.set(label, []);
+            groups.get(label).push(c);
+        }
+        // Order group labels deterministically
+        const orderedLabels = Array.from(groups.keys()).sort();
+        grid.innerHTML = orderedLabels.map(label => {
+            const cs = groups.get(label);
+            const cards = cs.map(c => renderCourseCardHTML(c, { showDetails: true })).join('');
+            return `<div style="grid-column: 1 / -1; margin-top: 8px;">
+                <h3 style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); margin: 12px 0 8px; display:flex; align-items:center; gap:8px;">
+                    <i class="fas fa-layer-group"></i> ${label} <span style="background:#f3f4f6;color:#4b5563;font-size:11px;padding:1px 8px;border-radius:10px;">${cs.length}</span>
+                </h3>
+                <div class="courses-grid">${cards}</div>
+            </div>`;
+        }).join('');
+    } else {
+        grid.innerHTML = filtered.map(c => renderCourseCardHTML(c, { showDetails: true })).join('');
+    }
 }
 
 function setCorsiStatusFilter(status) {
@@ -4731,6 +4862,9 @@ function closeMobileNav() {
     document.getElementById('corsiFilter').addEventListener('change', debouncedCorsi);
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
         el.addEventListener('click', () => setCorsiStatusFilter(el.dataset.status));
+    });
+    document.querySelectorAll('#corsiSortPills .status-pill').forEach(el => {
+        el.addEventListener('click', () => toggleCorsiSort(el.dataset.sort));
     });
     document.getElementById('corsistiSearch').addEventListener('input', debouncedCorsisti);
     document.getElementById('corsistiCourseFilter').addEventListener('change', debouncedCorsisti);
