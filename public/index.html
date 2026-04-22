@@ -2025,6 +2025,26 @@ function renderCourseCardHTML(c, opts = {}) {
     const refundAlertHTML = (c.businessState === 'cancellato' && paidStudents > 0)
         ? `<span class="state-badge refund-alert" title="${paidStudents} iscritti hanno pagato: verificare rimborsi o spostamento corso"><i class="fas fa-exclamation-triangle" style="font-size: 9px;"></i> ${paidStudents} da rimborsare/spostare</span>`
         : '';
+    const verdictBadgeHTML = renderVerdictBadge(c.handle);
+    // Notebook summary strip (compact, non-intrusive)
+    const nb = (COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].notebook) || {};
+    const totalNotes = (nb.notes || []).length + (nb.educatorNotes || []).length;
+    const tagsStr = (nb.tags || []).slice(0, 3).map(t =>
+        `<span style="background:#eff6ff;color:#1e40af;font-size:10px;padding:1px 6px;border-radius:10px;">${t.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>`
+    ).join(' ');
+    let plannedStr = '';
+    if (nb.plannedAction) {
+        const ps = verdictStyle(nb.plannedAction);
+        const deadline = nb.plannedActionDeadline ? ` entro ${nb.plannedActionDeadline.slice(5)}` : '';
+        plannedStr = `<span style="background:${ps.bg};color:${ps.fg};font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;" title="Azione pianificata"><i class="fas fa-bolt" style="font-size:8px;"></i> ${ps.label}${deadline}</span>`;
+    }
+    const notebookStripHTML = (totalNotes > 0 || tagsStr || plannedStr)
+        ? `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--text-light);">
+            ${totalNotes ? `<span title="Note nel notebook"><i class="fas fa-sticky-note"></i> ${totalNotes} ${totalNotes === 1 ? 'nota' : 'note'}</span>` : ''}
+            ${tagsStr}
+            ${plannedStr}
+        </div>`
+        : '';
 
     return `
     <div class="course-card" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" role="button" tabindex="0" aria-label="Dettaglio ${c.name}">
@@ -2036,6 +2056,7 @@ function renderCourseCardHTML(c, opts = {}) {
                         <span>${c.name}</span>
                         ${stateBadgeHTML}
                         ${refundAlertHTML}
+                        ${verdictBadgeHTML}
                     </div>
                     <div class="course-dates">
                         <i class="far fa-calendar-alt"></i> ${c.dates}
@@ -2076,6 +2097,7 @@ function renderCourseCardHTML(c, opts = {}) {
                 <span>${c.students.length}/${c.maxStudents} posti &bull; Min. ${c.minStudents}</span>
                 ${showDetails ? `<span>Costi: ${formatCurrency(s.costs)}</span>` : ''}
             </div>
+            ${notebookStripHTML}
         </div>
     </div>`;
 }
@@ -2143,6 +2165,55 @@ window.EXAM_RESULTS = {};
 window.HISTORICAL_STUDENTS = [];
 // Current source filter on Corsisti page: 'attuali' | 'storici' | 'tutti'
 window.corsistiSourceFilter = window.corsistiSourceFilter || 'attuali';
+
+// Recommendations from the data-driven engine: handle -> { verdict, confidence, metrics, baseline, reasoning, similarCourses }
+window.RECOMMENDATIONS = {};
+
+async function loadRecommendations() {
+    try {
+        const resp = await fetch('/api/recommendations');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && data.byHandle) {
+            window.RECOMMENDATIONS = data.byHandle;
+            console.log(`Recommendations loaded: ${data.count} future courses`);
+            // Re-render if the user is currently on the Corsi page
+            if (typeof currentPage !== 'undefined' && currentPage === 'corsi') {
+                renderCorsiPage();
+            }
+            if (typeof currentPage !== 'undefined' && currentPage === 'dashboard') {
+                renderDashboard();
+            }
+        }
+    } catch (e) {
+        console.error('Could not load recommendations:', e);
+        window.RECOMMENDATIONS = {};
+    }
+}
+
+function verdictStyle(verdict) {
+    switch (verdict) {
+        case 'in-traiettoria': return { bg: '#dcfce7', fg: '#15803d', icon: 'fa-check-circle', label: 'In traiettoria' };
+        case 'monitor':        return { bg: '#fef3c7', fg: '#b45309', icon: 'fa-eye',         label: 'Monitor' };
+        case 'rischio':        return { bg: '#ffedd5', fg: '#c2410c', icon: 'fa-exclamation-triangle', label: 'Rischio' };
+        case 'critico':        return { bg: '#fee2e2', fg: '#b91c1c', icon: 'fa-radiation',   label: 'Critico' };
+        case 'spingere':       return { bg: '#dbeafe', fg: '#1e40af', icon: 'fa-bullhorn',    label: 'Spingere' };
+        case 'posticipare':    return { bg: '#e0e7ff', fg: '#3730a3', icon: 'fa-clock',       label: 'Posticipare' };
+        case 'cancellare':     return { bg: '#fee2e2', fg: '#991b1b', icon: 'fa-ban',         label: 'Cancellare' };
+        default:               return { bg: '#f3f4f6', fg: '#4b5563', icon: 'fa-circle',      label: '—' };
+    }
+}
+
+function renderVerdictBadge(handle) {
+    const rec = window.RECOMMENDATIONS[handle];
+    if (!rec) return '';
+    const s = verdictStyle(rec.verdict);
+    const confLabel = rec.confidence === 'high' ? '' :
+                      rec.confidence === 'medium' ? ' · confidence media' :
+                      ' · confidence bassa';
+    const title = (rec.reasoning + confLabel).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+    return `<span class="state-badge" style="background:${s.bg};color:${s.fg};cursor:help;" title="${title}"><i class="fas ${s.icon}" style="font-size:9px;"></i> ${s.label}</span>`;
+}
 
 async function loadHistoricalStudents() {
     try {
@@ -2242,6 +2313,10 @@ async function loadApiData() {
     // Load historical students (pre-2024). Fire-and-forget: small JSON, served
     // by Node directly from disk, doesn't block anything.
     loadHistoricalStudents();
+
+    // Load recommendations (data-driven, transparent, no ML). Fire-and-forget:
+    // the card renders without them and re-renders once they arrive.
+    loadRecommendations();
 
     // Load courses
     try {
