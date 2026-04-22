@@ -1489,6 +1489,13 @@
             <select id="corsistiCourseFilter" aria-label="Filtra per corso">
                 <option value="all">Tutti i corsi</option>
             </select>
+            <select id="corsistiExamFilter" aria-label="Filtra per esito esame">
+                <option value="all">Esiti: tutti</option>
+                <option value="passed">Promossi</option>
+                <option value="retrial">Recupero</option>
+                <option value="failed">Bocciati</option>
+                <option value="none">In attesa / Nessun esame</option>
+            </select>
             <button class="link-btn" onclick="exportCorsisti()" aria-label="Esporta lista corsisti in CSV"><i class="fas fa-download"></i> Esporta CSV</button>
         </div>
         <div class="card">
@@ -2014,9 +2021,10 @@ function renderStudentRowHTML(st, opts = {}) {
     const emailKey = (st.email || '').toLowerCase().trim();
     const courseCount = emailKey ? COURSES.filter(c => c.students.some(s => (s.email || '').toLowerCase().trim() === emailKey)).length : 0;
     const courseCountBadge = courseCount > 1 ? `<span style="display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px;" title="${courseCount} corsi">${courseCount}</span>` : '';
+    const examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
     const clickAttr = emailKey ? `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"` : '';
     return `<tr ${clickAttr}>
-        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name">${st.name || '-'}${courseCountBadge}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
+        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${st.name || '-'}${courseCountBadge}${examBadgeHtml}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
         ${showCourse ? `<td>${st.courseCity || ''} - ${st.courseDates || ''}</td>` : ''}
         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>
@@ -2042,6 +2050,50 @@ async function loadCourseCosts() {
     }
 }
 
+// Exam results map: emailLower -> { result: 'passed'|'retrial'|'failed'|'unknown', score, examDate, courseName, attempts }
+window.EXAM_RESULTS = {};
+
+async function loadExamResults() {
+    try {
+        const response = await fetch('/api/exam-results');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.byEmail) {
+                window.EXAM_RESULTS = data.byEmail;
+                console.log(`Exam results loaded: ${data.count} unique students (${data.totalAttempts} attempts)`);
+            }
+        }
+    } catch (e) {
+        console.error('Could not load exam results:', e);
+        window.EXAM_RESULTS = {};
+    }
+}
+
+// Helpers for rendering exam outcome in student rows
+function getExamResultForStudent(student) {
+    const key = (student && student.email || '').toLowerCase().trim();
+    return key ? (window.EXAM_RESULTS[key] || null) : null;
+}
+
+function renderExamBadge(exam) {
+    if (!exam) return '';
+    const score = (exam.score != null) ? `${exam.score}%` : '';
+    const attemptsTitle = exam.attempts > 1 ? ` (tentativi: ${exam.attempts})` : '';
+    const dateTitle = exam.examDate ? ` — esame ${new Date(exam.examDate).toLocaleDateString('it-IT')}` : '';
+    const courseTitle = exam.courseName ? ` — ${exam.courseName}` : '';
+    const title = `${exam.result}${attemptsTitle}${dateTitle}${courseTitle}`;
+    if (exam.result === 'passed') {
+        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#dcfce7;color:#15803d;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-award" style="font-size:8px;"></i> Promosso ${score}</span>`;
+    }
+    if (exam.result === 'retrial') {
+        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#fef3c7;color:#b45309;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-redo" style="font-size:8px;"></i> Recupero ${score}</span>`;
+    }
+    if (exam.result === 'failed') {
+        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-times-circle" style="font-size:8px;"></i> Bocciato ${score}</span>`;
+    }
+    return '';
+}
+
 // =============================================
 // API DATA LOADING
 // =============================================
@@ -2056,6 +2108,10 @@ async function loadApiData() {
 
     // Load course costs FIRST (must be available before processing courses)
     await loadCourseCosts();
+
+    // Load exam results (Airtable Socrative pipeline) — non-blocking for UI,
+    // but we await so COURSES render has exam data on first paint.
+    await loadExamResults();
 
     // Load courses
     try {
@@ -2828,8 +2884,9 @@ function renderCourseDetailPage() {
                     const displayInitials = getInitials(displayName);
                     const origNameHtml = st.nameOverride ? `<div style="font-size: 10px; color: #9ca3af; text-decoration: line-through;" title="Nome originale Shopify">${st.name}</div>` : '';
                     const mismatchHtml = st.nameMismatch ? ` <span style="display: inline-flex; align-items: center; gap: 2px; background: #fef2f2; color: #dc2626; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; cursor: help;" title="Nome registrazione QR: ${st.registrationName || ''} — diverso da Shopify"><i class="fas fa-exclamation-triangle" style="font-size: 8px;"></i> QR: ${st.registrationName || ''}</span>` : (st.registrationName && !st.nameMismatch ? ` <span style="display: inline-flex; align-items: center; gap: 2px; background: #f0fdf4; color: #16a34a; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600; cursor: help;" title="Registrazione QR confermata"><i class="fas fa-check-circle" style="font-size: 8px;"></i> QR</span>` : '');
+                    const examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
                     return `<tr>
-                        <td><div class="name-cell"><span class="avatar">${displayInitials}</span><div class="name-info"><div class="name" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span class="editable-name" data-order="${st.orderNumber || ''}" data-course="${c.handle}" data-original="${st.name}" style="cursor: pointer;" onclick="editNameInline(this)" title="Clicca per modificare il nome">${displayName}</span>${isDup ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #fff7ed; color: #ea580c; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Stesso acquirente — ordine multiplo, verificare il nome"><i class="fas fa-clone" style="font-size: 8px;"></i> Doppio</span>' : ''}${mismatchHtml}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}</div>${origNameHtml}<div class="email">${st.email || ''}</div></div></div></td>
+                        <td><div class="name-cell"><span class="avatar">${displayInitials}</span><div class="name-info"><div class="name" style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;"><span class="editable-name" data-order="${st.orderNumber || ''}" data-course="${c.handle}" data-original="${st.name}" style="cursor: pointer;" onclick="editNameInline(this)" title="Clicca per modificare il nome">${displayName}</span>${isDup ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #fff7ed; color: #ea580c; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Stesso acquirente — ordine multiplo, verificare il nome"><i class="fas fa-clone" style="font-size: 8px;"></i> Doppio</span>' : ''}${mismatchHtml}${isRepeat ? ' <span style="display: inline-flex; align-items: center; gap: 2px; background: #eff6ff; color: #2563eb; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 600;" title="Ripartecipante — già iscritto ad altro corso SSA"><i class="fas fa-redo" style="font-size: 8px;"></i> Repeat</span>' : ''}${examBadgeHtml}</div>${origNameHtml}<div class="email">${st.email || ''}</div></div></div></td>
                         <td style="font-size: 12px; white-space: nowrap;">
                             <div class="phone-cell" data-email="${st.email || ''}" data-course="${c.handle}" data-order="${st.orderNumber || ''}" style="display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="editPhoneInline(this)" title="Clicca per modificare">
                                 ${phoneIcon}
@@ -3776,6 +3833,8 @@ function renderCorsistiPage() {
 
     const search = (document.getElementById('corsistiSearch').value || '').toLowerCase();
     const courseF = document.getElementById('corsistiCourseFilter').value;
+    const examFilterEl = document.getElementById('corsistiExamFilter');
+    const examF = examFilterEl ? examFilterEl.value : 'all';
 
     let allStudents = COURSES.flatMap(c =>
         c.students.map(st => ({
@@ -3788,6 +3847,11 @@ function renderCorsistiPage() {
     allStudents = allStudents.filter(st => {
         if (search && !(st.name || '').toLowerCase().includes(search) && !(st.email || '').toLowerCase().includes(search)) return false;
         if (courseF !== 'all' && st.courseId !== courseF) return false;
+        if (examF !== 'all') {
+            const exam = getExamResultForStudent(st);
+            if (examF === 'none') { if (exam) return false; }
+            else { if (!exam || exam.result !== examF) return false; }
+        }
         return true;
     });
 
@@ -4051,6 +4115,8 @@ function closeMobileNav() {
     document.getElementById('corsiFilter').addEventListener('change', debouncedCorsi);
     document.getElementById('corsistiSearch').addEventListener('input', debouncedCorsisti);
     document.getElementById('corsistiCourseFilter').addEventListener('change', debouncedCorsisti);
+    const examFilterEl = document.getElementById('corsistiExamFilter');
+    if (examFilterEl) examFilterEl.addEventListener('change', debouncedCorsisti);
 
     // Corsisti column sorting
     document.querySelectorAll('#corsistiTable th.sortable').forEach(th => {
