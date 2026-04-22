@@ -2548,6 +2548,79 @@ app.get('/api/shared/:token', async (req, res) => {
 });
 
 // ============================================================================
+// NOTEBOOK — educator-facing (no admin auth, scoped to share token)
+// An educator accesses /share/:token and can write notes that are:
+//   - stored under courseCosts[handle].notebook.educatorNotes
+//   - visible ONLY to admin and to THAT educator (filter by shareToken)
+//   - NEVER visible to other educators (filter below enforces this)
+// ============================================================================
+
+app.get('/api/shared/:token/notes', (req, res) => {
+  try {
+    const { token } = req.params;
+    const share = shareTokens[token];
+    if (!share) return res.status(404).json({ success: false, error: 'invalid-token' });
+    const notebook = (courseCosts[share.courseHandle] || {}).notebook || {};
+    const myNotes = (notebook.educatorNotes || [])
+      .filter(n => n.shareToken === token)
+      .map(n => ({ id: n.id, text: n.text, createdAt: n.createdAt }));
+    res.json({ success: true, courseHandle: share.courseHandle, notes: myNotes });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/shared/:token/notes', (req, res) => {
+  try {
+    const { token } = req.params;
+    const share = shareTokens[token];
+    if (!share) return res.status(404).json({ success: false, error: 'invalid-token' });
+    const { text } = req.body || {};
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      return res.status(400).json({ success: false, error: 'text required' });
+    }
+    const courseId = share.courseHandle;
+    const existing = courseCosts[courseId] || {};
+    const notebook = existing.notebook || {};
+    const educatorNotes = Array.isArray(notebook.educatorNotes) ? notebook.educatorNotes.slice() : [];
+    const note = {
+      id: crypto.randomUUID(),
+      shareToken: token,
+      educatorName: share.educatorName || '',
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+    };
+    educatorNotes.push(note);
+    courseCosts[courseId] = { ...existing, notebook: { ...notebook, educatorNotes } };
+    saveCostsToFile(courseCosts);
+    airtableConfigSet('course_costs', courseCosts).catch(() => {});
+    res.json({ success: true, note: { id: note.id, text: note.text, createdAt: note.createdAt } });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete('/api/shared/:token/notes/:noteId', (req, res) => {
+  try {
+    const { token, noteId } = req.params;
+    const share = shareTokens[token];
+    if (!share) return res.status(404).json({ success: false, error: 'invalid-token' });
+    const courseId = share.courseHandle;
+    const existing = courseCosts[courseId] || {};
+    const notebook = existing.notebook || {};
+    // Educator can only delete their own notes (matching shareToken AND id)
+    const kept = (notebook.educatorNotes || []).filter(n => !(n.id === noteId && n.shareToken === token));
+    courseCosts[courseId] = { ...existing, notebook: { ...notebook, educatorNotes: kept } };
+    saveCostsToFile(courseCosts);
+    airtableConfigSet('course_costs', courseCosts).catch(() => {});
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ============================================================================
 // SHARE TOKEN READ-ONLY PAGE (must be BEFORE wildcard route)
 // ============================================================================
 app.get('/share/:token', (req, res) => {
