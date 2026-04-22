@@ -2748,8 +2748,23 @@ app.get('/share/:token', (req, res) => {
     <div id="content">
       <div class="loading"><div class="spinner"></div><p>Caricamento corso...</p></div>
     </div>
+
+    <!-- Private notebook for this educator (visible only to admin + this educator) -->
+    <section id="educatorNotebook" style="max-width: 100%; margin: 24px 0; padding: 20px; background: white; border: 1px solid var(--border); border-radius: 12px;">
+      <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text); display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-sticky-note" style="color: var(--primary);"></i> Le tue note private
+      </h3>
+      <p style="font-size: 12px; color: var(--text-light); margin-bottom: 12px; line-height: 1.4;">
+        Queste note sono visibili solo a te e all'organizzazione SSA. Gli altri educator non possono vederle.
+      </p>
+      <textarea id="edNoteText" placeholder="Scrivi una nota..." rows="3" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button id="edNoteSubmit" style="padding: 8px 18px; background: var(--primary); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;"><i class="fas fa-plus"></i> Aggiungi</button>
+      </div>
+      <div id="edNotesList" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;"></div>
+    </section>
   </div>
-  <div class="footer">Sake Sommelier Association &copy; 2026 &mdash; Link condiviso, sola lettura</div>
+  <div class="footer">Sake Sommelier Association &copy; 2026 &mdash; Link condiviso</div>
 
   <script>
     const SAKE_COMPANY_DOMAIN = '${sakeCompanyDomain}';
@@ -2935,6 +2950,85 @@ app.get('/share/:token', (req, res) => {
       }
     }
     loadCourseData();
+
+    // ---- Educator private notebook ----
+    (function initEducatorNotebook() {
+      const token = ${JSON.stringify(req.params.token)};
+      const textarea = document.getElementById('edNoteText');
+      const button = document.getElementById('edNoteSubmit');
+      const list = document.getElementById('edNotesList');
+      if (!textarea || !button || !list) return;
+
+      function escapeHTML(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      function fmt(iso) {
+        try { return new Date(iso).toLocaleString('it-IT'); } catch (e) { return iso; }
+      }
+
+      async function loadNotes() {
+        try {
+          const r = await fetch('/api/shared/' + token + '/notes');
+          const d = await r.json();
+          if (!d.success) { list.innerHTML = '<div style="color:#b91c1c;font-size:12px;">Errore: ' + escapeHTML(d.error || '') + '</div>'; return; }
+          if (!d.notes.length) {
+            list.innerHTML = '<div style="color:#9ca3af;font-style:italic;font-size:13px;">Nessuna tua nota ancora.</div>';
+            return;
+          }
+          list.innerHTML = d.notes.slice().reverse().map(function(n) {
+            return '<div style="padding:10px;background:#fafafa;border-radius:8px;display:flex;gap:10px;align-items:flex-start;">' +
+              '<div style="flex:1;">' +
+                '<div style="font-size:10px;color:#6b7280;margin-bottom:4px;">' + escapeHTML(fmt(n.createdAt)) + '</div>' +
+                '<div style="font-size:13px;white-space:pre-wrap;">' + escapeHTML(n.text) + '</div>' +
+              '</div>' +
+              '<button onclick="edDeleteNote(\\'' + n.id + '\\')" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;" title="Elimina"><i class="fas fa-trash"></i></button>' +
+            '</div>';
+          }).join('');
+        } catch (e) {
+          list.innerHTML = '<div style="color:#b91c1c;font-size:12px;">Errore: ' + escapeHTML(e.message) + '</div>';
+        }
+      }
+
+      window.edDeleteNote = async function(id) {
+        if (!confirm('Eliminare questa nota?')) return;
+        try {
+          const r = await fetch('/api/shared/' + token + '/notes/' + encodeURIComponent(id), { method: 'DELETE' });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error || 'delete failed');
+          await loadNotes();
+        } catch (e) {
+          alert('Errore cancellando nota: ' + e.message);
+        }
+      };
+
+      button.addEventListener('click', async function() {
+        const text = (textarea.value || '').trim();
+        if (!text) return;
+        button.disabled = true;
+        try {
+          const r = await fetch('/api/shared/' + token + '/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+          });
+          const d = await r.json();
+          if (!d.success) throw new Error(d.error || 'save failed');
+          textarea.value = '';
+          await loadNotes();
+        } catch (e) {
+          alert('Errore: ' + e.message);
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      loadNotes();
+    })();
   </script>
 </body>
 </html>
