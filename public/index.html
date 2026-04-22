@@ -1854,7 +1854,10 @@ function parseCourseDate(handle, courseObj) {
             if (yearMatch) {
                 const year = yearMatch[1];
                 const startDate = `${year}-${monthNum}-01`;
-                return { start: startDate, end: startDate, display: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}` };
+                // End = last day of month (handles 28/29/30/31 automatically via day=0 of next month)
+                const lastDay = new Date(parseInt(year, 10), parseInt(monthNum, 10), 0).getDate();
+                const endDate = `${year}-${monthNum}-${String(lastDay).padStart(2, '0')}`;
+                return { start: startDate, end: endDate, display: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}` };
             }
         }
     }
@@ -1876,8 +1879,8 @@ function parseCourseDate(handle, courseObj) {
     return null;
 }
 
-function isFutureCourse(handle) {
-    const dateInfo = parseCourseDate(handle);
+function isFutureCourse(handle, courseObj) {
+    const dateInfo = parseCourseDate(handle, courseObj);
     if (!dateInfo) return false;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2081,7 +2084,7 @@ async function loadApiData() {
 
     // Process courses
     COURSES = coursesData
-        .filter(c => isFutureCourse(c.handle))
+        .filter(c => isFutureCourse(c.handle, c))
         .map(c => {
             const typeInfo = parseCourseType(c.handle, c.title);
             const city = parseCourseCity(c.handle, c.title, c.tags);
@@ -3860,7 +3863,7 @@ function openStudentModal(email) {
         const typeInfo = parseCourseType(c.handle, c.title);
         const city = parseCourseCity(c.handle, c.title, c.tags);
         const dateInfo = parseCourseDate(c.handle, c);
-        const isFuture = isFutureCourse(c.handle);
+        const isFuture = isFutureCourse(c.handle, c);
 
         // Resolve educator name
         let educatorName = c.educatorName || '';
