@@ -31,10 +31,54 @@ function classifyOutcome(course) {
   return enrolled >= min ? 'happened' : 'cancelled';
 }
 
+// ---- Date helpers ----
+
+// Parse Shopify created_at / published_at into a JS Date, tolerating nulls.
+function toDate(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// Day difference (b - a), rounded down; negative if b is before a.
+function daysBetween(a, b) {
+  if (!a || !b) return null;
+  const ms = b.getTime() - a.getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+}
+
+// ---- Per-course metrics ----
+
+// Compute raw metrics for a FUTURE course. Caller must pass `courseDate` (a
+// Date for when the course runs) and `now` (reference time, usually Date.now).
+// `openingDate` is when enrolment became possible — we use Shopify created_at
+// as a proxy.
+function courseMetrics(course, courseDate, now) {
+  const enrolled = (course.students || []).length || course.enrollmentCount || 0;
+  const opening = toDate(course.created_at) || toDate(course.published_at);
+  const daysSinceOpening = opening ? Math.max(1, daysBetween(opening, now)) : null;
+  const daysUntilCourse = courseDate ? daysBetween(now, courseDate) : null;
+  const velocity = daysSinceOpening ? enrolled / daysSinceOpening : null;
+  const projection = (velocity != null && daysUntilCourse != null && daysUntilCourse > 0)
+    ? Math.floor(enrolled + velocity * daysUntilCourse)
+    : enrolled;
+  return {
+    enrolled,
+    min: minStudentsFor(course),
+    daysSinceOpening,
+    daysUntilCourse,
+    velocity,
+    projection,
+  };
+}
+
 module.exports = {
   MIN_STUDENTS_PRESENZA,
   MIN_STUDENTS_ONLINE,
   isOnlineCourse,
   minStudentsFor,
   classifyOutcome,
+  toDate,
+  daysBetween,
+  courseMetrics,
 };
