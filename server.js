@@ -1451,6 +1451,82 @@ app.get('/api/historical-students', (req, res) => {
 });
 
 // ============================================================================
+// RECOMMENDATIONS (data-driven, transparent, no ML)
+// Reads already-cached course list, splits past/future, builds per-segment
+// historical baseline, emits verdict + reasoning per upcoming course.
+// ============================================================================
+const recommendations = require('./recommendations');
+
+// Mirror the frontend parseCourseDate(handle) month-from-handle logic.
+// Returns a midpoint Date for the course month (day 15) so analyse()
+// can put it on the past/future timeline. If no month in handle, falls
+// back to created_at.
+const ITALIAN_MONTHS = {
+  gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
+  luglio: 7, agosto: 8, settembre: 9, ottobre: 10, novembre: 11, dicembre: 12,
+};
+
+function getCourseEventDate(course) {
+  const h = (course.handle || '').toLowerCase();
+  for (const [name, num] of Object.entries(ITALIAN_MONTHS)) {
+    if (h.includes(name)) {
+      const m = h.match(/(\d{4})/);
+      if (m) {
+        return new Date(Date.UTC(parseInt(m[1], 10), num - 1, 15));
+      }
+    }
+  }
+  if (course.created_at) return new Date(course.created_at);
+  return null;
+}
+
+app.get('/api/recommendations', async (req, res) => {
+  try {
+    const cacheKey = 'recommendations';
+    if (req.query.refresh) cache.delete(cacheKey);
+    const cached = getCache(cacheKey);
+    if (cached) return res.json({ success: true, ...cached });
+
+    // Reuse the cached /api/courses full response. If absent, re-fetch raw
+    // products + orders minimally (without the full Twilio/educator pipeline
+    // — recommendations only need enrolment counts and dates).
+    const fullCacheKey = 'api_courses_full_response';
+    const fullCache = getCache(fullCacheKey);
+    let courses;
+    if (fullCache && Array.isArray(fullCache.data)) {
+      courses = fullCache.data;
+    } else {
+      const products = await fetchAllShopifyProducts();
+      const orders = await fetchAllShopifyOrders();
+      courses = products.filter(isCourseProduct).map(p => {
+        const enrol = [];
+        let revenue = 0;
+        orders.forEach(o => (o.line_items || []).forEach(li => {
+          if (li.product_id === p.id) {
+            enrol.push({ email: (o.customer && o.customer.email) || '' });
+            revenue += parseFloat(li.price || 0) * (li.quantity || 1);
+          }
+        }));
+        return {
+          handle: p.handle, title: p.title, created_at: p.created_at,
+          published_at: p.published_at, tags: p.tags, status: p.status,
+          educatorName: '',
+          students: enrol, enrollmentCount: enrol.length, revenue,
+        };
+      });
+    }
+
+    const result = recommendations.analyse(courses, new Date(), getCourseEventDate);
+    setCache(cacheKey, result, 900); // 15 min
+    res.set('Cache-Control', 'private, max-age=300');
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('Recommendations failed:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
 // EDUCATOR ROUTE
 // ============================================================================
 app.get('/api/educator/:id', async (req, res) => {
