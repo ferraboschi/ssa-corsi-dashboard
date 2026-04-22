@@ -2102,6 +2102,193 @@ function renderCourseCardHTML(c, opts = {}) {
     </div>`;
 }
 
+// ---- Notebook editor (admin view in course detail) ----
+
+function escapeHTMLInline(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderNotebookSection(c) {
+    const nb = (COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].notebook) || {};
+    const rec = window.RECOMMENDATIONS[c.handle] || null;
+    const recHTML = rec ? `
+        <div style="padding:12px 14px;background:#f8fafc;border-left:4px solid ${verdictStyle(rec.verdict).fg};border-radius:6px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-light);margin-bottom:4px;">
+                <i class="fas fa-chart-line"></i> Analisi dati storici · confidence ${rec.confidence}
+            </div>
+            <div style="font-size:13px;color:var(--text);line-height:1.5;">${escapeHTMLInline(rec.reasoning)}</div>
+            ${rec.baseline && rec.baseline.sampleSize > 0 ? `<div style="margin-top:6px;font-size:11px;color:var(--text-light);">Basato su ${rec.baseline.sampleSize} corsi storici simili (stesso tipo/modalità/educator).</div>` : ''}
+        </div>` : '';
+
+    const adminNotesHTML = (nb.notes || []).length
+        ? (nb.notes || []).slice().reverse().map(n => `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;background:#fafafa;border-radius:6px;font-size:13px;">
+                <div style="flex:1;">
+                    <div style="font-size:10px;color:var(--text-light);margin-bottom:2px;">${new Date(n.createdAt).toLocaleString('it-IT')} · admin</div>
+                    <div style="white-space:pre-wrap;">${escapeHTMLInline(n.text)}</div>
+                </div>
+                <button onclick="deleteNotebookNote('${c.handle.replace(/'/g, "\\'")}','${n.id}')" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:12px;" title="Elimina"><i class="fas fa-trash"></i></button>
+            </div>
+        `).join('')
+        : '<div style="color:var(--text-light);font-size:12px;font-style:italic;">Nessuna nota ancora.</div>';
+
+    const educatorNotesHTML = (nb.educatorNotes || []).length
+        ? `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text-light);font-weight:600;margin-bottom:6px;"><i class="fas fa-chalkboard-teacher"></i> Note dagli educator (link condiviso):</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                ${(nb.educatorNotes || []).slice().reverse().map(n => `
+                    <div style="padding:8px 10px;background:#eff6ff;border-left:3px solid #1e40af;border-radius:4px;font-size:13px;">
+                        <div style="font-size:10px;color:var(--text-light);margin-bottom:2px;">${new Date(n.createdAt).toLocaleString('it-IT')} · ${escapeHTMLInline(n.educatorName || 'educator')}</div>
+                        <div style="white-space:pre-wrap;">${escapeHTMLInline(n.text)}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>`
+        : '';
+
+    const tagsHTML = (nb.tags || []).map(t =>
+        `<span class="filter-pill">${escapeHTMLInline(t)} <span class="remove" onclick="removeNotebookTag('${c.handle.replace(/'/g, "\\'")}','${t.replace(/'/g, "\\'")}')">&times;</span></span>`
+    ).join('');
+
+    return `
+    <div class="section-title"><i class="fas fa-book"></i> Notebook</div>
+    <div id="notebookContainer" style="background:white;border-radius:10px;padding:16px;margin-bottom:24px;border:1px solid var(--border);">
+        ${recHTML}
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+            <label style="font-size:12px;color:var(--text-light);font-weight:600;">Azione pianificata:</label>
+            <select id="nbPlannedAction" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+                <option value=""${!nb.plannedAction ? ' selected' : ''}>— nessuna —</option>
+                <option value="in-traiettoria"${nb.plannedAction === 'in-traiettoria' ? ' selected' : ''}>In traiettoria</option>
+                <option value="monitor"${nb.plannedAction === 'monitor' ? ' selected' : ''}>Monitor</option>
+                <option value="spingere"${nb.plannedAction === 'spingere' ? ' selected' : ''}>Spingere</option>
+                <option value="posticipare"${nb.plannedAction === 'posticipare' ? ' selected' : ''}>Posticipare</option>
+                <option value="cancellare"${nb.plannedAction === 'cancellare' ? ' selected' : ''}>Cancellare</option>
+            </select>
+            <input type="date" id="nbDeadline" value="${nb.plannedActionDeadline || ''}" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button onclick="saveNotebookMeta('${c.handle.replace(/'/g, "\\'")}')" style="padding:6px 14px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">Salva azione</button>
+        </div>
+
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+            <label style="font-size:12px;color:var(--text-light);font-weight:600;">Tag:</label>
+            <div id="nbTagsContainer" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;">${tagsHTML}</div>
+            <input type="text" id="nbTagInput" placeholder="aggiungi tag + Invio" onkeypress="if(event.key==='Enter'){event.preventDefault();addNotebookTag('${c.handle.replace(/'/g, "\\'")}');}" style="padding:4px 10px;border:1px solid var(--border);border-radius:14px;font-size:11px;min-width:140px;">
+        </div>
+
+        <div style="margin-top:16px;">
+            <div style="font-size:12px;color:var(--text-light);font-weight:600;margin-bottom:6px;">Le tue note (solo tu admin le vedi):</div>
+            <textarea id="nbNewNoteText" placeholder="Scrivi una nota e premi Aggiungi..." rows="2" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+            <button onclick="saveNotebookNote('${c.handle.replace(/'/g, "\\'")}')" style="margin-top:6px;padding:6px 14px;background:var(--accent);color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;"><i class="fas fa-plus"></i> Aggiungi nota</button>
+            <div id="nbNotesList" style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+                ${adminNotesHTML}
+            </div>
+        </div>
+
+        ${educatorNotesHTML}
+    </div>`;
+}
+
+async function saveNotebookMeta(courseId) {
+    const plannedAction = document.getElementById('nbPlannedAction').value || null;
+    const plannedActionDeadline = document.getElementById('nbDeadline').value || null;
+    const existingTags = (COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook && COURSE_COSTS[courseId].notebook.tags) || [];
+    try {
+        const resp = await fetch(`/api/notebook/${encodeURIComponent(courseId)}/meta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plannedAction, plannedActionDeadline, tags: existingTags }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), notebook: data.notebook };
+        renderCourseDetailPage();
+    } catch (e) {
+        alert('Errore salvando azione: ' + e.message);
+    }
+}
+
+async function saveNotebookNote(courseId) {
+    const textarea = document.getElementById('nbNewNoteText');
+    const text = (textarea.value || '').trim();
+    if (!text) return;
+    try {
+        const resp = await fetch(`/api/notebook/${encodeURIComponent(courseId)}/notes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        const notebook = (COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook) || {};
+        const notes = [...(notebook.notes || []), data.note];
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), notebook: { ...notebook, notes } };
+        textarea.value = '';
+        renderCourseDetailPage();
+    } catch (e) {
+        alert('Errore salvando nota: ' + e.message);
+    }
+}
+
+async function deleteNotebookNote(courseId, noteId) {
+    if (!confirm('Eliminare questa nota?')) return;
+    try {
+        const resp = await fetch(`/api/notebook/${encodeURIComponent(courseId)}/notes/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'delete failed');
+        const notebook = (COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook) || {};
+        const notes = (notebook.notes || []).filter(n => n.id !== noteId);
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), notebook: { ...notebook, notes } };
+        renderCourseDetailPage();
+    } catch (e) {
+        alert('Errore cancellando nota: ' + e.message);
+    }
+}
+
+async function addNotebookTag(courseId) {
+    const input = document.getElementById('nbTagInput');
+    const v = (input.value || '').trim();
+    if (!v) return;
+    const existing = ((COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook && COURSE_COSTS[courseId].notebook.tags) || []);
+    if (existing.includes(v)) { input.value = ''; return; }
+    const newTags = [...existing, v].slice(0, 10);
+    try {
+        const resp = await fetch(`/api/notebook/${encodeURIComponent(courseId)}/meta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: newTags }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), notebook: data.notebook };
+        input.value = '';
+        renderCourseDetailPage();
+    } catch (e) {
+        alert('Errore aggiungendo tag: ' + e.message);
+    }
+}
+
+async function removeNotebookTag(courseId, tag) {
+    const existing = ((COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook && COURSE_COSTS[courseId].notebook.tags) || []);
+    const newTags = existing.filter(t => t !== tag);
+    try {
+        const resp = await fetch(`/api/notebook/${encodeURIComponent(courseId)}/meta`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tags: newTags }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), notebook: data.notebook };
+        renderCourseDetailPage();
+    } catch (e) {
+        alert('Errore rimuovendo tag: ' + e.message);
+    }
+}
+
 function renderStudentRowHTML(st, opts = {}) {
     const { showCourse = false } = opts;
     const initials = getInitials(st.name);
@@ -3133,6 +3320,8 @@ function renderCourseDetailPage() {
                 <div id="educatorPreviewBio">${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}</div>
             </div>
         </div>
+
+        ${renderNotebookSection(c)}
 
         <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
         ${c.students.length > 0 ? `
