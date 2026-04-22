@@ -2101,7 +2101,13 @@ function renderStudentRowHTML(st, opts = {}) {
         examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
     }
     const historicalBadge = st.isHistorical ? ' <span class="state-badge" style="background:#f3f4f6;color:#4b5563;font-size:9px;" title="Corsista storico pre-2024">Storico</span>' : '';
-    const clickAttr = (emailKey && !st.isHistorical) ? `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"` : '';
+    // Row click: open student modal. For historicals without email, use hist:INDEX key.
+    let clickAttr = '';
+    if (emailKey) {
+        clickAttr = `onclick="openStudentModal('${emailKey.replace(/'/g, "\\'")}')" style="cursor: pointer;"`;
+    } else if (st.isHistorical && typeof st.historicalIndex === 'number') {
+        clickAttr = `onclick="openStudentModal('hist:${st.historicalIndex}')" style="cursor: pointer;"`;
+    }
     const rowStyle = st.isHistorical ? 'background: #fafafa;' : '';
     return `<tr ${clickAttr} style="${rowStyle}">
         <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${st.name || '-'}${courseCountBadge}${historicalBadge}${examBadgeHtml}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
@@ -2145,7 +2151,7 @@ async function loadHistoricalStudents() {
         const data = await resp.json();
         if (data.success && Array.isArray(data.students)) {
             // Normalize to the same shape as current students so the table row renderer works
-            window.HISTORICAL_STUDENTS = data.students.map(s => ({
+            window.HISTORICAL_STUDENTS = data.students.map((s, idx) => ({
                 name: [s.firstName, s.lastName].filter(Boolean).join(' ').trim(),
                 email: s.email || '',
                 phone: s.phone || '',
@@ -2158,6 +2164,7 @@ async function loadHistoricalStudents() {
                 courseDates: s.courseDate || '',
                 historicalResult: s.result,       // passed | failed | enrolled
                 historicalSource: s.source,
+                historicalIndex: idx,
                 isHistorical: true
             }));
             console.log(`Historical students loaded: ${window.HISTORICAL_STUDENTS.length}`);
@@ -4192,54 +4199,107 @@ function exportCorsisti() {
 // STUDENT HISTORY MODAL
 // =============================================
 
-function openStudentModal(email) {
-    const emailKey = (email || '').toLowerCase().trim();
-    if (!emailKey) return;
+function openStudentModal(identifier) {
+    // identifier can be:
+    //   - an email (normal case): search Shopify courses + historical data
+    //   - "hist:N" (historical-only click, when no email is available): show that one record
+    const id = String(identifier || '').trim();
+    if (!id) return;
+
+    const isHistOnly = id.startsWith('hist:');
+    const emailKey = isHistOnly ? '' : id.toLowerCase();
+    const histIndex = isHistOnly ? parseInt(id.slice(5), 10) : -1;
 
     // Build full course list from cached API data (includes ALL courses: past + active)
     const allRawCourses = getCached('courses') || [];
     const participations = [];
+    let fallbackStudentName = '';
 
-    allRawCourses.forEach(c => {
-        const rawStudents = c.students || [];
-        const students = deduplicateStudents(rawStudents);
-        const match = students.find(st => (st.email || '').toLowerCase().trim() === emailKey);
-        if (!match) return;
+    if (emailKey) {
+        allRawCourses.forEach(c => {
+            const rawStudents = c.students || [];
+            const students = deduplicateStudents(rawStudents);
+            const match = students.find(st => (st.email || '').toLowerCase().trim() === emailKey);
+            if (!match) return;
 
-        const typeInfo = parseCourseType(c.handle, c.title);
-        const city = parseCourseCity(c.handle, c.title, c.tags);
-        const dateInfo = parseCourseDate(c.handle, c);
-        const isFuture = isFutureCourse(c.handle, c);
+            const typeInfo = parseCourseType(c.handle, c.title);
+            const city = parseCourseCity(c.handle, c.title, c.tags);
+            const dateInfo = parseCourseDate(c.handle, c);
+            const isFuture = isFutureCourse(c.handle, c);
 
-        // Resolve educator name
-        let educatorName = c.educatorName || '';
-        if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
-            educatorName = COURSE_COSTS[c.handle].educatorName;
-        }
-        if (!educatorName && c.tags) {
-            const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
-            const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
-            if (educatorTag) educatorName = educatorTag.replace('educator:', '').trim();
-        }
-        educatorName = educatorName || 'Da assegnare';
+            // Resolve educator name
+            let educatorName = c.educatorName || '';
+            if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+                educatorName = COURSE_COSTS[c.handle].educatorName;
+            }
+            if (!educatorName && c.tags) {
+                const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
+                const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+                if (educatorTag) educatorName = educatorTag.replace('educator:', '').trim();
+            }
+            educatorName = educatorName || 'Da assegnare';
 
-        participations.push({
-            courseId: c.handle,
-            city: city || '',
-            dates: dateInfo ? dateInfo.display : '',
-            level: typeInfo.levelLabel,
-            levelClass: typeInfo.level,
-            delivery: typeInfo.deliveryLabel,
-            deliveryClass: typeInfo.delivery,
-            deliveryIcon: typeInfo.deliveryIcon,
-            color: typeInfo.color,
-            educator: educatorName,
-            orderDate: match.orderDate,
-            financialStatus: match.financialStatus,
-            studentName: match.name,
-            studentEmail: match.email,
-            isPast: !isFuture
+            participations.push({
+                courseId: c.handle,
+                city: city || '',
+                dates: dateInfo ? dateInfo.display : '',
+                level: typeInfo.levelLabel,
+                levelClass: typeInfo.level,
+                delivery: typeInfo.deliveryLabel,
+                deliveryClass: typeInfo.delivery,
+                deliveryIcon: typeInfo.deliveryIcon,
+                color: typeInfo.color,
+                educator: educatorName,
+                orderDate: match.orderDate,
+                financialStatus: match.financialStatus,
+                studentName: match.name,
+                studentEmail: match.email,
+                isPast: !isFuture,
+                isHistorical: false
+            });
         });
+    }
+
+    // Add historical participations (pre-2024)
+    const historicalMatches = [];
+    if (emailKey) {
+        (window.HISTORICAL_STUDENTS || []).forEach(h => {
+            if ((h.email || '').toLowerCase().trim() === emailKey) historicalMatches.push(h);
+        });
+    } else if (histIndex >= 0) {
+        const rec = (window.HISTORICAL_STUDENTS || [])[histIndex];
+        if (rec) historicalMatches.push(rec);
+    }
+
+    historicalMatches.forEach(h => {
+        const resultLabel = h.historicalResult === 'passed' ? 'Promosso'
+            : h.historicalResult === 'failed' ? 'Bocciato'
+            : 'Iscritto';
+        const resultColor = h.historicalResult === 'passed' ? '#15803d'
+            : h.historicalResult === 'failed' ? '#b91c1c'
+            : '#3730a3';
+        participations.push({
+            courseId: null,
+            city: h.courseCity || '',
+            dates: h.courseDates ? h.courseDates.slice(0, 10) : '',
+            level: resultLabel,
+            levelClass: 'certificato',
+            delivery: 'Storico',
+            deliveryClass: 'presenza',
+            deliveryIcon: 'fa-archive',
+            color: 'blue',
+            educator: (h.historicalSource || '').replace(/-xlsx$/, '').replace(/-/g, ' ') || 'archivio',
+            orderDate: h.courseDates || '',
+            financialStatus: '',
+            studentName: h.name || '',
+            studentEmail: h.email || '',
+            isPast: true,
+            isHistorical: true,
+            historicalResult: h.historicalResult,
+            historicalResultColor: resultColor,
+            historicalResultLabel: resultLabel
+        });
+        if (!fallbackStudentName) fallbackStudentName = h.name || '';
     });
 
     // Sort by date (most recent first)
@@ -4249,7 +4309,7 @@ function openStudentModal(email) {
         return db.localeCompare(da);
     });
 
-    const studentName = participations[0]?.studentName || emailKey;
+    const studentName = participations[0]?.studentName || fallbackStudentName || emailKey || 'Corsista storico';
     const totalCourses = participations.length;
     const uniqueTypes = [...new Set(participations.map(p => p.level))];
     const uniqueCities = [...new Set(participations.map(p => p.city).filter(Boolean))];
@@ -4271,14 +4331,24 @@ function openStudentModal(email) {
         participations.forEach(p => {
             const isPaid = p.financialStatus === 'paid';
             const dateStr = p.orderDate ? new Date(p.orderDate).toLocaleDateString('it-IT') : '';
-            html += `<div class="student-course-card" onclick="closeStudentModal(); window.currentCourseId='${p.courseId}'; openCourseDetail('${p.courseId}')">
+            // Historical entries have no Shopify courseId; don't try to navigate
+            const clickHandler = p.courseId
+                ? `onclick="closeStudentModal(); window.currentCourseId='${p.courseId}'; openCourseDetail('${p.courseId}')" style="cursor: pointer;"`
+                : `style="cursor: default; background: #fafafa;"`;
+            const rightBadge = p.isHistorical
+                ? `<span style="font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: ${p.historicalResultColor}22; color: ${p.historicalResultColor};">${p.historicalResultLabel}</span>`
+                : `<span class="badge ${isPaid ? 'paid' : 'pending'}" style="font-size: 9px; padding: 2px 6px;">${isPaid ? 'Pagato' : (p.financialStatus || 'In attesa')}</span>`;
+            const pastOrHistoricalTag = p.isHistorical
+                ? ' <span style="font-size: 9px; color: #6b7280; background: #f3f4f6; padding: 1px 6px; border-radius: 8px;">storico</span>'
+                : (p.isPast ? ' <span style="font-size: 9px; color: var(--text-light);">(passato)</span>' : '');
+            html += `<div class="student-course-card" ${clickHandler}>
                 <div class="student-course-dot course-banner ${p.color}"></div>
                 <div class="student-course-info">
-                    <div class="city">${p.city || 'Corso'} <span class="badge ${p.levelClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;">${p.level}</span> <span class="badge ${p.deliveryClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;"><i class="fas ${p.deliveryIcon}" style="font-size: 8px; margin-right: 2px;"></i>${p.delivery}</span>${p.isPast ? ' <span style="font-size: 9px; color: var(--text-light);">(passato)</span>' : ''}</div>
-                    <div class="meta"><i class="far fa-calendar-alt"></i> ${p.dates} &bull; <i class="fas fa-chalkboard-teacher"></i> ${p.educator}${dateStr ? ` &bull; Iscritto il ${dateStr}` : ''}</div>
+                    <div class="city">${p.city || 'Corso'} <span class="badge ${p.levelClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;">${p.level}</span> <span class="badge ${p.deliveryClass}" style="font-size: 9px; padding: 1px 6px; vertical-align: middle;"><i class="fas ${p.deliveryIcon}" style="font-size: 8px; margin-right: 2px;"></i>${p.delivery}</span>${pastOrHistoricalTag}</div>
+                    <div class="meta"><i class="far fa-calendar-alt"></i> ${p.dates} &bull; <i class="fas fa-chalkboard-teacher"></i> ${p.educator}${dateStr ? ` &bull; ${p.isHistorical ? 'Archivio' : 'Iscritto il'} ${dateStr}` : ''}</div>
                 </div>
                 <div style="flex-shrink: 0;">
-                    <span class="badge ${isPaid ? 'paid' : 'pending'}" style="font-size: 9px; padding: 2px 6px;">${isPaid ? 'Pagato' : (p.financialStatus || 'In attesa')}</span>
+                    ${rightBadge}
                 </div>
             </div>`;
         });
