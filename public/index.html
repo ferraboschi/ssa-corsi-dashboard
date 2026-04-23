@@ -1382,7 +1382,6 @@
             <button class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
             <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
             <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
-            <button data-page="passati"><i class="fas fa-history"></i> Passati</button>
             <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
         </nav>
         <div class="header-actions">
@@ -1410,7 +1409,6 @@
     <button class="active" data-page="dashboard"><i class="fas fa-chart-pie"></i> Dashboard</button>
     <button data-page="corsi"><i class="fas fa-graduation-cap"></i> Corsi</button>
     <button data-page="corsisti"><i class="fas fa-users"></i> Corsisti</button>
-    <button data-page="passati"><i class="fas fa-history"></i> Passati</button>
     <button data-page="educator"><i class="fas fa-chalkboard-teacher"></i> Educator</button>
     <hr style="border:none;border-top:1px solid var(--border);margin:8px 0;">
     <button onclick="window.location.href='/auth/logout'" style="color:var(--danger);"><i class="fas fa-sign-out-alt"></i> Esci</button>
@@ -2889,10 +2887,16 @@ function navigateTo(page) {
 }
 
 function renderCurrentPage() {
+    // 'passati' is deprecated as a standalone page — it is now a tab inside Corsi.
+    // Redirect any stale sessionStorage/bookmark reference to the new location.
+    if (currentPage === 'passati') {
+        currentPage = 'corsi';
+        window.corsiStatusFilter = 'passati';
+        // fall through to the corsi render path
+    }
     if (currentPage === 'dashboard') renderDashboard();
     else if (currentPage === 'corsi') renderCorsiPage();
     else if (currentPage === 'corsisti') renderCorsistiPage();
-    else if (currentPage === 'passati') renderPastCoursesPage();
     else if (currentPage === 'educator') renderEducatorPage();
     else if (currentPage === 'course-detail') renderCourseDetailPage();
 }
