@@ -1593,9 +1593,11 @@
                     <thead><tr>
                         <th class="sortable" data-sort="name">Corsista <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
                         <th>Corso</th>
+                        <th>Esito</th>
                         <th class="sortable" data-sort="orderDate">Data Iscrizione <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
                         <th class="sortable" data-sort="financialStatus">Pagamento <span class="sort-icon"><i class="fas fa-sort"></i></span></th>
                         <th>Ordine Shopify</th>
+                        <th></th>
                     </tr></thead>
                     <tbody></tbody>
                 </table>
@@ -1679,6 +1681,17 @@
             <button class="student-modal-close" onclick="closeStudentModal()" aria-label="Chiudi"><i class="fas fa-times"></i></button>
         </div>
         <div class="student-modal-body" id="studentModalBody"></div>
+    </div>
+</div>
+
+<!-- Student editor: identity overrides (global) + outcome/note (per course) -->
+<div class="student-modal-overlay" id="studentEditorOverlay" onclick="if(event.target===this)closeStudentEditor()">
+    <div class="student-modal" style="max-width:560px;">
+        <div class="student-modal-header">
+            <h3 id="studentEditorTitle">Modifica corsista</h3>
+            <button class="student-modal-close" onclick="closeStudentEditor()" aria-label="Chiudi"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="student-modal-body" id="studentEditorBody" style="padding:20px;"></div>
     </div>
 </div>
 
@@ -2386,25 +2399,24 @@ async function removeNotebookTag(courseId, tag) {
 
 function renderStudentRowHTML(st, opts = {}) {
     const { showCourse = false } = opts;
-    const initials = getInitials(st.name);
+    const identity = resolveStudentIdentity(st);
+    const displayName = identity.name || '-';
+    const displayEmail = identity.email;
+    const initials = getInitials(displayName);
     const isPaid = st.financialStatus === 'paid';
-    // Count how many courses this student appears in
-    const emailKey = (st.email || '').toLowerCase().trim();
-    const courseCount = emailKey ? COURSES.filter(c => c.students.some(s => (s.email || '').toLowerCase().trim() === emailKey)).length : 0;
+    const emailKey = identity.originalEmail;
+    // Resolve the course this row refers to (needed for outcome/note resolver).
+    const handle = st.courseId || '';
+    const courseObj = (window.ALL_COURSES || []).find(c => c.handle === handle)
+        || (window.COURSES || []).find(c => c.handle === handle)
+        || (handle ? { handle, businessState: st.isHistorical ? 'eseguito' : null } : null);
+    const outcome = resolveStudentOutcome(st, courseObj);
+    const outcomeCell = renderOutcomeColumn(outcome);
+    // Repeat badge: count distinct courses this email appears in
+    const courseCount = emailKey ? COURSES.filter(c => c.students.some(s => _normEmail(s.email) === emailKey)).length : 0;
     const courseCountBadge = courseCount > 1 ? `<span style="display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; width: 16px; height: 16px; border-radius: 50%; margin-left: 4px;" title="${courseCount} corsi">${courseCount}</span>` : '';
-    // Historical students carry their own result; current students go through exam-results
-    let examBadgeHtml;
-    if (st.isHistorical) {
-        const map = {
-            passed: ` <span class="state-badge" style="background:#dcfce7;color:#15803d;" title="Promosso (storico pre-2024 — fonte: ${st.historicalSource || '?'})"><i class="fas fa-award" style="font-size:8px;"></i> Promosso</span>`,
-            failed: ` <span class="state-badge" style="background:#fee2e2;color:#b91c1c;" title="Bocciato (storico pre-2024 — fonte: ${st.historicalSource || '?'})"><i class="fas fa-times-circle" style="font-size:8px;"></i> Bocciato</span>`,
-            enrolled: ` <span class="state-badge" style="background:#e0e7ff;color:#3730a3;" title="Iscritto (Eventbrite — esito sconosciuto)"><i class="fas fa-user-graduate" style="font-size:8px;"></i> Iscritto</span>`
-        };
-        examBadgeHtml = map[st.historicalResult] || '';
-    } else {
-        examBadgeHtml = renderExamBadge(getExamResultForStudent(st));
-    }
     const historicalBadge = st.isHistorical ? ' <span class="state-badge" style="background:#f3f4f6;color:#4b5563;font-size:9px;" title="Corsista storico pre-2024">Storico</span>' : '';
+    const profileBadge = identity.hasProfileOverride ? ' <i class="fas fa-user-edit" style="font-size:10px;color:var(--accent);" title="Identità corretta manualmente"></i>' : '';
     // Row click: open student modal. For historicals without email, use hist:INDEX key.
     let clickAttr = '';
     if (emailKey) {
@@ -2413,12 +2425,18 @@ function renderStudentRowHTML(st, opts = {}) {
         clickAttr = `onclick="openStudentModal('hist:${st.historicalIndex}')" style="cursor: pointer;"`;
     }
     const rowStyle = st.isHistorical ? 'background: #fafafa;' : '';
+    // Edit button opens the per-student editor (identity + outcome + note)
+    const editBtn = (emailKey && handle)
+        ? `<button type="button" class="link-btn" onclick="event.stopPropagation(); openStudentEditor('${handle.replace(/'/g, "\\'")}','${emailKey.replace(/'/g, "\\'")}')" title="Modifica dati studente" style="background:none;border:none;color:var(--text-light);cursor:pointer;font-size:12px;"><i class="fas fa-pen"></i></button>`
+        : '';
     return `<tr ${clickAttr} style="${rowStyle}">
-        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${st.name || '-'}${courseCountBadge}${historicalBadge}${examBadgeHtml}</div>${opts.showEmail !== false ? `<div class="email">${st.email || ''}</div>` : ''}</div></div></td>
+        <td><div class="name-cell"><span class="avatar">${initials}</span><div class="name-info"><div class="name" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${displayName}${courseCountBadge}${historicalBadge}${profileBadge}</div>${opts.showEmail !== false ? `<div class="email">${displayEmail || ''}</div>` : ''}</div></div></td>
         ${showCourse ? `<td>${st.courseCity || ''} ${st.courseDates ? ('- ' + (st.courseDates.slice ? st.courseDates.slice(0,10) : st.courseDates)) : ''}</td>` : ''}
+        <td>${outcomeCell}</td>
         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
         <td>${st.isHistorical ? '<span style="color:#9ca3af;font-size:12px;">—</span>' : `<span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span>`}</td>
         <td style="font-family: monospace; font-size: 12px;">${st.orderNumber || '-'}</td>
+        <td style="text-align:right;">${editBtn}</td>
     </tr>`;
 }
 
@@ -2438,6 +2456,124 @@ async function loadCourseCosts() {
     } catch (e) {
         console.error('Could not load course costs:', e);
     }
+}
+
+// Student overrides — identity (profiles) + outcome/note per course.
+// Shape: { profiles: {originalEmail: {displayName, primaryEmail}},
+//          outcomeOverrides: {handle: {email: 'passed'|'failed'}},
+//          studentNotes: {handle: {email: {text, updatedAt}}} }
+window.STUDENT_OVERRIDES = { profiles: {}, outcomeOverrides: {}, studentNotes: {} };
+
+async function loadStudentOverrides() {
+    try {
+        const response = await fetch('/api/student-overrides');
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                window.STUDENT_OVERRIDES = {
+                    profiles: data.profiles || {},
+                    outcomeOverrides: data.outcomeOverrides || {},
+                    studentNotes: data.studentNotes || {},
+                };
+                console.log(`Student overrides loaded: ${Object.keys(data.profiles || {}).length} profiles, outcomes for ${Object.keys(data.outcomeOverrides || {}).length} courses`);
+            }
+        }
+    } catch (e) {
+        console.error('Could not load student overrides:', e);
+    }
+}
+
+// ---- Resolver: identity + outcome + note per student ----
+// Identity key is always the ORIGINAL email (Shopify/historical). Edits to
+// displayName or primaryEmail live in studentProfiles[originalEmail]; the UI
+// shows the resolved values while filtering/linking still works on the stable
+// original key.
+function _normEmail(e) { return (e || '').toString().toLowerCase().trim(); }
+
+function resolveStudentIdentity(student) {
+    const original = _normEmail(student && student.email);
+    const profile = (window.STUDENT_OVERRIDES && window.STUDENT_OVERRIDES.profiles && window.STUDENT_OVERRIDES.profiles[original]) || null;
+    return {
+        originalEmail: original,
+        email: (profile && profile.primaryEmail) || original,
+        name: (profile && profile.displayName) || (student && student.name) || '',
+        hasProfileOverride: !!profile,
+    };
+}
+
+// Resolves the exam outcome for a student on a specific course. Returns
+// { result: 'passed'|'failed'|null, retrial: bool, score, source }.
+// Priority:
+//   1) manual outcomeOverride (per-course, keyed by resolved or original email)
+//   2) Socrative EXAM_RESULTS (by email)
+//   3) historical XLS result (for isHistorical students)
+//   4) derived: if course is 'eseguito', treat unresolved as 'failed'
+//   5) otherwise null (in attesa)
+function resolveStudentOutcome(student, course) {
+    const id = resolveStudentIdentity(student);
+    const handle = (course && (course.handle || course.id)) || student.courseId || '';
+    const ov = window.STUDENT_OVERRIDES || {};
+    const coursedOverrides = (ov.outcomeOverrides && ov.outcomeOverrides[handle]) || {};
+    // Try both resolved email and original — in case the override was set on either.
+    const override = coursedOverrides[id.email] || coursedOverrides[id.originalEmail];
+    if (override === 'passed' || override === 'failed') {
+        // When overriding to passed, preserve Socrative retrial marker if present.
+        const exam = window.EXAM_RESULTS ? (window.EXAM_RESULTS[id.originalEmail] || window.EXAM_RESULTS[id.email]) : null;
+        const retrial = override === 'passed' && exam && exam.result === 'retrial';
+        return { result: override, retrial, score: exam ? exam.score : null, source: 'override' };
+    }
+    // Socrative data
+    const exam = window.EXAM_RESULTS ? (window.EXAM_RESULTS[id.originalEmail] || window.EXAM_RESULTS[id.email]) : null;
+    if (exam && exam.result) {
+        if (exam.result === 'passed' || exam.result === 'retrial') {
+            return { result: 'passed', retrial: exam.result === 'retrial', score: exam.score, source: 'socrative' };
+        }
+        if (exam.result === 'failed') {
+            return { result: 'failed', retrial: false, score: exam.score, source: 'socrative' };
+        }
+    }
+    // Historical (pre-2024)
+    if (student && student.isHistorical) {
+        const hr = student.historicalResult;
+        if (hr === 'passed') return { result: 'passed', retrial: false, score: null, source: 'historical' };
+        if (hr === 'failed') return { result: 'failed', retrial: false, score: null, source: 'historical' };
+        // 'enrolled' → fall through to derivation
+    }
+    // Derived rule: executed course with no positive signal → bocciato
+    if (course && course.businessState === 'eseguito') {
+        return { result: 'failed', retrial: false, score: null, source: 'derived' };
+    }
+    return { result: null, retrial: false, score: null, source: null };
+}
+
+function resolveStudentNote(student, course) {
+    const id = resolveStudentIdentity(student);
+    const handle = (course && (course.handle || course.id)) || student.courseId || '';
+    const ov = window.STUDENT_OVERRIDES || {};
+    const bucket = (ov.studentNotes && ov.studentNotes[handle]) || {};
+    return bucket[id.email] || bucket[id.originalEmail] || null;
+}
+
+function renderOutcomeColumn(outcome) {
+    if (!outcome || !outcome.result) {
+        return '<span style="color:var(--text-light);font-size:11px;font-style:italic;">— In attesa</span>';
+    }
+    const score = outcome.score != null ? ` ${outcome.score}%` : '';
+    const srcIcon = outcome.source === 'override'
+        ? ` <i class="fas fa-user-edit" style="font-size:8px;opacity:0.7;" title="Override manuale"></i>`
+        : outcome.source === 'derived'
+            ? ` <i class="fas fa-calculator" style="font-size:8px;opacity:0.7;" title="Derivato: iscritti − promossi su corso eseguito"></i>`
+            : '';
+    if (outcome.result === 'passed') {
+        const rec = outcome.retrial
+            ? ` <span style="background:#fde68a;color:#92400e;font-size:9px;padding:0 4px;border-radius:6px;font-weight:700;margin-left:2px;" title="Esame di recupero"><i class="fas fa-redo" style="font-size:7px;"></i> recupero</span>`
+            : '';
+        return `<span style="display:inline-flex;align-items:center;gap:3px;background:#dcfce7;color:#15803d;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;"><i class="fas fa-award" style="font-size:8px;"></i>Promosso${score}${srcIcon}</span>${rec}`;
+    }
+    if (outcome.result === 'failed') {
+        return `<span style="display:inline-flex;align-items:center;gap:3px;background:#fee2e2;color:#b91c1c;font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;"><i class="fas fa-times-circle" style="font-size:8px;"></i>Bocciato${score}${srcIcon}</span>`;
+    }
+    return '';
 }
 
 // Exam results map: emailLower -> { result: 'passed'|'retrial'|'failed'|'unknown', score, examDate, courseName, attempts }
@@ -2954,6 +3090,10 @@ async function loadApiData() {
 
     // Load course costs FIRST (must be available before processing courses)
     await loadCourseCosts();
+
+    // Student overrides (identity profiles + outcome + notes). Loaded here so the
+    // resolver sees them before Corsisti renders.
+    await loadStudentOverrides();
 
     // Load exam results (Airtable Socrative pipeline) — non-blocking for UI,
     // but we await so COURSES render has exam data on first paint.
@@ -5054,20 +5194,16 @@ function renderCorsistiPage() {
         if (search && !(st.name || '').toLowerCase().includes(search) && !(st.email || '').toLowerCase().includes(search)) return false;
         if (courseF !== 'all' && st.courseId !== courseF) return false;
         if (examF !== 'all') {
-            // Historical students carry their own historicalResult; current students go through exam-results lookup
-            if (st.isHistorical) {
-                const hr = st.historicalResult;
-                // Map "passed"/"failed"/"enrolled" to the same filter keys
-                if (examF === 'passed' && hr !== 'passed') return false;
-                if (examF === 'failed' && hr !== 'failed') return false;
-                if (examF === 'retrial') return false;          // no retrial concept in historical data
-                if (examF === 'none' && (hr === 'passed' || hr === 'failed')) return false;
-            } else {
-                const exam = getExamResultForStudent(st);
-                if (examF === 'none') { if (exam) return false; }
-                else if (examF === 'passed') { if (!exam || (exam.result !== 'passed' && exam.result !== 'retrial')) return false; }
-                else { if (!exam || exam.result !== examF) return false; }
-            }
+            // Use the unified resolver so the filter works identically for
+            // current and historical students, and applies manual overrides.
+            const course = (window.ALL_COURSES || []).find(c => c.handle === st.courseId)
+                || (window.COURSES || []).find(c => c.handle === st.courseId)
+                || (st.courseId ? { handle: st.courseId, businessState: st.isHistorical ? 'eseguito' : null } : null);
+            const outcome = resolveStudentOutcome(st, course);
+            if (examF === 'passed') { if (outcome.result !== 'passed') return false; }
+            else if (examF === 'retrial') { if (!(outcome.result === 'passed' && outcome.retrial)) return false; }
+            else if (examF === 'failed') { if (outcome.result !== 'failed') return false; }
+            else if (examF === 'none') { if (outcome.result !== null) return false; }
         }
         return true;
     });
@@ -5290,6 +5426,142 @@ function openStudentModal(identifier) {
 function closeStudentModal() {
     document.getElementById('studentModalOverlay').classList.remove('show');
     document.body.style.overflow = '';
+}
+
+// ---- Student editor (identity + outcome + note) ----
+// Opens a dedicated modal to fix up a student's displayed name, primary email,
+// exam outcome and a contextual note. Identity edits are global (propagate to
+// every course); outcome and note stay scoped to the selected course handle.
+function openStudentEditor(handle, originalEmail) {
+    const key = _normEmail(originalEmail);
+    if (!key || !handle) return;
+    const ov = window.STUDENT_OVERRIDES || { profiles: {}, outcomeOverrides: {}, studentNotes: {} };
+    const profile = ov.profiles[key] || {};
+    const currentOutcome = (ov.outcomeOverrides[handle] || {})[key] || null;
+    const currentNote = ((ov.studentNotes[handle] || {})[key] || {}).text || '';
+    // Find the student record + course to display contextual info
+    const course = (window.ALL_COURSES || []).find(c => c.handle === handle)
+        || (window.COURSES || []).find(c => c.handle === handle);
+    let originalName = '';
+    if (course) {
+        const match = (course.students || []).find(s => _normEmail(s.email) === key);
+        if (match) originalName = match.name || '';
+    }
+    const displayName = profile.displayName || originalName || '';
+    const primaryEmail = profile.primaryEmail || key;
+    // Compute automatic (data-driven) outcome to show the user what "Auto" resolves to
+    const fakeStudent = { email: key, name: originalName, courseId: handle };
+    // Temporarily strip outcome override to get the auto value
+    const savedOverride = (ov.outcomeOverrides[handle] || {})[key];
+    if (savedOverride) delete ov.outcomeOverrides[handle][key];
+    const autoOutcome = resolveStudentOutcome(fakeStudent, course);
+    if (savedOverride) { ov.outcomeOverrides[handle] = ov.outcomeOverrides[handle] || {}; ov.outcomeOverrides[handle][key] = savedOverride; }
+    const autoLabel = autoOutcome.result === 'passed' ? `Promosso${autoOutcome.retrial ? ' (recupero)' : ''}`
+                    : autoOutcome.result === 'failed' ? `Bocciato${autoOutcome.source === 'derived' ? ' (derivato)' : ''}`
+                    : 'In attesa';
+    const btnStyle = 'padding:8px 14px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:white;';
+    const activeBtn = ';box-shadow:0 0 0 2px var(--accent) inset;';
+    const courseLabel = course ? `${course.name || course.title || handle}` : handle;
+    const body = document.getElementById('studentEditorBody');
+    body.innerHTML = `
+        <div style="font-size:12px;color:var(--text-light);margin-bottom:12px;"><i class="fas fa-graduation-cap"></i> ${escapeHTMLInline(courseLabel)}</div>
+
+        <div style="display:grid;grid-template-columns:1fr;gap:12px;">
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-light);">Nome (mostrato ovunque)</label>
+                <input id="editName" type="text" value="${escapeHTMLInline(displayName)}" placeholder="${escapeHTMLInline(originalName || 'Nome studente')}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:4px;">
+                ${originalName && displayName && displayName !== originalName ? `<div style="font-size:10px;color:var(--text-light);margin-top:2px;">Originale Shopify: <em>${escapeHTMLInline(originalName)}</em></div>` : ''}
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-light);">Email (identità)</label>
+                <input id="editEmail" type="email" value="${escapeHTMLInline(primaryEmail)}" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:4px;">
+                <div style="font-size:10px;color:var(--text-light);margin-top:2px;">Chiave originale (non cambia): <code>${escapeHTMLInline(key)}</code></div>
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-light);">Esito esame su questo corso</label>
+                <div id="editOutcomeToggle" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+                    <button type="button" data-outcome="auto" style="${btnStyle}${currentOutcome === null ? activeBtn : ''}"><i class="fas fa-magic" style="font-size:10px;"></i> Auto <span style="color:var(--text-light);font-size:11px;margin-left:4px;">(${autoLabel})</span></button>
+                    <button type="button" data-outcome="passed" style="${btnStyle}${currentOutcome === 'passed' ? activeBtn : ''}color:#15803d;"><i class="fas fa-award" style="font-size:10px;"></i> Promosso</button>
+                    <button type="button" data-outcome="failed" style="${btnStyle}${currentOutcome === 'failed' ? activeBtn : ''}color:#b91c1c;"><i class="fas fa-times-circle" style="font-size:10px;"></i> Bocciato</button>
+                </div>
+            </div>
+            <div>
+                <label style="font-size:12px;font-weight:600;color:var(--text-light);">Nota (solo questo corso)</label>
+                <textarea id="editNote" rows="3" placeholder="Annotazione privata su questo studente…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;margin-top:4px;resize:vertical;">${escapeHTMLInline(currentNote)}</textarea>
+            </div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;gap:10px;margin-top:18px;">
+            <button type="button" onclick="closeStudentEditor()" style="padding:9px 18px;background:none;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;">Annulla</button>
+            <button type="button" id="editSaveBtn" onclick="saveStudentEditor('${handle.replace(/'/g, "\\'")}','${key.replace(/'/g, "\\'")}')" style="padding:9px 18px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;"><i class="fas fa-save"></i> Salva</button>
+        </div>
+        <div id="editStatus" style="font-size:11px;color:var(--text-light);margin-top:10px;text-align:right;"></div>
+    `;
+    // Wire toggle
+    document.querySelectorAll('#editOutcomeToggle button').forEach(b => {
+        b.addEventListener('click', () => {
+            document.querySelectorAll('#editOutcomeToggle button').forEach(x => {
+                x.style.boxShadow = '';
+            });
+            b.style.boxShadow = '0 0 0 2px var(--accent) inset';
+            b.dataset.selected = 'true';
+            document.querySelectorAll('#editOutcomeToggle button').forEach(x => {
+                if (x !== b) delete x.dataset.selected;
+            });
+        });
+        if ((currentOutcome === null && b.dataset.outcome === 'auto') ||
+            (currentOutcome === b.dataset.outcome)) {
+            b.dataset.selected = 'true';
+        }
+    });
+    document.getElementById('studentEditorOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeStudentEditor() {
+    document.getElementById('studentEditorOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+async function saveStudentEditor(handle, originalEmail) {
+    const status = document.getElementById('editStatus');
+    const btn = document.getElementById('editSaveBtn');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Salvataggio…';
+    try {
+        const name = (document.getElementById('editName').value || '').trim();
+        const email = _normEmail(document.getElementById('editEmail').value);
+        const note = (document.getElementById('editNote').value || '');
+        const selectedBtn = document.querySelector('#editOutcomeToggle button[data-selected="true"]');
+        const outcomeChoice = selectedBtn ? selectedBtn.dataset.outcome : 'auto';
+        const outcomeValue = outcomeChoice === 'auto' ? null : outcomeChoice;
+        // Fire all three saves in parallel; they're independent
+        const calls = [
+            fetch(`/api/student/profile/${encodeURIComponent(originalEmail)}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ displayName: name, primaryEmail: email })
+            }),
+            fetch(`/api/costs/${encodeURIComponent(handle)}/outcome/${encodeURIComponent(originalEmail)}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ outcome: outcomeValue })
+            }),
+            fetch(`/api/costs/${encodeURIComponent(handle)}/note/${encodeURIComponent(originalEmail)}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: note })
+            }),
+        ];
+        const results = await Promise.all(calls);
+        for (const r of results) { if (!r.ok) throw new Error('Salvataggio fallito: ' + r.status); }
+        // Re-hydrate overrides + re-render current page
+        await loadStudentOverrides();
+        if (typeof renderCurrentPage === 'function') renderCurrentPage();
+        if (status) status.textContent = 'Salvato \u2713';
+        setTimeout(closeStudentEditor, 500);
+    } catch (e) {
+        if (status) status.textContent = 'Errore: ' + e.message;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 // Close on Escape key
