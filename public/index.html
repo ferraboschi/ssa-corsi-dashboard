@@ -2601,6 +2601,33 @@ function normaliseCourse(c) {
     return course;
 }
 
+// ---- Sake templates (canonical program per course type) ----
+window.SAKE_TEMPLATES = { certificato: [], introduttivo: [], shochu: [], masterclass: [] };
+
+async function loadSakeTemplates() {
+    try {
+        const resp = await fetch('/api/sake-templates');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.success && data.templates) {
+            window.SAKE_TEMPLATES = Object.assign({ certificato: [], introduttivo: [], shochu: [], masterclass: [] }, data.templates);
+            console.log('Sake templates loaded:',
+                Object.keys(window.SAKE_TEMPLATES).map(k => k + '=' + window.SAKE_TEMPLATES[k].length).join(', '));
+        }
+    } catch (e) {
+        console.error('Could not load sake templates:', e);
+    }
+}
+
+function templateTypeForCourse(c) {
+    const t = (c && c.courseType && c.courseType.type) || '';
+    if (t.includes('certificato')) return 'certificato';
+    if (t.includes('introduttivo')) return 'introduttivo';
+    if (t.includes('shochu')) return 'shochu';
+    if (t.includes('masterclass')) return 'masterclass';
+    return null;
+}
+
 // ---- Data freshness helpers ----
 function formatTimeAgo(iso) {
     if (!iso) return '—';
@@ -2674,6 +2701,9 @@ async function loadApiData() {
     // Load recommendations (data-driven, transparent, no ML). Fire-and-forget:
     // the card renders without them and re-renders once they arrive.
     loadRecommendations();
+
+    // Load sake templates (canonical sake program per course type). Fire-and-forget.
+    loadSakeTemplates();
 
     // Load courses
     try {
@@ -3462,13 +3492,26 @@ function renderCourseDetailPage() {
                 <i class="fas fa-info-circle"></i> Stima: 1 bottiglia ogni 15 partecipanti
             </div>
             <!-- Copy sake from another course -->
-            <div id="copySakeSection" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
+            <div id="copySakeSection" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 10px 12px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px;">
                 <i class="fas fa-copy" style="color: #0284c7; font-size: 14px;"></i>
                 <select id="copySakeSource" style="flex: 1; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 12px; background: white;">
                     <option value="">Copia sake da un altro corso...</option>
                 </select>
-                <button onclick="copySakeFromCourse()" style="padding: 6px 14px; background: #0284c7; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background 0.2s;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'">
+                <button onclick="copySakeFromCourse()" style="padding: 6px 14px; background: #0284c7; color: white; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;" onmouseover="this.style.background='#0369a1'" onmouseout="this.style.background='#0284c7'">
                     <i class="fas fa-paste"></i> COPIA SAKE
+                </button>
+            </div>
+            <!-- Sake templates per course type (globally saved, applied with one click) -->
+            <div id="sakeTemplateSection" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:10px 12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;flex-wrap:wrap;">
+                <i class="fas fa-bookmark" style="color:#b45309;font-size:14px;"></i>
+                <span style="font-size:12px;color:#92400e;font-weight:600;">Template</span>
+                <span id="sakeTemplateInfo" style="font-size:11px;color:#92400e;"></span>
+                <div style="flex:1;"></div>
+                <button onclick="applySakeTemplateToCurrent('${c.id}')" style="padding:6px 14px;background:#b45309;color:white;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Sostituisce il programma corrente con il template salvato per questo tipo di corso">
+                    <i class="fas fa-download"></i> APPLICA TEMPLATE
+                </button>
+                <button onclick="saveCurrentAsSakeTemplate('${c.id}')" style="padding:6px 14px;background:white;color:#b45309;border:1px solid #b45309;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;" title="Salva il programma corrente come template per questo tipo di corso (sovrascrive il precedente)">
+                    <i class="fas fa-save"></i> SALVA COME TEMPLATE
                 </button>
             </div>
             <div id="programContainer"></div>
@@ -3994,6 +4037,10 @@ function renderProgram() {
     updateProgramTotal();
     populateCopySakeDropdown();
 
+    // Refresh the sake-template info line so it reflects the current course type + saved template count
+    const currentCourse = (COURSES || []).find(x => x.id === window.currentCourseId) || (ALL_COURSES || []).find(x => x.id === window.currentCourseId);
+    if (currentCourse) updateSakeTemplateInfo(currentCourse);
+
     // Inline event handler helpers (called from onclick/onchange attributes)
 }
 
@@ -4065,6 +4112,69 @@ function copySakeFromCourse() {
     const totalSakes = clonedProgram.reduce((sum, g) => sum + (g.sakes?.length || 0), 0);
     const sourceName = select.options[select.selectedIndex]?.text || sourceHandle;
     showToast(`Copiati ${totalSakes} sake da ${sourceName}`);
+}
+
+// ---- Sake templates per course type (apply / save) ----
+
+function applySakeTemplateToCurrent(courseHandle) {
+    const c = (COURSES || []).find(x => x.id === courseHandle) || (ALL_COURSES || []).find(x => x.id === courseHandle);
+    if (!c) return alert('Corso non trovato');
+    const type = templateTypeForCourse(c);
+    if (!type) return alert('Impossibile dedurre il tipo corso per applicare un template');
+    const template = (window.SAKE_TEMPLATES && window.SAKE_TEMPLATES[type]) || [];
+    if (!template.length) {
+        return alert('Nessun template salvato per "' + type + '". Costruisci un programma e usa "Salva come template".');
+    }
+    const hasExisting = !!(COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].program && COURSE_COSTS[c.handle].program.length);
+    const msg = 'Applicare il template "' + type + '" con ' + template.length + ' sake' +
+                (hasExisting ? ' sostituendo il programma esistente' : '') + '?';
+    if (!confirm(msg)) return;
+    // Wrap all template sakes into a single "Giorno 1" group; user can split into days later
+    const program = [{ name: 'Giorno 1', day: 1, sakes: JSON.parse(JSON.stringify(template)) }];
+    if (!COURSE_COSTS[c.handle]) COURSE_COSTS[c.handle] = {};
+    COURSE_COSTS[c.handle].program = program;
+    renderProgram();
+    showToast('Template "' + type + '" applicato: ' + template.length + ' sake');
+}
+
+async function saveCurrentAsSakeTemplate(courseHandle) {
+    const c = (COURSES || []).find(x => x.id === courseHandle) || (ALL_COURSES || []).find(x => x.id === courseHandle);
+    if (!c) return alert('Corso non trovato');
+    const type = templateTypeForCourse(c);
+    if (!type) return alert('Impossibile dedurre il tipo corso');
+    const program = (COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].program) || [];
+    const allSakes = program.flatMap(g => g.sakes || []);
+    if (!allSakes.length) return alert('Il corso corrente ha un programma vuoto, niente da salvare come template.');
+    const current = (window.SAKE_TEMPLATES && window.SAKE_TEMPLATES[type]) || [];
+    const msg = 'Salvare ' + allSakes.length + ' sake come template "' + type + '"?' +
+                (current.length ? ' Il template attuale (' + current.length + ' sake) verrà sovrascritto.' : '');
+    if (!confirm(msg)) return;
+    try {
+        const resp = await fetch('/api/sake-templates/' + encodeURIComponent(type), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sakes: allSakes }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        window.SAKE_TEMPLATES[type] = allSakes.map(s => ({ ...s }));
+        showToast('Template "' + type + '" salvato: ' + data.count + ' sake');
+        updateSakeTemplateInfo(c);
+    } catch (e) {
+        alert('Errore salvando template: ' + e.message);
+    }
+}
+
+// Update the little info line inside the template bar
+function updateSakeTemplateInfo(course) {
+    const el = document.getElementById('sakeTemplateInfo');
+    if (!el) return;
+    const type = templateTypeForCourse(course);
+    if (!type) { el.textContent = 'tipo corso non riconosciuto'; return; }
+    const template = (window.SAKE_TEMPLATES && window.SAKE_TEMPLATES[type]) || [];
+    el.textContent = template.length
+        ? '"' + type + '" — ' + template.length + ' sake salvati'
+        : '"' + type + '" — nessun template salvato';
 }
 
 function updateGroupName(groupIdx, value) {
