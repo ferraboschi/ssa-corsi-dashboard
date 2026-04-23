@@ -1772,7 +1772,8 @@ const B2B_PRICES = {"C010-0720":24.92,"C025-0720":20.98,"C026-0720":18.36,"C027-
 // =============================================
 // GLOBAL STATE
 // =============================================
-let COURSES = [];
+let COURSES = [];       // future/in-corso only (backward compat for Dashboard/Corsisti)
+let ALL_COURSES = [];   // every course, past + future, normalised (Corsi page reads from here)
 let EDUCATORS = [];
 let SAKE_CATALOG = [];
 let COURSE_COSTS = {}; // Store costs per course handle
@@ -2502,6 +2503,105 @@ function renderExamBadge(exam) {
 // API DATA LOADING
 // =============================================
 
+// Normalise one raw Shopify course object into the UI shape.
+// Used for both COURSES (future only) and ALL_COURSES (past + future).
+function normaliseCourse(c) {
+    const typeInfo = parseCourseType(c.handle, c.title);
+    const city = parseCourseCity(c.handle, c.title, c.tags);
+    const dateInfo = parseCourseDate(c.handle, c);
+    // Educator: Shopify metafield > Airtable config > tags > default
+    let educatorName = '';
+    if (c.educatorName) educatorName = c.educatorName;
+    if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
+        educatorName = COURSE_COSTS[c.handle].educatorName;
+    }
+    if (!educatorName && c.tags) {
+        const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
+        const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
+        if (educatorTag) {
+            const tagName = educatorTag.replace('educator:', '').trim();
+            if (tagName) educatorName = tagName;
+        }
+    }
+    const educatorBase = educatorName
+        ? { name: educatorName, region: '', initials: educatorName.split(' ').map(w => w[0]).join('').toUpperCase() }
+        : { name: 'Da assegnare', region: '', initials: '?' };
+    const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
+    const educator = {
+        ...educatorBase,
+        photo: c.educatorPhoto || educatorProfile.photo || '',
+        bio: c.educatorBio || educatorProfile.bio || '',
+        region: c.educatorRegion || educatorProfile.region || educatorBase.region,
+    };
+    const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
+    const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
+    const students = deduplicateStudents(c.students || []);
+    // Costs: Airtable saved > sensible defaults
+    let costs;
+    if (COURSE_COSTS[c.handle]) {
+        costs = COURSE_COSTS[c.handle];
+    } else {
+        const isCertDefault = typeInfo.type.includes('certificato');
+        costs = {
+            location: typeInfo.type.includes('online') ? 0 : 500,
+            educator_fee: isCertDefault ? 600 : 200,
+            ssa_fee: isCertDefault ? 900 : 300,
+            food: typeInfo.type.includes('online') ? 0 : 250,
+            sake: typeInfo.type.includes('online') ? 150 : 300,
+            adv: 200,
+        };
+    }
+    const totalCosts = getTotalCosts(costs);
+    // Shopify product status -> business state
+    const shopifyStatus = (c.status || 'active').toLowerCase();
+    let businessState = 'pubblicato';
+    if (shopifyStatus === 'draft') businessState = 'bozza';
+    else if (shopifyStatus === 'archived') businessState = 'cancellato';
+
+    const course = {
+        id: c.handle,
+        shopifyId: c.shopifyId,
+        name: c.title,
+        handle: c.handle,
+        city,
+        location,
+        courseType: typeInfo,
+        dates: dateInfo ? dateInfo.display : '',
+        startDate: dateInfo ? dateInfo.start : '',
+        endDate: dateInfo ? dateInfo.end : '',
+        educator,
+        price,
+        minStudents: typeInfo.type.includes('online') ? 3 : 6,
+        maxStudents: typeInfo.type.includes('online') ? 50 : 20,
+        costs,
+        totalCosts,
+        students,
+        enrollmentCount: c.enrollmentCount || 0,
+        revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
+        shopifyStatus,
+        businessState,
+        status: 'active',
+        isFuture: isFutureCourse(c.handle, c),
+    };
+    // Pre-compute auto-calc cost lines so dashboard numbers match detail page
+    const isCert = typeInfo.type.includes('certificato');
+    const diplomaCost = isCert ? 115 : 60;
+    const textbookCost = isCert ? 9 : 8;
+    const educatorFeeCost = isCert ? 600 : 200;
+    const ssaFeeCost = isCert ? 900 : 300;
+    if (course.costs.lines && course.costs.lines.length > 0) {
+        course.costs.lines.forEach(line => {
+            if (line.key === 'diploma_fee') line.value = students.length * diplomaCost;
+            if (line.key === 'textbook_fee') line.value = students.length * textbookCost;
+            if (line.key === 'educator_fee') line.value = educatorFeeCost;
+            if (line.key === 'ssa_fee') line.value = ssaFeeCost;
+        });
+    }
+    course.totalCosts = getCostLinesTotal(course);
+    course.sustainability = computeSustainability(course);
+    return course;
+}
+
 // ---- Data freshness helpers ----
 function formatTimeAgo(iso) {
     if (!iso) return '—';
@@ -2603,125 +2703,14 @@ async function loadApiData() {
         showError('Impossibile caricare i corsi da Shopify. ' + e.message);
     }
 
-    // Process courses
-    COURSES = coursesData
-        .filter(c => isFutureCourse(c.handle, c))
-        .map(c => {
-            const typeInfo = parseCourseType(c.handle, c.title);
-            const city = parseCourseCity(c.handle, c.title, c.tags);
-            const dateInfo = parseCourseDate(c.handle, c);
-            // Read educator: 1) Shopify metafield, 2) saved config (Airtable), 3) Shopify tags, 4) default
-            let educatorName = '';
-            // Priority 1: Shopify product metafield "Sake Educator" (from server)
-            if (c.educatorName) {
-                educatorName = c.educatorName;
-            }
-            // Priority 2: saved educator in course costs (Airtable)
-            if (!educatorName && COURSE_COSTS[c.handle] && COURSE_COSTS[c.handle].educatorName) {
-                educatorName = COURSE_COSTS[c.handle].educatorName;
-            }
-            // Priority 3: Shopify product tag educator:Name (legacy)
-            if (!educatorName && c.tags) {
-                const tagsArray = typeof c.tags === 'string' ? c.tags.split(',').map(t => t.trim()) : (Array.isArray(c.tags) ? c.tags : []);
-                const educatorTag = tagsArray.find(t => t.startsWith('educator:'));
-                if (educatorTag) {
-                    const tagName = educatorTag.replace('educator:', '').trim();
-                    if (tagName) educatorName = tagName;
-                }
-            }
-            let educatorBase;
-            if (educatorName) {
-                const initials = educatorName.split(' ').map(w => w[0]).join('').toUpperCase();
-                educatorBase = { name: educatorName, region: '', initials };
-            } else {
-                educatorBase = { name: 'Da assegnare', region: '', initials: '?' };
-            }
-            const educatorProfile = CONFIG.EDUCATOR_PROFILES[educatorBase.name] || {};
-            // Priority: server-scraped Chi Siamo data > CONFIG.EDUCATOR_PROFILES fallback > empty
-            const educator = {
-                ...educatorBase,
-                photo: c.educatorPhoto || educatorProfile.photo || '',
-                bio: c.educatorBio || educatorProfile.bio || '',
-                region: c.educatorRegion || educatorProfile.region || educatorBase.region
-            };
-            const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
-            const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
-
-            // Deduplicate students for this course
-            const rawStudents = c.students || [];
-            const students = deduplicateStudents(rawStudents);
-
-            // Use API costs if available, otherwise use defaults
-            let costs;
-            if (COURSE_COSTS[c.handle]) {
-                costs = COURSE_COSTS[c.handle];
-            } else {
-                const isCert = typeInfo.type.includes('certificato');
-                costs = {
-                    location: typeInfo.type.includes('online') ? 0 : 500,
-                    educator_fee: isCert ? 600 : 200,
-                    ssa_fee: isCert ? 900 : 300,
-                    food: typeInfo.type.includes('online') ? 0 : 250,
-                    sake: typeInfo.type.includes('online') ? 150 : 300,
-                    adv: 200
-                };
-            }
-            const totalCosts = getTotalCosts(costs);
-
-            // Shopify product status -> business state
-            //   active   -> 'pubblicato' (default, course is running)
-            //   draft    -> 'bozza'      (still being prepared, shown with badge)
-            //   archived -> 'cancellato' (course will not happen in this date)
-            const shopifyStatus = (c.status || 'active').toLowerCase();
-            let businessState = 'pubblicato';
-            if (shopifyStatus === 'draft') businessState = 'bozza';
-            else if (shopifyStatus === 'archived') businessState = 'cancellato';
-
-            const course = {
-                id: c.handle,
-                shopifyId: c.shopifyId,
-                name: c.title,
-                handle: c.handle,
-                city,
-                location,
-                courseType: typeInfo,
-                dates: dateInfo ? dateInfo.display : '',
-                startDate: dateInfo ? dateInfo.start : '',
-                endDate: dateInfo ? dateInfo.end : '',
-                educator,
-                price,
-                minStudents: typeInfo.type.includes('online') ? 3 : 6,
-                maxStudents: typeInfo.type.includes('online') ? 50 : 20,
-                costs,
-                totalCosts,
-                students,
-                enrollmentCount: c.enrollmentCount || 0,
-                // Revenue = sum of actual student amounts (after deduplication), not server total
-                revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
-                shopifyStatus,
-                businessState,
-                status: 'active'
-            };
-
-            // Pre-compute auto-calc cost lines so home dashboard matches detail page
-            const isCert = typeInfo.type.includes('certificato');
-            const diplomaCost = isCert ? 115 : 60;
-            const textbookCost = isCert ? 9 : 8;
-            const educatorFeeCost = isCert ? 600 : 200;
-            const ssaFeeCost = isCert ? 900 : 300;
-            if (course.costs.lines && course.costs.lines.length > 0) {
-                course.costs.lines.forEach(line => {
-                    if (line.key === 'diploma_fee') line.value = students.length * diplomaCost;
-                    if (line.key === 'textbook_fee') line.value = students.length * textbookCost;
-                    if (line.key === 'educator_fee') line.value = educatorFeeCost;
-                    if (line.key === 'ssa_fee') line.value = ssaFeeCost;
-                });
-            }
-            course.totalCosts = getCostLinesTotal(course);
-            course.sustainability = computeSustainability(course);
-            return course;
-        })
+    // Process courses — normalise every course (past + future) into the shape
+    // the UI expects. COURSES keeps only the future ones for backward-compat
+    // (Dashboard / Corsisti / Educator still read COURSES), while ALL_COURSES
+    // holds the full list for the Corsi page's 4-tab view.
+    ALL_COURSES = coursesData
+        .map(c => normaliseCourse(c))
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+    COURSES = ALL_COURSES.filter(c => c.isFuture);
 
     // Build educators list
     const educatorMap = new Map();
