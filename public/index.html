@@ -1514,8 +1514,8 @@
 
     <!-- CORSI PAGE -->
     <div id="page-corsi" class="page-hidden">
-        <div class="filter-bar">
-            <input type="text" id="corsiSearch" placeholder="Cerca corso..." aria-label="Cerca corso">
+        <div class="filter-bar" style="flex-wrap:wrap;">
+            <input type="text" id="corsiSearch" placeholder="Cerca corso..." aria-label="Cerca corso" style="min-width:200px;">
             <select id="corsiFilter" aria-label="Filtra per tipo">
                 <option value="all">Tutti i tipi</option>
                 <option value="certificato-presenza">In Presenza Certificato</option>
@@ -1526,6 +1526,15 @@
                 <option value="shochu-online">Shochu Online</option>
                 <option value="masterclass-presenza">Masterclass In Presenza</option>
                 <option value="masterclass-online">Masterclass Online</option>
+            </select>
+            <select id="corsiCityFilter" aria-label="Filtra per città" title="Filtra per città">
+                <option value="all">Tutte le città</option>
+            </select>
+            <select id="corsiEducatorFilter" aria-label="Filtra per educator" title="Filtra per educator">
+                <option value="all">Tutti gli educator</option>
+            </select>
+            <select id="corsiMonthFilter" aria-label="Filtra per mese" title="Filtra per mese di inizio">
+                <option value="all">Tutti i mesi</option>
             </select>
         </div>
         <div class="status-pills" id="corsiStatusPills" role="tablist" aria-label="Stato corso" style="margin-bottom: 12px;">
@@ -1539,7 +1548,10 @@
             <div class="status-pills" id="corsiSortPills" aria-label="Ordinamento corsi">
                 <span class="status-pill" data-sort="vicinanza" role="button" title="Ordina dal corso più vicino al più lontano"><i class="far fa-calendar-check" style="font-size:10px;"></i> Vicinanza ad oggi</span>
                 <span class="status-pill" data-sort="iscritti" role="button" title="Ordina per numero di iscritti (più in alto)"><i class="fas fa-users" style="font-size:10px;"></i> Iscritti</span>
-                <span class="status-pill" data-sort="raggruppa" role="button" title="Raggruppa le card per tipologia corso"><i class="fas fa-layer-group" style="font-size:10px;"></i> Raggruppa per tipo</span>
+                <span class="status-pill" data-sort="raggruppa-tipo" role="button" title="Raggruppa per tipologia corso"><i class="fas fa-layer-group" style="font-size:10px;"></i> Per tipo</span>
+                <span class="status-pill" data-sort="raggruppa-citta" role="button" title="Raggruppa per città"><i class="fas fa-map-marked-alt" style="font-size:10px;"></i> Per città</span>
+                <span class="status-pill" data-sort="raggruppa-educator" role="button" title="Raggruppa per educator"><i class="fas fa-user-tie" style="font-size:10px;"></i> Per educator</span>
+                <span class="status-pill" data-sort="raggruppa-mese" role="button" title="Raggruppa per mese di inizio"><i class="far fa-calendar-alt" style="font-size:10px;"></i> Per mese</span>
             </div>
             <button id="corsiSortReset" type="button" onclick="resetCorsiSort()" style="display:none;background:none;border:1px solid var(--border);border-radius:14px;padding:4px 10px;font-size:11px;color:var(--text-light);cursor:pointer;">Azzera</button>
         </div>
@@ -2070,53 +2082,45 @@ function renderCourseCardHTML(c, opts = {}) {
     <div class="course-card" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" role="button" tabindex="0" aria-label="Dettaglio ${c.name}">
         <div class="course-banner ${c.courseType.color}"></div>
         <div class="course-content">
-            <div class="course-top">
-                <div>
-                    <div class="course-title" style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <!-- Title row: name + state/refund/verdict badges on the left, type+delivery on the right -->
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px;">
+                <div style="flex:1;min-width:0;">
+                    <div class="course-title" style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px;line-height:1.3;">
                         <span>${c.name}</span>
                         ${stateBadgeHTML}
                         ${refundAlertHTML}
                         ${verdictBadgeHTML}
                     </div>
-                    <div class="course-dates">
-                        <i class="far fa-calendar-alt"></i> ${c.dates}
-                        &bull; <i class="fas fa-map-marker-alt"></i> ${c.city}
-                        &bull; <i class="fas fa-chalkboard-teacher"></i> ${c.educator.name}
-                    </div>
-                    ${countdownHTML}
                 </div>
-                <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
-                    <span class="badge ${c.courseType.level}">${c.courseType.levelLabel}</span>
-                    <span class="badge ${c.courseType.delivery}" style="font-size: 10px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right: 3px; font-size: 9px;"></i>${c.courseType.deliveryLabel}</span>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:flex-start;flex-shrink:0;">
+                    <span class="badge ${c.courseType.level}" style="font-size:10px;">${c.courseType.levelLabel}</span>
+                    <span class="badge ${c.courseType.delivery}" style="font-size:10px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right:3px;font-size:9px;"></i>${c.courseType.deliveryLabel}</span>
                 </div>
             </div>
-            ${showDetails ? `
-            <div style="margin-top: 12px; display: flex; gap: 16px; font-size: 12px; color: var(--text-light);">
-                <span><i class="fas fa-map-marker-alt" style="color: var(--accent);"></i> ${c.city}</span>
-                <span><i class="fas fa-euro-sign"></i> ${formatCurrency(c.price)}/persona</span>
-                <span><i class="fab fa-shopify" style="color: #5e8e3e;"></i> Shopify</span>
-            </div>` : ''}
-            <div class="course-stats">
-                <div class="course-stat">
-                    <div class="val">${showDetails ? c.students.length + '/' + c.maxStudents : c.students.length}</div>
-                    <div class="lbl">Iscritti</div>
-                </div>
-                <div class="course-stat">
-                    <div class="val">${formatCurrency(c.revenue)}</div>
-                    <div class="lbl">Incasso</div>
-                </div>
-                <div class="course-stat">
-                    <div class="val" style="color: ${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(s.profit)}</div>
-                    <div class="lbl">Margine</div>
-                </div>
+
+            <!-- Hero row: the 4 things that matter at a glance -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-top:4px;font-size:13px;color:var(--text);">
+                <div><i class="far fa-calendar-alt" style="color:var(--accent);width:14px;"></i> <strong>${c.dates || '—'}</strong></div>
+                <div><i class="fas fa-map-marker-alt" style="color:var(--accent);width:14px;"></i> ${c.city || '—'}</div>
+                <div><i class="fas fa-chalkboard-teacher" style="color:var(--accent);width:14px;"></i> ${c.educator.name}</div>
+                <div><i class="fas fa-users" style="color:var(--accent);width:14px;"></i> <strong>${c.students.length}/${c.maxStudents}</strong> iscritti</div>
             </div>
-            <div class="sustainability-bar">
-                <div class="fill ${fillClass}" style="width: ${pct}%"></div>
+
+            <!-- Progress bar (fill rate vs minimum) -->
+            <div class="sustainability-bar" style="margin-top:12px;">
+                <div class="fill ${fillClass}" style="width:${pct}%"></div>
             </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--text-light);">
-                <span>${c.students.length}/${c.maxStudents} posti &bull; Min. ${c.minStudents}</span>
-                ${showDetails ? `<span>Costi: ${formatCurrency(s.costs)}</span>` : ''}
+
+            <!-- Secondary details: money stats, dimmed -->
+            <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text-light);">
+                <span>Incasso <strong style="color:var(--text);">${formatCurrency(c.revenue)}</strong></span>
+                <span>Margine <strong style="color:${s.profit >= 0 ? 'var(--success)' : 'var(--danger)'};">${formatCurrency(s.profit)}</strong></span>
+                <span>Costi <strong style="color:var(--text);">${formatCurrency(s.costs)}</strong></span>
             </div>
+
+            <div style="font-size:11px;color:var(--text-light);margin-top:2px;">Min. ${c.minStudents} iscritti · ${formatCurrency(c.price)}/persona</div>
+
+            ${countdownHTML ? `<div style="margin-top:8px;">${countdownHTML}</div>` : ''}
             ${notebookStripHTML}
         </div>
     </div>`;
@@ -3050,15 +3054,29 @@ function _loadCorsiSortState() {
         return obj;
     } catch (e) { return null; }
 }
-window.corsiSort = window.corsiSort || _loadCorsiSortState() || { keys: [], raggruppa: false };
+// Migrate legacy { keys, raggruppa: bool } -> { keys, grouping: 'none'|'tipo'|... }
+(function _migrateCorsiSort() {
+    const loaded = _loadCorsiSortState();
+    if (loaded && typeof loaded.raggruppa !== 'undefined' && typeof loaded.grouping === 'undefined') {
+        loaded.grouping = loaded.raggruppa ? 'tipo' : 'none';
+        delete loaded.raggruppa;
+        window.corsiSort = loaded;
+    } else if (loaded) {
+        window.corsiSort = loaded;
+    } else {
+        window.corsiSort = { keys: [], grouping: 'none' };
+    }
+})();
 
 function _persistCorsiSort() {
     try { sessionStorage.setItem('ssa_corsi_sort', JSON.stringify(window.corsiSort)); } catch (e) {}
 }
 
 function toggleCorsiSort(key) {
-    if (key === 'raggruppa') {
-        window.corsiSort.raggruppa = !window.corsiSort.raggruppa;
+    if (typeof key === 'string' && key.startsWith('raggruppa-')) {
+        const g = key.replace('raggruppa-', ''); // 'tipo' | 'citta' | 'educator' | 'mese'
+        // Click on the currently-active grouping toggles it off; otherwise switches
+        window.corsiSort.grouping = (window.corsiSort.grouping === g) ? 'none' : g;
     } else {
         const i = window.corsiSort.keys.indexOf(key);
         if (i >= 0) window.corsiSort.keys.splice(i, 1);
@@ -3069,7 +3087,7 @@ function toggleCorsiSort(key) {
 }
 
 function resetCorsiSort() {
-    window.corsiSort = { keys: [], raggruppa: false };
+    window.corsiSort = { keys: [], grouping: 'none' };
     _persistCorsiSort();
     renderCorsiPage();
 }
@@ -3103,11 +3121,42 @@ function isCorsoAttivo(c) {
 function renderCorsiPage() {
     const search = (document.getElementById('corsiSearch').value || '').toLowerCase();
     const filter = document.getElementById('corsiFilter').value;
+    const cityF = ((document.getElementById('corsiCityFilter') || {}).value) || 'all';
+    const educatorF = ((document.getElementById('corsiEducatorFilter') || {}).value) || 'all';
+    const monthF = ((document.getElementById('corsiMonthFilter') || {}).value) || 'all';
     const statusFilter = window.corsiStatusFilter || 'attivi';
 
     // Unified data source: ALL_COURSES contains past + future; COURSES is a fallback
     // if ALL_COURSES has not been populated yet (first render).
     const SOURCE = (ALL_COURSES && ALL_COURSES.length) ? ALL_COURSES : COURSES;
+
+    // Populate city / educator / month selects from the current dataset
+    (function populateDynamicFilters() {
+        function fill(selectId, values, labelFn) {
+            const sel = document.getElementById(selectId);
+            if (!sel) return;
+            const current = sel.value;
+            while (sel.options.length > 1) sel.remove(1);
+            for (const v of values) {
+                if (!v) continue;
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = labelFn ? labelFn(v) : v;
+                sel.appendChild(opt);
+            }
+            if (Array.from(sel.options).some(o => o.value === current)) sel.value = current;
+            else sel.value = 'all';
+        }
+        const citySet = Array.from(new Set(SOURCE.map(c => c.city).filter(Boolean))).sort();
+        const educatorSet = Array.from(new Set(SOURCE.map(c => c.educator.name).filter(Boolean))).sort();
+        const monthSet = Array.from(new Set(SOURCE.map(c => (c.startDate || '').slice(0, 7)).filter(Boolean))).sort().reverse();
+        fill('corsiCityFilter', citySet);
+        fill('corsiEducatorFilter', educatorSet);
+        fill('corsiMonthFilter', monthSet, v => {
+            const [yr, mo] = v.split('-');
+            return new Date(parseInt(yr, 10), parseInt(mo, 10) - 1, 1).toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+        });
+    })();
 
     // Update status pill counts across all 4 tabs
     const counts = { attivi: 0, bozze: 0, archiviati: 0, passati: 0 };
@@ -3129,15 +3178,26 @@ function renderCorsiPage() {
         el.setAttribute('aria-selected', el.dataset.status === statusFilter ? 'true' : 'false');
     });
 
-    // Update active filter pills (search / type)
+    // Update active filter pills (search / type / city / educator / month) with click-to-clear
     const filtersDiv = document.getElementById('activeFilters');
-    let pillsHTML = '';
-    if (search) pillsHTML += `<span class="filter-pill">Cerca: "${search}" <span class="remove" onclick="document.getElementById('corsiSearch').value='';renderCorsiPage();">&times;</span></span>`;
-    if (filter !== 'all') {
-        const filterLabel = document.getElementById('corsiFilter').selectedOptions[0].text;
-        pillsHTML += `<span class="filter-pill">${filterLabel} <span class="remove" onclick="document.getElementById('corsiFilter').value='all';renderCorsiPage();">&times;</span></span>`;
+    const activePills = [];
+    if (search) {
+        activePills.push({ label: 'Cerca: "' + search + '"', clear: "document.getElementById('corsiSearch').value='';renderCorsiPage();" });
     }
-    filtersDiv.innerHTML = pillsHTML;
+    if (filter !== 'all') {
+        const lbl = document.getElementById('corsiFilter').selectedOptions[0].text;
+        activePills.push({ label: lbl, clear: "document.getElementById('corsiFilter').value='all';renderCorsiPage();" });
+    }
+    if (cityF !== 'all') activePills.push({ label: 'Città: ' + cityF, clear: "document.getElementById('corsiCityFilter').value='all';renderCorsiPage();" });
+    if (educatorF !== 'all') activePills.push({ label: 'Educator: ' + educatorF, clear: "document.getElementById('corsiEducatorFilter').value='all';renderCorsiPage();" });
+    if (monthF !== 'all') {
+        const [yr, mo] = monthF.split('-');
+        const monthLabel = new Date(parseInt(yr, 10), parseInt(mo, 10) - 1, 1).toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+        activePills.push({ label: 'Mese: ' + monthLabel, clear: "document.getElementById('corsiMonthFilter').value='all';renderCorsiPage();" });
+    }
+    filtersDiv.innerHTML = activePills.map(p =>
+        '<span class="filter-pill">' + p.label + ' <span class="remove" onclick="' + p.clear + '">&times;</span></span>'
+    ).join('');
 
     // Tab match: which subset of SOURCE belongs to the active tab?
     function matchesTab(c) {
@@ -3153,6 +3213,9 @@ function renderCorsiPage() {
         if (!matchesTab(c)) return false;
         if (search && !c.name.toLowerCase().includes(search) && !c.city.toLowerCase().includes(search) && !c.educator.name.toLowerCase().includes(search)) return false;
         if (filter !== 'all' && c.courseType.type !== filter) return false;
+        if (cityF !== 'all' && c.city !== cityF) return false;
+        if (educatorF !== 'all' && c.educator.name !== educatorF) return false;
+        if (monthF !== 'all' && (c.startDate || '').slice(0, 7) !== monthF) return false;
         return true;
     });
 
@@ -3171,43 +3234,61 @@ function renderCorsiPage() {
     }
 
     // Sync sort-pill visual state + reset button visibility
+    const grouping = (window.corsiSort && window.corsiSort.grouping) || 'none';
     document.querySelectorAll('#corsiSortPills .status-pill').forEach(el => {
         const k = el.dataset.sort;
-        const on = k === 'raggruppa'
-            ? !!(window.corsiSort && window.corsiSort.raggruppa)
+        const isGrouping = typeof k === 'string' && k.startsWith('raggruppa-');
+        const on = isGrouping
+            ? (grouping === k.replace('raggruppa-', ''))
             : sortKeys.includes(k);
         el.classList.toggle('active', on);
         // Annotate primary/secondary when multiple sort keys active
-        if (k !== 'raggruppa' && on && sortKeys.length > 1) {
+        if (!isGrouping && on && sortKeys.length > 1) {
             const idx = sortKeys.indexOf(k);
             el.setAttribute('data-sort-order', String(idx + 1));
         } else {
             el.removeAttribute('data-sort-order');
         }
     });
-    const anyActive = sortKeys.length > 0 || (window.corsiSort && window.corsiSort.raggruppa);
+    const anyActive = sortKeys.length > 0 || grouping !== 'none';
     const resetBtn = document.getElementById('corsiSortReset');
     if (resetBtn) resetBtn.style.display = anyActive ? 'inline-flex' : 'none';
 
     const grid = document.getElementById('corsiGrid');
     if (filtered.length === 0) {
-        const msg = statusFilter === 'non-attivi'
-            ? 'Nessun corso cancellato nel periodo visualizzato.'
-            : 'Prova a cambiare i filtri di ricerca.';
+        const msg = statusFilter === 'archiviati' ? 'Nessun corso cancellato nel periodo visualizzato.'
+                  : statusFilter === 'bozze' ? 'Nessun corso in bozza.'
+                  : statusFilter === 'passati' ? 'Nessun corso passato corrisponde ai filtri.'
+                  : 'Prova a cambiare i filtri di ricerca.';
         grid.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun corso trovato</h3><p>${msg}</p></div>`;
         return;
     }
 
-    // Render: either a flat grid or grouped sections.
-    if (window.corsiSort && window.corsiSort.raggruppa) {
+    // Grouping label helper
+    function _groupByFor(c, mode) {
+        if (mode === 'tipo') return (c.courseType && c.courseType.levelLabel) || 'Altro';
+        if (mode === 'citta') return c.city || '—';
+        if (mode === 'educator') return (c.educator && c.educator.name) || 'Da assegnare';
+        if (mode === 'mese') {
+            if (!c.startDate) return 'Senza data';
+            const [yr, mo] = c.startDate.split('-');
+            return new Date(parseInt(yr, 10), parseInt(mo, 10) - 1, 1).toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+        }
+        return null;
+    }
+
+    if (grouping !== 'none') {
         const groups = new Map();
         for (const c of filtered) {
-            const label = _groupLabelFor(c);
+            const label = _groupByFor(c, grouping);
             if (!groups.has(label)) groups.set(label, []);
             groups.get(label).push(c);
         }
-        // Order group labels deterministically
-        const orderedLabels = Array.from(groups.keys()).sort();
+        // Order group labels: for "mese" preserve the chronological sort already applied;
+        // for the others sort alphabetically for determinism.
+        const orderedLabels = grouping === 'mese'
+            ? Array.from(groups.keys())
+            : Array.from(groups.keys()).sort();
         grid.innerHTML = orderedLabels.map(label => {
             const cs = groups.get(label);
             const cards = cs.map(c => renderCourseCardHTML(c, { showDetails: true })).join('');
@@ -5020,6 +5101,10 @@ function closeMobileNav() {
 
     document.getElementById('corsiSearch').addEventListener('input', debouncedCorsi);
     document.getElementById('corsiFilter').addEventListener('change', debouncedCorsi);
+    ['corsiCityFilter', 'corsiEducatorFilter', 'corsiMonthFilter'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', debouncedCorsi);
+    });
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
         el.addEventListener('click', () => setCorsiStatusFilter(el.dataset.status));
     });
