@@ -424,6 +424,8 @@
         }
         .state-badge.bozza { background: #ede9fe; color: #6d28d9; }
         .state-badge.cancellato { background: #fee2e2; color: #b91c1c; }
+        .state-badge.eseguito { background: #e0e7ef; color: #334155; }
+        .state-badge.senza-evidenze { background: #fef3c7; color: #92400e; }
         .state-badge.refund-alert {
             background: #fef3c7; color: #92400e;
             border: 1px solid #fbbf24;
@@ -1540,8 +1542,13 @@
         <div class="status-pills" id="corsiStatusPills" role="tablist" aria-label="Stato corso" style="margin-bottom: 12px;">
             <span class="status-pill active" data-status="attivi" role="tab" title="Corsi pubblicati con data futura o in corso">Attivi <span class="count" id="countAttivi">0</span></span>
             <span class="status-pill" data-status="bozze" role="tab" title="Corsi in bozza su Shopify con data futura">Bozze <span class="count" id="countBozze">0</span></span>
-            <span class="status-pill" data-status="archiviati" role="tab" title="Corsi archiviati/cancellati su Shopify con data futura">Archiviati <span class="count" id="countArchiviati">0</span></span>
-            <span class="status-pill" data-status="passati" role="tab" title="Corsi con data passata (qualsiasi stato)">Passati <span class="count" id="countPassatiCorsi">0</span></span>
+            <span class="status-pill" data-status="cancellati" role="tab" title="Corsi cancellati (archived su Shopify) con data futura — possibile refund pending">Cancellati <span class="count" id="countCancellati">0</span></span>
+            <span class="status-pill" data-status="archiviati" role="tab" title="Corsi con data passata (archivio storico)">Archiviati <span class="count" id="countArchiviati">0</span></span>
+        </div>
+        <div class="status-pills" id="corsiExecPills" role="tablist" aria-label="Stato esecuzione" style="margin-bottom: 12px; display:none;">
+            <span class="status-pill active" data-exec="tutti" role="tab" title="Tutti i corsi passati">Tutti <span class="count" id="countExecTutti">0</span></span>
+            <span class="status-pill" data-exec="eseguiti" role="tab" title="Corsi eseguiti: revenue &gt; 0 o esame registrato">Eseguiti <span class="count" id="countExecEseguiti">0</span></span>
+            <span class="status-pill" data-exec="senza-evidenze" role="tab" title="Corsi passati senza evidenze di esecuzione (no revenue, no esami)">Senza evidenze <span class="count" id="countExecSenza">0</span></span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
             <span style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Ordina:</span>
@@ -2046,12 +2053,17 @@ function renderCourseCardHTML(c, opts = {}) {
         ? `<div class="countdown-badge ${countdown.css}"><i class="fas fa-clock"></i> ${countdown.text}</div>`
         : '';
 
-    // State badges (bozza / cancellato) + refund alert if cancelled course has paying students
+    // State badges (bozza / cancellato / eseguito / senza-evidenze) + refund alert for
+    // cancelled future courses that still carry paying students.
     let stateBadgeHTML = '';
     if (c.businessState === 'bozza') {
         stateBadgeHTML = '<span class="state-badge bozza" title="Corso in bozza su Shopify">Bozza</span>';
     } else if (c.businessState === 'cancellato') {
-        stateBadgeHTML = '<span class="state-badge cancellato" title="Corso cancellato su Shopify (archived)">Cancellato</span>';
+        stateBadgeHTML = '<span class="state-badge cancellato" title="Corso cancellato: data futura, archiviato su Shopify">Cancellato</span>';
+    } else if (c.businessState === 'eseguito') {
+        stateBadgeHTML = '<span class="state-badge eseguito" title="Corso passato eseguito: revenue o esame registrato">Eseguito</span>';
+    } else if (c.businessState === 'senza-evidenze') {
+        stateBadgeHTML = '<span class="state-badge senza-evidenze" title="Corso passato senza evidenze (no revenue, no esami registrati)">Senza evidenze</span>';
     }
     const paidStudents = (c.students || []).filter(st => st.financialStatus === 'paid').length;
     const refundAlertHTML = (c.businessState === 'cancellato' && paidStudents > 0)
@@ -2701,6 +2713,15 @@ function buildExamByHandle() {
     });
     window.EXAM_BY_HANDLE = result;
     window.EXAM_UNMATCHED = unmatched;
+    // Upgrade businessState: a past course with exam matches was certainly
+    // executed, even if revenue is 0 (e.g. comped/external-paid students).
+    if (Array.isArray(ALL_COURSES) && ALL_COURSES.length > 0) {
+        ALL_COURSES.forEach(c => {
+            if (c.businessState === 'senza-evidenze' && result[c.handle] && result[c.handle].students.length > 0) {
+                c.businessState = 'eseguito';
+            }
+        });
+    }
     const totalMatched = Object.values(result).reduce((n, s) => n + s.students.length, 0);
     const totalUnmatched = unmatched.reduce((n, u) => n + (u.students || []).length, 0);
     console.log(`[exam-by-handle] ${Object.keys(result).length} handles matched; ${totalMatched} attempts mapped, ${totalUnmatched} unmatched (${unmatched.length} exam codes)`);
@@ -2785,11 +2806,21 @@ function normaliseCourse(c) {
         };
     }
     const totalCosts = getTotalCosts(costs);
-    // Shopify product status -> business state
+    // Business state: five values unified across future (pubblicato/bozza/
+    // cancellato) and past (eseguito/senza-evidenze). Past courses get an
+    // evidence-based classification: revenue > 0 counts as executed; exam
+    // matches upgrade later in buildExamByHandle().
     const shopifyStatus = (c.status || 'active').toLowerCase();
-    let businessState = 'pubblicato';
-    if (shopifyStatus === 'draft') businessState = 'bozza';
-    else if (shopifyStatus === 'archived') businessState = 'cancellato';
+    const isFut = isFutureCourse(c.handle, c);
+    const revenueSum = students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0);
+    let businessState;
+    if (isFut) {
+        if (shopifyStatus === 'draft') businessState = 'bozza';
+        else if (shopifyStatus === 'archived') businessState = 'cancellato';
+        else businessState = 'pubblicato';
+    } else {
+        businessState = revenueSum > 0 ? 'eseguito' : 'senza-evidenze';
+    }
 
     const course = {
         id: c.handle,
@@ -2810,11 +2841,11 @@ function normaliseCourse(c) {
         totalCosts,
         students,
         enrollmentCount: c.enrollmentCount || 0,
-        revenue: students.reduce((sum, st) => sum + (parseFloat(st.amount) || 0), 0),
+        revenue: revenueSum,
         shopifyStatus,
         businessState,
         status: 'active',
-        isFuture: isFutureCourse(c.handle, c),
+        isFuture: isFut,
     };
     // Pre-compute auto-calc cost lines so dashboard numbers match detail page
     const isCert = typeInfo.type.includes('certificato');
@@ -3160,9 +3191,10 @@ function renderCurrentPage() {
     // Redirect any stale sessionStorage/bookmark reference to the new location.
     if (currentPage === 'passati') {
         currentPage = 'corsi';
-        window.corsiStatusFilter = 'passati';
-        // fall through to the corsi render path
+        window.corsiStatusFilter = 'archiviati';
     }
+    // Old tab value 'passati' now maps to 'archiviati' (renamed for clarity).
+    if (window.corsiStatusFilter === 'passati') window.corsiStatusFilter = 'archiviati';
     if (currentPage === 'dashboard') renderDashboard();
     else if (currentPage === 'corsi') renderCorsiPage();
     else if (currentPage === 'corsisti') renderCorsistiPage();
@@ -3360,6 +3392,7 @@ function renderCorsiPage() {
     const educatorF = ((document.getElementById('corsiEducatorFilter') || {}).value) || 'all';
     const monthF = ((document.getElementById('corsiMonthFilter') || {}).value) || 'all';
     const statusFilter = window.corsiStatusFilter || 'attivi';
+    const execFilter = window.corsiExecFilter || 'tutti';
 
     // Unified data source: ALL_COURSES contains past + future; COURSES is a fallback
     // if ALL_COURSES has not been populated yet (first render).
@@ -3394,23 +3427,37 @@ function renderCorsiPage() {
     })();
 
     // Update status pill counts across all 4 tabs
-    const counts = { attivi: 0, bozze: 0, archiviati: 0, passati: 0 };
+    const counts = { attivi: 0, bozze: 0, cancellati: 0, archiviati: 0, eseguiti: 0, senza: 0 };
     for (const c of SOURCE) {
-        if (!c.isFuture) { counts.passati++; continue; }
+        if (!c.isFuture) {
+            counts.archiviati++;
+            if (c.businessState === 'eseguito') counts.eseguiti++;
+            else if (c.businessState === 'senza-evidenze') counts.senza++;
+            continue;
+        }
         if (c.businessState === 'pubblicato') counts.attivi++;
         else if (c.businessState === 'bozza') counts.bozze++;
-        else if (c.businessState === 'cancellato') counts.archiviati++;
+        else if (c.businessState === 'cancellato') counts.cancellati++;
     }
     const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     setCount('countAttivi', counts.attivi);
     setCount('countBozze', counts.bozze);
+    setCount('countCancellati', counts.cancellati);
     setCount('countArchiviati', counts.archiviati);
-    setCount('countPassatiCorsi', counts.passati);
+    setCount('countExecTutti', counts.archiviati);
+    setCount('countExecEseguiti', counts.eseguiti);
+    setCount('countExecSenza', counts.senza);
 
-    // Sync pill visual "active" state
+    // Sync pill visual "active" state + show/hide execution sub-pills
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
         el.classList.toggle('active', el.dataset.status === statusFilter);
         el.setAttribute('aria-selected', el.dataset.status === statusFilter ? 'true' : 'false');
+    });
+    const execBar = document.getElementById('corsiExecPills');
+    if (execBar) execBar.style.display = statusFilter === 'archiviati' ? '' : 'none';
+    document.querySelectorAll('#corsiExecPills .status-pill').forEach(el => {
+        el.classList.toggle('active', el.dataset.exec === execFilter);
+        el.setAttribute('aria-selected', el.dataset.exec === execFilter ? 'true' : 'false');
     });
 
     // Update active filter pills (search / type / city / educator / month) with click-to-clear
@@ -3436,11 +3483,16 @@ function renderCorsiPage() {
 
     // Tab match: which subset of SOURCE belongs to the active tab?
     function matchesTab(c) {
-        if (statusFilter === 'passati') return !c.isFuture;
+        if (statusFilter === 'archiviati') {
+            if (c.isFuture) return false;
+            if (execFilter === 'eseguiti') return c.businessState === 'eseguito';
+            if (execFilter === 'senza-evidenze') return c.businessState === 'senza-evidenze';
+            return true; // 'tutti'
+        }
         if (!c.isFuture) return false; // future-only tabs never show past
         if (statusFilter === 'attivi') return c.businessState === 'pubblicato';
         if (statusFilter === 'bozze') return c.businessState === 'bozza';
-        if (statusFilter === 'archiviati') return c.businessState === 'cancellato';
+        if (statusFilter === 'cancellati') return c.businessState === 'cancellato';
         return true;
     }
 
@@ -3491,9 +3543,12 @@ function renderCorsiPage() {
 
     const grid = document.getElementById('corsiGrid');
     if (filtered.length === 0) {
-        const msg = statusFilter === 'archiviati' ? 'Nessun corso cancellato nel periodo visualizzato.'
+        const msg = statusFilter === 'cancellati' ? 'Nessun corso cancellato.'
                   : statusFilter === 'bozze' ? 'Nessun corso in bozza.'
-                  : statusFilter === 'passati' ? 'Nessun corso passato corrisponde ai filtri.'
+                  : statusFilter === 'archiviati'
+                      ? (execFilter === 'eseguiti' ? 'Nessun corso eseguito nell\u2019archivio.'
+                         : execFilter === 'senza-evidenze' ? 'Nessun corso passato senza evidenze di esecuzione.'
+                         : 'Nessun corso archiviato corrisponde ai filtri.')
                   : 'Prova a cambiare i filtri di ricerca.';
         grid.innerHTML = `<div class="empty-state"><i class="fas fa-search"></i><h3>Nessun corso trovato</h3><p>${msg}</p></div>`;
         return;
@@ -5344,6 +5399,9 @@ function closeMobileNav() {
     });
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
         el.addEventListener('click', () => setCorsiStatusFilter(el.dataset.status));
+    });
+    document.querySelectorAll('#corsiExecPills .status-pill').forEach(el => {
+        el.addEventListener('click', () => { window.corsiExecFilter = el.dataset.exec; renderCorsiPage(); });
     });
     document.querySelectorAll('#corsiSortPills .status-pill').forEach(el => {
         el.addEventListener('click', () => toggleCorsiSort(el.dataset.sort));
