@@ -371,8 +371,10 @@ async function fetchExamResults() {
       };
     });
 
-    // Aggregate by email — keep best result per student (priority) + count attempts
+    // Aggregate by email — keep best result per student (priority) + count attempts.
+    // Also group per exam course (for cross-referencing with Shopify handles).
     const byEmail = {};
+    const byCourse = {};       // socrative course name -> { examDate, attempts: [...] }
     students.forEach(r => {
       const f = r.fields || {};
       const emailKey = (f.Email || '').toLowerCase().trim();
@@ -394,6 +396,7 @@ async function fetchExamResults() {
       const courseName = courseInfo ? courseInfo.name : '';
 
       const entry = {
+        email: emailKey,
         fullName: f['Full Name'] || '',
         result: resultName,
         score: scorePct,
@@ -422,10 +425,46 @@ async function fetchExamResults() {
           byEmail[emailKey] = entry;
         }
       }
+
+      // byCourse collects every attempt (deduped later by email+result priority)
+      if (courseName) {
+        const bucket = byCourse[courseName] || (byCourse[courseName] = { examDate, attempts: [] });
+        bucket.attempts.push({
+          email: emailKey,
+          fullName: f['Full Name'] || '',
+          result: resultName,
+          score: scorePct,
+          examDate
+        });
+      }
+    });
+
+    // Per-course best-per-student summary (aligned with byEmail semantics):
+    // each student appears once with their best outcome for that exam course.
+    Object.keys(byCourse).forEach(cn => {
+      const bucket = byCourse[cn];
+      const bestByEmail = {};
+      bucket.attempts.forEach(a => {
+        const cur = bestByEmail[a.email];
+        if (!cur) { bestByEmail[a.email] = { ...a, attempts: 1 }; return; }
+        cur.attempts += 1;
+        const prCur = RESULT_PRIORITY[cur.result] || 0;
+        const prNew = RESULT_PRIORITY[a.result] || 0;
+        if (prNew > prCur || (prNew === prCur && (a.examDate || '') > (cur.examDate || ''))) {
+          const kept = cur.attempts;
+          bestByEmail[a.email] = { ...a, attempts: kept };
+        }
+      });
+      bucket.students = Object.values(bestByEmail);
+      bucket.counts = bucket.students.reduce((acc, s) => {
+        acc[s.result] = (acc[s.result] || 0) + 1;
+        return acc;
+      }, {});
     });
 
     const result = {
       byEmail,
+      byCourse,
       count: Object.keys(byEmail).length,
       totalAttempts: students.length,
       lastUpdated: new Date().toISOString()

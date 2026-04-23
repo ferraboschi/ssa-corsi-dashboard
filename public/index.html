@@ -2527,13 +2527,167 @@ async function loadExamResults() {
             const data = await response.json();
             if (data.success && data.byEmail) {
                 window.EXAM_RESULTS = data.byEmail;
+                window.EXAM_BY_COURSE = data.byCourse || {};
                 console.log(`Exam results loaded: ${data.count} unique students (${data.totalAttempts} attempts)`);
+                // If ALL_COURSES is already populated, index exams by Shopify handle immediately;
+                // otherwise loadApiData() will call buildExamByHandle() after normalising.
+                if (typeof ALL_COURSES !== 'undefined' && ALL_COURSES.length > 0) {
+                    buildExamByHandle();
+                }
             }
         }
     } catch (e) {
         console.error('Could not load exam results:', e);
         window.EXAM_RESULTS = {};
+        window.EXAM_BY_COURSE = {};
     }
+}
+
+// ---- Exam code -> Shopify course handle matcher ----
+// Socrative uses short codes (NIHONSHU-YYMM-CITY, "Esame SAKE", "Esame Corso Shochu Professional").
+// This pure function resolves the code to a specific Shopify course handle using the
+// course type + year/month + city signals. Falls back to examDate + type heuristics.
+function parseExamCode(name) {
+    if (!name) return null;
+    const m = name.match(/^\s*(NIHONSHU|SAKE|SHOCHU|MIXOLOGY)[-\s](\d{2})(\d{2})[-\s](.+?)\s*$/i);
+    if (m) {
+        const kindToType = { NIHONSHU: 'certificato', SAKE: 'introduttivo', SHOCHU: 'shochu', MIXOLOGY: 'mixology' };
+        return {
+            type: kindToType[m[1].toUpperCase()],
+            year: 2000 + parseInt(m[2], 10),
+            month: parseInt(m[3], 10),
+            cityKey: m[4].trim().toLowerCase().replace(/\s+/g, '-'),
+            exact: true,
+        };
+    }
+    const low = name.toLowerCase();
+    let type = null;
+    if (low.includes('shochu')) type = 'shochu';
+    else if (low.includes('nihonshu')) type = 'certificato';
+    else if (low.includes('sake')) type = 'introduttivo';
+    if (type) return { type, year: null, month: null, cityKey: null, exact: false };
+    return null;
+}
+
+function normaliseCityKey(s) {
+    const k = (s || '').toLowerCase().trim();
+    // Special: colli-del-tronto often abbreviated "colli"
+    if (k.startsWith('colli')) return 'colli';
+    return k;
+}
+
+function courseTypeKey(course) {
+    // Reuse the parser the rest of the UI already uses
+    const t = (course.courseType && course.courseType.type) || '';
+    if (t.includes('certificato')) return 'certificato';
+    if (t.includes('introduttivo')) return 'introduttivo';
+    if (t.includes('shochu')) return 'shochu';
+    if (t.includes('masterclass')) return 'masterclass';
+    if (t.includes('mixology')) return 'mixology';
+    if (t.includes('bartending')) return 'mixology';
+    return t || null;
+}
+
+function resolveExamCourseHandle(examCourseName, examDateIso, shopifyCourses) {
+    const parsed = parseExamCode(examCourseName);
+    const ym = examDateIso ? { y: parseInt(examDateIso.slice(0, 4), 10), m: parseInt(examDateIso.slice(5, 7), 10) } : null;
+    const scored = [];
+    for (const c of shopifyCourses) {
+        const tKey = courseTypeKey(c);
+        if (!tKey) continue;
+        // type filter
+        if (parsed && parsed.type && parsed.type !== tKey) continue;
+        if (!parsed && ym) { /* type inferred by exam date fallback only */ }
+        // year/month from course startDate (YYYY-MM-DD)
+        const sd = c.startDate || '';
+        const cy = sd.slice(0, 4) && parseInt(sd.slice(0, 4), 10);
+        const cm = sd.slice(5, 7) && parseInt(sd.slice(5, 7), 10);
+        const cityKey = normaliseCityKey(c.city);
+        let score = 0;
+        if (parsed && parsed.exact) {
+            if (cy === parsed.year && cm === parsed.month) score += 5;
+            if (parsed.cityKey && cityKey && cityKey.includes(parsed.cityKey.split('-')[0])) score += 3;
+            if (score === 0) continue;
+        } else if (ym) {
+            if (cy === ym.y && cm === ym.m) score += 3;
+            // Loosen: exam within ~60 days after course end
+            if (score === 0) {
+                const ed = c.endDate || '';
+                if (ed) {
+                    const edDate = new Date(ed + 'T00:00:00');
+                    const xd = new Date(examDateIso);
+                    const days = (xd - edDate) / 86400000;
+                    if (days >= -15 && days <= 60) score += 2;
+                }
+            }
+            if (score === 0) continue;
+        } else {
+            continue;
+        }
+        scored.push({ handle: c.handle, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    if (!scored.length) return null;
+    // Only accept if the top match is strictly better than the second (avoid ambiguous)
+    if (scored.length > 1 && scored[0].score === scored[1].score) return null;
+    return scored[0].handle;
+}
+
+// Build the inverse map: Shopify course handle -> { examDate, students: [...], counts: {passed,retrial,failed} }
+// Exam "sessions" for the same course (main + recupero) are merged into one bucket, best-per-email.
+function buildExamByHandle() {
+    const result = {};
+    const byCourse = window.EXAM_BY_COURSE || {};
+    const shopify = (typeof ALL_COURSES !== 'undefined') ? ALL_COURSES : [];
+    const priority = { passed: 3, retrial: 2, failed: 1, unknown: 0 };
+    const unmatched = [];
+    Object.keys(byCourse).forEach(cn => {
+        const bucket = byCourse[cn];
+        const examDate = bucket.examDate || null;
+        const handle = resolveExamCourseHandle(cn, examDate, shopify);
+        if (!handle) {
+            unmatched.push({ courseName: cn, examDate, students: bucket.students });
+            return;
+        }
+        const slot = result[handle] || (result[handle] = {
+            examDates: [],
+            examCodeNames: [],
+            studentsByEmail: {},
+        });
+        if (examDate && !slot.examDates.includes(examDate)) slot.examDates.push(examDate);
+        if (!slot.examCodeNames.includes(cn)) slot.examCodeNames.push(cn);
+        (bucket.students || []).forEach(s => {
+            const cur = slot.studentsByEmail[s.email];
+            if (!cur) { slot.studentsByEmail[s.email] = { ...s, attempts: s.attempts || 1 }; return; }
+            const combinedAttempts = (cur.attempts || 1) + (s.attempts || 1);
+            const pCur = priority[cur.result] || 0;
+            const pNew = priority[s.result] || 0;
+            if (pNew > pCur || (pNew === pCur && (s.examDate || '') > (cur.examDate || ''))) {
+                slot.studentsByEmail[s.email] = { ...s, attempts: combinedAttempts };
+            } else {
+                cur.attempts = combinedAttempts;
+            }
+        });
+    });
+    // Flatten + compute counts
+    Object.keys(result).forEach(h => {
+        const slot = result[h];
+        slot.students = Object.values(slot.studentsByEmail);
+        delete slot.studentsByEmail;
+        slot.counts = slot.students.reduce((acc, s) => {
+            const k = s.result === 'retrial' ? 'retrial' : (s.result === 'passed' ? 'passed' : (s.result === 'failed' ? 'failed' : 'unknown'));
+            acc[k] = (acc[k] || 0) + 1;
+            // Promossi = passed + retrial (retrial è un promosso rimandato)
+            if (k === 'passed' || k === 'retrial') acc.promossi = (acc.promossi || 0) + 1;
+            return acc;
+        }, {});
+        slot.examDate = slot.examDates.sort()[0] || null;
+    });
+    window.EXAM_BY_HANDLE = result;
+    window.EXAM_UNMATCHED = unmatched;
+    const totalMatched = Object.values(result).reduce((n, s) => n + s.students.length, 0);
+    const totalUnmatched = unmatched.reduce((n, u) => n + (u.students || []).length, 0);
+    console.log(`[exam-by-handle] ${Object.keys(result).length} handles matched; ${totalMatched} attempts mapped, ${totalUnmatched} unmatched (${unmatched.length} exam codes)`);
 }
 
 // Helpers for rendering exam outcome in student rows
@@ -2804,6 +2958,11 @@ async function loadApiData() {
         .map(c => normaliseCourse(c))
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
     COURSES = ALL_COURSES.filter(c => c.isFuture);
+
+    // Index exam records by Shopify handle — depends on ALL_COURSES being populated.
+    if (window.EXAM_BY_COURSE && Object.keys(window.EXAM_BY_COURSE).length > 0) {
+        buildExamByHandle();
+    }
 
     // Build educators list
     const educatorMap = new Map();
