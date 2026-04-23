@@ -1020,7 +1020,8 @@ app.get('/api/courses', async (req, res) => {
     // Apply cached Twilio data immediately (non-blocking — no new API calls)
     applyCachedTwilioData(courses);
 
-    const responseData = { success: true, count: courses.length, data: courses };
+    const lastUpdated = new Date().toISOString();
+    const responseData = { success: true, count: courses.length, data: courses, lastUpdated };
     // Cache the full response for 10 minutes
     setCache(fullCacheKey, responseData, 600);
     console.log(`API /api/courses total time: ${Date.now() - apiStart}ms (${courses.length} courses)`);
@@ -1061,7 +1062,7 @@ app.get('/api/courses', async (req, res) => {
           nameMismatch: s.nameMismatch
         }))
       }));
-      payload = { success: true, count: slimCourses.length, minimal: true, data: slimCourses };
+      payload = { success: true, count: slimCourses.length, minimal: true, data: slimCourses, lastUpdated };
     }
 
     // Browser/CDN cache: 5 min hit, 10 min stale-while-revalidate
@@ -1071,7 +1072,7 @@ app.get('/api/courses', async (req, res) => {
     // Enrich Twilio data in background (doesn't block the response)
     enrichStudentsWithWhatsApp(courses).then(() => {
       // Update cache with enriched data
-      const enrichedData = { success: true, count: courses.length, data: courses };
+      const enrichedData = { success: true, count: courses.length, data: courses, lastUpdated };
       setCache(fullCacheKey, enrichedData, 600);
     }).catch(err => console.log('Background Twilio enrichment failed:', err.message));
   } catch (error) {
