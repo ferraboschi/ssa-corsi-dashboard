@@ -1391,6 +1391,8 @@
             <div class="sync-badge" id="connectionStatus" role="status" aria-live="polite">
                 <span style="color: var(--warning);">&#9679;</span> Caricamento...
             </div>
+            <span id="lastUpdatedLabel" style="font-size:11px;color:var(--text-light);" title="Ultimo aggiornamento dati">—</span>
+            <button id="refreshDataBtn" type="button" onclick="refreshAllData()" title="Ricarica dati da Shopify e Airtable" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text-light);font-size:13px;font-family:inherit;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'"><i class="fas fa-sync-alt"></i> <span id="refreshBtnLabel">Ricarica</span></button>
             <button onclick="window.location.href='/auth/logout'" title="Esci" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--text-light);font-size:13px;font-family:inherit;display:flex;align-items:center;gap:6px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--danger)';this.style.color='var(--danger)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-light)'"><i class="fas fa-sign-out-alt"></i> Esci</button>
         </div>
     </div>
@@ -2500,6 +2502,57 @@ function renderExamBadge(exam) {
 // API DATA LOADING
 // =============================================
 
+// ---- Data freshness helpers ----
+function formatTimeAgo(iso) {
+    if (!iso) return '—';
+    const ageMs = Date.now() - new Date(iso).getTime();
+    if (ageMs < 0) return 'adesso';
+    const mins = Math.floor(ageMs / 60000);
+    if (mins < 1) return 'adesso';
+    if (mins < 60) return mins + ' min fa';
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return hours + 'h fa';
+    return Math.floor(hours / 24) + 'g fa';
+}
+
+function updateLastUpdatedLabel() {
+    const el = document.getElementById('lastUpdatedLabel');
+    if (!el) return;
+    const iso = window.__lastUpdated || null;
+    el.textContent = iso ? 'Aggiornato ' + formatTimeAgo(iso) : '—';
+    el.title = iso ? 'Aggiornato il ' + new Date(iso).toLocaleString('it-IT') : 'Nessun dato caricato';
+}
+
+async function refreshAllData() {
+    const btn = document.getElementById('refreshDataBtn');
+    const lbl = document.getElementById('refreshBtnLabel');
+    if (btn) btn.disabled = true;
+    if (lbl) lbl.textContent = 'Ricarico...';
+    try {
+        // Invalidate client-side cache
+        try { sessionStorage.removeItem('ssa_courses'); } catch (e) {}
+        try { sessionStorage.removeItem('sake_v3'); } catch (e) {}
+        // Force server-side refresh so subsequent /api/courses returns fresh data
+        await fetch('/api/courses?nocache=1&minimal=1');
+        await loadApiData();
+        // Also refresh exam results
+        if (typeof loadExamResults === 'function') await loadExamResults();
+        if (typeof loadRecommendations === 'function') loadRecommendations();
+        updateLastUpdatedLabel();
+        renderCurrentPage();
+    } catch (e) {
+        alert('Errore durante il refresh: ' + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (lbl) lbl.textContent = 'Ricarica';
+    }
+}
+
+// Refresh the "X min fa" label every 30s while the page is open
+if (!window.__lastUpdatedTicker) {
+    window.__lastUpdatedTicker = setInterval(updateLastUpdatedLabel, 30000);
+}
+
 async function loadApiData() {
     hideError();
     let coursesData = [];
@@ -2538,6 +2591,8 @@ async function loadApiData() {
                     apiStatus.courses = true;
                     coursesData = data.data;
                     setCache('courses', coursesData);
+                    window.__lastUpdated = data.lastUpdated || new Date().toISOString();
+                    updateLastUpdatedLabel();
                 }
             } else {
                 throw new Error('Shopify API: ' + response.status);
