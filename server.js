@@ -1896,30 +1896,17 @@ app.post('/api/costs/:courseId', (req, res) => {
   const { courseId } = req.params;
   const { location, educator, food, sake, adv, program, lines, educatorName, whatsappGroupLink } = req.body;
   const existing = courseCosts[courseId] || {};
-  courseCosts[courseId] = {
-    ...existing, // preserve sibling fields (notebook, phoneOverrides, nameOverrides, fatturato, ...)
-    location: parseFloat(location) || 0,
-    educator: parseFloat(educator) || 0,
-    food: parseFloat(food) || 0,
-    sake: parseFloat(sake) || 0,
-    adv: parseFloat(adv) || 0
-  };
-  // Save program (groups with sakes) if provided
-  if (program !== undefined) {
-    courseCosts[courseId].program = program;
-  }
-  // Save lines array if provided
-  if (lines !== undefined) {
-    courseCosts[courseId].lines = lines;
-  }
-  // Keep educatorName field for backward compatibility
-  if (educatorName !== undefined) {
-    courseCosts[courseId].educatorName = educatorName;
-  }
-  // Save WhatsApp group link if provided
-  if (whatsappGroupLink !== undefined) {
-    courseCosts[courseId].whatsappGroupLink = whatsappGroupLink;
-  }
+  const next = { ...existing }; // preserve sibling fields (notebook, phoneOverrides, nameOverrides, fatturato, ...)
+  if (location !== undefined) next.location = parseFloat(location) || 0;
+  if (educator !== undefined) next.educator = parseFloat(educator) || 0;
+  if (food !== undefined) next.food = parseFloat(food) || 0;
+  if (sake !== undefined) next.sake = parseFloat(sake) || 0;
+  if (adv !== undefined) next.adv = parseFloat(adv) || 0;
+  if (program !== undefined) next.program = program;
+  if (lines !== undefined) next.lines = lines;
+  if (educatorName !== undefined) next.educatorName = educatorName;
+  if (whatsappGroupLink !== undefined) next.whatsappGroupLink = whatsappGroupLink;
+  courseCosts[courseId] = next;
   saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
 });

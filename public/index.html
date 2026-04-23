@@ -2295,6 +2295,65 @@ async function addNotebookTag(courseId) {
     }
 }
 
+// ---- Educator assignment (course detail) ----
+// Lets admin override the Shopify metafield with a per-course educator saved to COURSE_COSTS.
+// The fallback chain stays: Shopify metafield → COURSE_COSTS.educatorName → tag → "Da assegnare".
+function renderEducatorAssignControl(c) {
+    const knownNames = new Set();
+    Object.keys(CONFIG.EDUCATOR_PROFILES || {}).forEach(n => knownNames.add(n));
+    (EDUCATORS || []).forEach(e => { if (e && e.name && e.name !== 'Da assegnare') knownNames.add(e.name); });
+    const current = c.educator && c.educator.name && c.educator.name !== 'Da assegnare' ? c.educator.name : '';
+    if (current) knownNames.add(current);
+    const opts = Array.from(knownNames).sort((a, b) => a.localeCompare(b, 'it'));
+    const options = [
+        `<option value=""${!current ? ' selected' : ''}>— Da assegnare —</option>`,
+        ...opts.map(n => `<option value="${escapeHTMLInline(n)}"${n === current ? ' selected' : ''}>${escapeHTMLInline(n)}</option>`)
+    ].join('');
+    return `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:12px;color:var(--text-light);font-weight:600;"><i class="fas fa-user-edit"></i> Assegna educator:</label>
+            <select id="educatorAssignSelect" onchange="saveCourseEducator('${c.handle.replace(/'/g, "\\'")}', this.value)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:white;">
+                ${options}
+            </select>
+            <span id="educatorAssignStatus" style="font-size:11px;color:var(--text-light);"></span>
+        </div>`;
+}
+
+async function saveCourseEducator(courseId, newName) {
+    const status = document.getElementById('educatorAssignStatus');
+    if (status) status.textContent = 'Salvataggio…';
+    try {
+        const resp = await fetch(`/api/costs/${encodeURIComponent(courseId)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ educatorName: newName || '' }),
+        });
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.error || 'save failed');
+        COURSE_COSTS[courseId] = { ...(COURSE_COSTS[courseId] || {}), educatorName: newName || '' };
+        const profile = (newName && CONFIG.EDUCATOR_PROFILES[newName]) || {};
+        const nextEd = newName
+            ? {
+                name: newName,
+                region: profile.region || '',
+                initials: newName.split(' ').map(w => w[0]).join('').toUpperCase(),
+                photo: profile.photo || '',
+                bio: profile.bio || '',
+            }
+            : { name: 'Da assegnare', region: '', initials: '?', photo: '', bio: '' };
+        const apply = (arr) => {
+            const target = arr.find(cc => cc.handle === courseId);
+            if (target) target.educator = nextEd;
+        };
+        apply(ALL_COURSES);
+        apply(COURSES);
+        renderCourseDetailPage();
+    } catch (e) {
+        if (status) status.textContent = '';
+        alert('Errore salvando educator: ' + e.message);
+    }
+}
+
 async function removeNotebookTag(courseId, tag) {
     const existing = ((COURSE_COSTS[courseId] && COURSE_COSTS[courseId].notebook && COURSE_COSTS[courseId].notebook.tags) || []);
     const newTags = existing.filter(t => t !== tag);
@@ -3623,6 +3682,7 @@ function renderCourseDetailPage() {
                     </div>
                 </div>
                 <div id="educatorPreviewBio">${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}</div>
+                ${renderEducatorAssignControl(c)}
             </div>
         </div>
 
