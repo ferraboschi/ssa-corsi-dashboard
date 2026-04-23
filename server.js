@@ -426,9 +426,14 @@ async function fetchExamResults() {
         }
       }
 
-      // byCourse collects every attempt (deduped later by email+result priority)
+      // byCourse: one bucket per distinct (Socrative courseName, exam day).
+      // Grouping by the day — not by courseName alone — preserves date-specific
+      // sessions (e.g. multiple "Esame SAKE" exam days referring to different
+      // Shopify courses), so the frontend matcher can resolve each one.
       if (courseName) {
-        const bucket = byCourse[courseName] || (byCourse[courseName] = { examDate, attempts: [] });
+        const day = (examDate || '').slice(0, 10) || 'unknown';
+        const key = `${courseName}|${day}`;
+        const bucket = byCourse[key] || (byCourse[key] = { courseName, examDate, attempts: [] });
         bucket.attempts.push({
           email: emailKey,
           fullName: f['Full Name'] || '',

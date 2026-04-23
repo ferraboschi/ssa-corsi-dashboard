@@ -2549,14 +2549,16 @@ async function loadExamResults() {
 // course type + year/month + city signals. Falls back to examDate + type heuristics.
 function parseExamCode(name) {
     if (!name) return null;
-    const m = name.match(/^\s*(NIHONSHU|SAKE|SHOCHU|MIXOLOGY)[-\s](\d{2})(\d{2})[-\s](.+?)\s*$/i);
+    // Tolerate any trailing delimiter after the city token (-/+/space) so e.g.
+    // "SAKE-2511-ROMA+ONLINE" resolves with the primary city "roma".
+    const m = name.match(/^\s*(NIHONSHU|SAKE|SHOCHU|MIXOLOGY)[-\s](\d{2})(\d{2})[-\s]+([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ-]*)/i);
     if (m) {
         const kindToType = { NIHONSHU: 'certificato', SAKE: 'introduttivo', SHOCHU: 'shochu', MIXOLOGY: 'mixology' };
         return {
             type: kindToType[m[1].toUpperCase()],
             year: 2000 + parseInt(m[2], 10),
             month: parseInt(m[3], 10),
-            cityKey: m[4].trim().toLowerCase().replace(/\s+/g, '-'),
+            cityKey: m[4].trim().toLowerCase(),
             exact: true,
         };
     }
@@ -2588,16 +2590,16 @@ function courseTypeKey(course) {
     return t || null;
 }
 
-function resolveExamCourseHandle(examCourseName, examDateIso, shopifyCourses) {
+function resolveExamCourseHandle(examCourseName, examDateIso, shopifyCourses, examEmails) {
     const parsed = parseExamCode(examCourseName);
     const ym = examDateIso ? { y: parseInt(examDateIso.slice(0, 4), 10), m: parseInt(examDateIso.slice(5, 7), 10) } : null;
+    const emailSet = examEmails instanceof Set ? examEmails : new Set(examEmails || []);
     const scored = [];
     for (const c of shopifyCourses) {
         const tKey = courseTypeKey(c);
         if (!tKey) continue;
         // type filter
         if (parsed && parsed.type && parsed.type !== tKey) continue;
-        if (!parsed && ym) { /* type inferred by exam date fallback only */ }
         // year/month from course startDate (YYYY-MM-DD)
         const sd = c.startDate || '';
         const cy = sd.slice(0, 4) && parseInt(sd.slice(0, 4), 10);
@@ -2624,13 +2626,25 @@ function resolveExamCourseHandle(examCourseName, examDateIso, shopifyCourses) {
         } else {
             continue;
         }
-        scored.push({ handle: c.handle, score });
+        // Tiebreaker: how many of the exam-taker emails actually ordered this Shopify course?
+        let emailHits = 0;
+        if (emailSet.size > 0 && Array.isArray(c.students)) {
+            for (const s of c.students) {
+                const em = (s.email || '').toLowerCase().trim();
+                if (em && emailSet.has(em)) emailHits++;
+            }
+        }
+        scored.push({ handle: c.handle, score, emailHits });
     }
-    scored.sort((a, b) => b.score - a.score);
+    scored.sort((a, b) => (b.score - a.score) || (b.emailHits - a.emailHits));
     if (!scored.length) return null;
-    // Only accept if the top match is strictly better than the second (avoid ambiguous)
-    if (scored.length > 1 && scored[0].score === scored[1].score) return null;
-    return scored[0].handle;
+    const top = scored[0];
+    const second = scored[1];
+    // Accept if no tie, or if tiebreaker gave the top a clear email-overlap edge.
+    if (!second) return top.handle;
+    if (top.score !== second.score) return top.handle;
+    if (top.emailHits > second.emailHits && top.emailHits > 0) return top.handle;
+    return null;
 }
 
 // Build the inverse map: Shopify course handle -> { examDate, students: [...], counts: {passed,retrial,failed} }
@@ -2641,10 +2655,12 @@ function buildExamByHandle() {
     const shopify = (typeof ALL_COURSES !== 'undefined') ? ALL_COURSES : [];
     const priority = { passed: 3, retrial: 2, failed: 1, unknown: 0 };
     const unmatched = [];
-    Object.keys(byCourse).forEach(cn => {
-        const bucket = byCourse[cn];
+    Object.keys(byCourse).forEach(key => {
+        const bucket = byCourse[key];
+        const cn = bucket.courseName || key;
         const examDate = bucket.examDate || null;
-        const handle = resolveExamCourseHandle(cn, examDate, shopify);
+        const emailSet = new Set((bucket.students || []).map(s => (s.email || '').toLowerCase().trim()).filter(Boolean));
+        const handle = resolveExamCourseHandle(cn, examDate, shopify, emailSet);
         if (!handle) {
             unmatched.push({ courseName: cn, examDate, students: bucket.students });
             return;
