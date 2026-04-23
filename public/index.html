@@ -1531,9 +1531,10 @@
             </select>
         </div>
         <div class="status-pills" id="corsiStatusPills" role="tablist" aria-label="Stato corso" style="margin-bottom: 12px;">
-            <span class="status-pill active" data-status="attivi" role="tab">Attivi <span class="count" id="countAttivi">0</span></span>
-            <span class="status-pill" data-status="non-attivi" role="tab">Non attivi <span class="count" id="countNonAttivi">0</span></span>
-            <span class="status-pill" data-status="passati" role="tab" title="Apri la pagina Passati">Passati <span class="count" id="countPassati">—</span></span>
+            <span class="status-pill active" data-status="attivi" role="tab" title="Corsi pubblicati con data futura o in corso">Attivi <span class="count" id="countAttivi">0</span></span>
+            <span class="status-pill" data-status="bozze" role="tab" title="Corsi in bozza su Shopify con data futura">Bozze <span class="count" id="countBozze">0</span></span>
+            <span class="status-pill" data-status="archiviati" role="tab" title="Corsi archiviati/cancellati su Shopify con data futura">Archiviati <span class="count" id="countArchiviati">0</span></span>
+            <span class="status-pill" data-status="passati" role="tab" title="Corsi con data passata (qualsiasi stato)">Passati <span class="count" id="countPassatiCorsi">0</span></span>
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
             <span style="font-size:11px;color:var(--text-light);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Ordina:</span>
@@ -3070,24 +3071,23 @@ function renderCorsiPage() {
     const filter = document.getElementById('corsiFilter').value;
     const statusFilter = window.corsiStatusFilter || 'attivi';
 
-    // Update status pill counts (based on unfiltered COURSES, so counts are stable)
-    const countAttivi = COURSES.filter(isCorsoAttivo).length;
-    const countNonAttivi = COURSES.length - countAttivi;
-    const countAttiviEl = document.getElementById('countAttivi');
-    const countNonAttiviEl = document.getElementById('countNonAttivi');
-    const countPassatiEl = document.getElementById('countPassati');
-    if (countAttiviEl) countAttiviEl.textContent = countAttivi;
-    if (countNonAttiviEl) countNonAttiviEl.textContent = countNonAttivi;
-    if (countPassatiEl) {
-        const rawAll = getCached('courses') || [];
-        const today = new Date(); today.setHours(0,0,0,0);
-        const pastCount = rawAll.filter(raw => {
-            const dateInfo = parseCourseDate(raw.handle, raw);
-            if (!dateInfo) return false;
-            return new Date(dateInfo.end + 'T23:59:59') < today;
-        }).length;
-        countPassatiEl.textContent = pastCount;
+    // Unified data source: ALL_COURSES contains past + future; COURSES is a fallback
+    // if ALL_COURSES has not been populated yet (first render).
+    const SOURCE = (ALL_COURSES && ALL_COURSES.length) ? ALL_COURSES : COURSES;
+
+    // Update status pill counts across all 4 tabs
+    const counts = { attivi: 0, bozze: 0, archiviati: 0, passati: 0 };
+    for (const c of SOURCE) {
+        if (!c.isFuture) { counts.passati++; continue; }
+        if (c.businessState === 'pubblicato') counts.attivi++;
+        else if (c.businessState === 'bozza') counts.bozze++;
+        else if (c.businessState === 'cancellato') counts.archiviati++;
     }
+    const setCount = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setCount('countAttivi', counts.attivi);
+    setCount('countBozze', counts.bozze);
+    setCount('countArchiviati', counts.archiviati);
+    setCount('countPassatiCorsi', counts.passati);
 
     // Sync pill visual "active" state
     document.querySelectorAll('#corsiStatusPills .status-pill').forEach(el => {
@@ -3095,7 +3095,7 @@ function renderCorsiPage() {
         el.setAttribute('aria-selected', el.dataset.status === statusFilter ? 'true' : 'false');
     });
 
-    // Update active filter pills
+    // Update active filter pills (search / type)
     const filtersDiv = document.getElementById('activeFilters');
     let pillsHTML = '';
     if (search) pillsHTML += `<span class="filter-pill">Cerca: "${search}" <span class="remove" onclick="document.getElementById('corsiSearch').value='';renderCorsiPage();">&times;</span></span>`;
@@ -3105,11 +3105,18 @@ function renderCorsiPage() {
     }
     filtersDiv.innerHTML = pillsHTML;
 
-    const filtered = COURSES.filter(c => {
-        // Status pill
-        const isAttivo = isCorsoAttivo(c);
-        if (statusFilter === 'attivi' && !isAttivo) return false;
-        if (statusFilter === 'non-attivi' && isAttivo) return false;
+    // Tab match: which subset of SOURCE belongs to the active tab?
+    function matchesTab(c) {
+        if (statusFilter === 'passati') return !c.isFuture;
+        if (!c.isFuture) return false; // future-only tabs never show past
+        if (statusFilter === 'attivi') return c.businessState === 'pubblicato';
+        if (statusFilter === 'bozze') return c.businessState === 'bozza';
+        if (statusFilter === 'archiviati') return c.businessState === 'cancellato';
+        return true;
+    }
+
+    const filtered = SOURCE.filter(c => {
+        if (!matchesTab(c)) return false;
         if (search && !c.name.toLowerCase().includes(search) && !c.city.toLowerCase().includes(search) && !c.educator.name.toLowerCase().includes(search)) return false;
         if (filter !== 'all' && c.courseType.type !== filter) return false;
         return true;
@@ -3183,11 +3190,6 @@ function renderCorsiPage() {
 }
 
 function setCorsiStatusFilter(status) {
-    // "Passati" is a shortcut to the dedicated Past Courses page (different data set)
-    if (status === 'passati') {
-        navigateTo('passati');
-        return;
-    }
     window.corsiStatusFilter = status;
     renderCorsiPage();
 }
