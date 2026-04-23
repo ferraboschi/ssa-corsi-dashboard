@@ -61,6 +61,12 @@ function generateShareToken() {
 const courseCosts = loadCostsFromFile();
 let shareTokens = loadShareTokensFromFile();
 
+// Global per-student identity overrides, keyed by the original Shopify/historical
+// email. Survives email rewrites because the key is frozen at first observation.
+//   studentProfiles[originalEmail] = { displayName, primaryEmail, updatedAt }
+// Persisted on Airtable under config key 'student_profiles'.
+let studentProfiles = {};
+
 // ============================================================================
 // AIRTABLE-BASED PERSISTENCE (survives Render ephemeral filesystem wipes)
 // Uses table NAME directly in REST API (no metadata API / schema permissions needed)
@@ -188,6 +194,11 @@ async function loadFromAirtable() {
         shareTokens[k] = tokensData[k];
       });
       console.log(`Loaded ${Object.keys(tokensData).length} share tokens from Airtable (overwriting file data)`);
+    }
+    const profilesData = await airtableConfigGet('student_profiles');
+    if (profilesData && typeof profilesData === 'object') {
+      studentProfiles = profilesData;
+      console.log(`Loaded ${Object.keys(studentProfiles).length} student profiles from Airtable`);
     }
   } catch (e) {
     console.error('Failed to load from Airtable:', e.message);
@@ -1617,6 +1628,110 @@ app.get('/api/recommendations', async (req, res) => {
     console.error('Recommendations failed:', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ============================================================================
+// STUDENT OVERRIDES — per-student identity (global) + per-course outcome/note
+//
+// Three storage scopes, all persisted in SSA_CourseConfig Airtable:
+//   - studentProfiles[originalEmail] = { displayName, primaryEmail, updatedAt }
+//       Global identity override. Key never changes so name/email edits propagate
+//       everywhere the student appears without losing the original reference.
+//   - courseCosts[handle].outcomeOverrides[email] = "passed" | "failed" | null
+//       Per-course exam outcome override; wins over Airtable Socrative data.
+//   - courseCosts[handle].studentNotes[email]   = "free text"
+//       Per-course contextual note about the student.
+// ============================================================================
+
+function normaliseEmailKey(raw) {
+  return (raw || '').toString().toLowerCase().trim();
+}
+
+// Returns the combined overrides payload consumed by the frontend resolver.
+app.get('/api/student-overrides', (req, res) => {
+  const outcomeOverrides = {};
+  const studentNotes = {};
+  Object.keys(courseCosts).forEach(handle => {
+    const c = courseCosts[handle] || {};
+    if (c.outcomeOverrides && Object.keys(c.outcomeOverrides).length) {
+      outcomeOverrides[handle] = c.outcomeOverrides;
+    }
+    if (c.studentNotes && Object.keys(c.studentNotes).length) {
+      studentNotes[handle] = c.studentNotes;
+    }
+  });
+  res.json({
+    success: true,
+    profiles: studentProfiles,
+    outcomeOverrides,
+    studentNotes,
+    lastUpdated: new Date().toISOString(),
+  });
+});
+
+// Global profile: upsert displayName and/or primaryEmail for a given original email.
+app.post('/api/student/profile/:originalEmail', (req, res) => {
+  const key = normaliseEmailKey(decodeURIComponent(req.params.originalEmail));
+  if (!key) return res.status(400).json({ success: false, error: 'originalEmail required' });
+  const { displayName, primaryEmail, clear } = req.body || {};
+  if (clear) {
+    delete studentProfiles[key];
+  } else {
+    const existing = studentProfiles[key] || {};
+    const next = { ...existing };
+    if (displayName !== undefined) next.displayName = String(displayName || '').trim() || undefined;
+    if (primaryEmail !== undefined) next.primaryEmail = normaliseEmailKey(primaryEmail) || undefined;
+    if (!next.displayName && !next.primaryEmail) {
+      delete studentProfiles[key];
+    } else {
+      next.updatedAt = new Date().toISOString();
+      studentProfiles[key] = next;
+    }
+  }
+  airtableConfigSet('student_profiles', studentProfiles).catch(() => {});
+  res.json({ success: true, profile: studentProfiles[key] || null });
+});
+
+// Per-course outcome override. outcome = "passed" | "failed" | null (clear).
+app.post('/api/costs/:courseId/outcome/:email', (req, res) => {
+  const { courseId } = req.params;
+  const email = normaliseEmailKey(decodeURIComponent(req.params.email));
+  if (!email) return res.status(400).json({ success: false, error: 'email required' });
+  let { outcome } = req.body || {};
+  if (outcome !== 'passed' && outcome !== 'failed' && outcome !== null && outcome !== undefined) {
+    return res.status(400).json({ success: false, error: 'outcome must be "passed", "failed" or null' });
+  }
+  const existing = courseCosts[courseId] || {};
+  const overrides = { ...(existing.outcomeOverrides || {}) };
+  if (outcome === null || outcome === undefined) {
+    delete overrides[email];
+  } else {
+    overrides[email] = outcome;
+  }
+  courseCosts[courseId] = { ...existing, outcomeOverrides: overrides };
+  saveCostsToFile(courseCosts);
+  airtableConfigSet('course_costs', courseCosts).catch(() => {});
+  res.json({ success: true, outcomeOverrides: overrides });
+});
+
+// Per-course contextual note about a student. Empty/null clears the note.
+app.post('/api/costs/:courseId/note/:email', (req, res) => {
+  const { courseId } = req.params;
+  const email = normaliseEmailKey(decodeURIComponent(req.params.email));
+  if (!email) return res.status(400).json({ success: false, error: 'email required' });
+  const { text } = req.body || {};
+  const trimmed = typeof text === 'string' ? text.trim() : '';
+  const existing = courseCosts[courseId] || {};
+  const notes = { ...(existing.studentNotes || {}) };
+  if (!trimmed) {
+    delete notes[email];
+  } else {
+    notes[email] = { text: trimmed, updatedAt: new Date().toISOString() };
+  }
+  courseCosts[courseId] = { ...existing, studentNotes: notes };
+  saveCostsToFile(courseCosts);
+  airtableConfigSet('course_costs', courseCosts).catch(() => {});
+  res.json({ success: true, studentNotes: notes });
 });
 
 // ============================================================================
