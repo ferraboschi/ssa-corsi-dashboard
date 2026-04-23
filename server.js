@@ -1452,6 +1452,54 @@ app.get('/api/historical-students', (req, res) => {
 });
 
 // ============================================================================
+// SAKE TEMPLATES — canonical sake program per course type.
+// Stored in the SSA_CourseConfig Airtable table under key 'sake_templates'.
+// Shape: { certificato: [sakes], introduttivo: [sakes], shochu: [sakes], masterclass: [sakes] }
+// Each sake item has the same shape used inside program groups, so
+// apply-template is a direct copy into the course's program.
+// ============================================================================
+
+const SAKE_TEMPLATE_KEYS = ['certificato', 'introduttivo', 'shochu', 'masterclass'];
+
+app.get('/api/sake-templates', async (req, res) => {
+  try {
+    const stored = await airtableConfigGet('sake_templates');
+    const result = {};
+    for (const k of SAKE_TEMPLATE_KEYS) {
+      result[k] = (stored && Array.isArray(stored[k])) ? stored[k] : [];
+    }
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json({ success: true, templates: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/sake-templates/:type', async (req, res) => {
+  try {
+    const type = (req.params.type || '').toLowerCase();
+    if (!SAKE_TEMPLATE_KEYS.includes(type)) {
+      return res.status(400).json({ success: false, error: 'unknown type' });
+    }
+    const incoming = (req.body && Array.isArray(req.body.sakes)) ? req.body.sakes : null;
+    if (!incoming) {
+      return res.status(400).json({ success: false, error: 'sakes[] required' });
+    }
+    const stored = (await airtableConfigGet('sake_templates')) || {};
+    stored[type] = incoming.map(s => ({
+      id: s.id, code: s.code, name: s.name, nameJp: s.nameJp || '',
+      type: s.type || '', sakagura: s.sakagura || '', size: s.size,
+      cost: parseFloat(s.cost) || 0, qty: parseInt(s.qty, 10) || 1,
+      note: s.note || '', image: s.image || '',
+    }));
+    await airtableConfigSet('sake_templates', stored);
+    res.json({ success: true, type, count: stored[type].length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ============================================================================
 // RECOMMENDATIONS (data-driven, transparent, no ML)
 // Reads already-cached course list, splits past/future, builds per-segment
 // historical baseline, emits verdict + reasoning per upcoming course.
