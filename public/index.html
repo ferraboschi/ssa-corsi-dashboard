@@ -1568,8 +1568,8 @@
             </select>
             <select id="corsistiExamFilter" aria-label="Filtra per esito esame">
                 <option value="all">Esiti: tutti</option>
-                <option value="passed">Promossi</option>
-                <option value="retrial">Recupero</option>
+                <option value="passed">Promossi (incluso recupero)</option>
+                <option value="retrial">Solo chi ha fatto recupero</option>
                 <option value="failed">Bocciati</option>
                 <option value="none">In attesa / Nessun esame</option>
             </select>
@@ -2549,11 +2549,12 @@ function renderExamBadge(exam) {
     const dateTitle = exam.examDate ? ` — esame ${new Date(exam.examDate).toLocaleDateString('it-IT')}` : '';
     const courseTitle = exam.courseName ? ` — ${exam.courseName}` : '';
     const title = `${exam.result}${attemptsTitle}${dateTitle}${courseTitle}`;
-    if (exam.result === 'passed') {
-        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#dcfce7;color:#15803d;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-award" style="font-size:8px;"></i> Promosso ${score}</span>`;
-    }
-    if (exam.result === 'retrial') {
-        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#fef3c7;color:#b45309;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-redo" style="font-size:8px;"></i> Recupero ${score}</span>`;
+    // Promossi = passed + retrial (retrial è un promosso che ha fatto recupero)
+    if (exam.result === 'passed' || exam.result === 'retrial') {
+        const recuperoTag = exam.result === 'retrial'
+            ? ` <span style="background:#fde68a;color:#92400e;font-size:9px;padding:0 4px;border-radius:6px;font-weight:700;margin-left:2px;" title="Ha fatto esame di recupero"><i class="fas fa-redo" style="font-size:7px;"></i> recupero</span>`
+            : '';
+        return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#dcfce7;color:#15803d;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-award" style="font-size:8px;"></i> Promosso ${score}${recuperoTag}</span>`;
     }
     if (exam.result === 'failed') {
         return ` <span style="display:inline-flex;align-items:center;gap:2px;background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;cursor:help;" title="${title}"><i class="fas fa-times-circle" style="font-size:8px;"></i> Bocciato ${score}</span>`;
@@ -4834,6 +4835,7 @@ function renderCorsistiPage() {
             } else {
                 const exam = getExamResultForStudent(st);
                 if (examF === 'none') { if (exam) return false; }
+                else if (examF === 'passed') { if (!exam || (exam.result !== 'passed' && exam.result !== 'retrial')) return false; }
                 else { if (!exam || exam.result !== examF) return false; }
             }
         }
