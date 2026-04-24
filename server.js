@@ -1692,14 +1692,15 @@ app.post('/api/student/profile/:originalEmail', (req, res) => {
   res.json({ success: true, profile: studentProfiles[key] || null });
 });
 
-// Per-course outcome override. outcome = "passed" | "failed" | null (clear).
+// Per-course outcome override. outcome = "passed" | "failed" | "absent" | null (clear).
+const VALID_OUTCOMES = new Set(['passed', 'failed', 'absent']);
 app.post('/api/costs/:courseId/outcome/:email', (req, res) => {
   const { courseId } = req.params;
   const email = normaliseEmailKey(decodeURIComponent(req.params.email));
   if (!email) return res.status(400).json({ success: false, error: 'email required' });
   let { outcome } = req.body || {};
-  if (outcome !== 'passed' && outcome !== 'failed' && outcome !== null && outcome !== undefined) {
-    return res.status(400).json({ success: false, error: 'outcome must be "passed", "failed" or null' });
+  if (outcome !== null && outcome !== undefined && !VALID_OUTCOMES.has(outcome)) {
+    return res.status(400).json({ success: false, error: 'outcome must be "passed", "failed", "absent" or null' });
   }
   const existing = courseCosts[courseId] || {};
   const overrides = { ...(existing.outcomeOverrides || {}) };
