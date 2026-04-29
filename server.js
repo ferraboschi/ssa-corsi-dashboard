@@ -547,21 +547,30 @@ async function fetchAllShopifyProducts() {
     const response = await shopifyFetch(url);
     const products = response.products || [];
     allProducts = allProducts.concat(products);
-
-    // Check for pagination (Shopify link header not available via this method)
-    // For now, if we got less than 250, we've got them all
     if (products.length < 250) break;
-
-    // Simple pagination using since_id
     const lastId = products[products.length - 1].id;
     url = `/products.json?limit=250&since_id=${lastId}`;
   }
+
+  // Deduplicate by product ID (same since_id pagination overlap fix as orders)
+  const seen = new Set();
+  const uniqueProducts = [];
+  for (const p of allProducts) {
+    if (!seen.has(p.id)) {
+      seen.add(p.id);
+      uniqueProducts.push(p);
+    }
+  }
+  allProducts = uniqueProducts;
 
   setCache(cacheKey, allProducts, 900); // 15 min cache (products rarely change)
   return allProducts;
 }
 
 // Fetch ALL Shopify orders with pagination
+// NOTE: Shopify REST API returns orders in created_at DESC by default.
+// Using since_id with DESC sort caused duplicate fetches — orders appeared twice.
+// Fix: deduplicate by order ID after fetching all pages.
 async function fetchAllShopifyOrders() {
   const cacheKey = 'shopify_all_orders';
   let cached = getCache(cacheKey);
@@ -580,8 +589,21 @@ async function fetchAllShopifyOrders() {
     url = `/orders.json?limit=250&status=any&since_id=${lastId}`;
   }
 
-  setCache(cacheKey, allOrders, 600); // 10 min cache
-  return allOrders;
+  // Deduplicate by order ID (pagination overlap with DESC sort can produce duplicates)
+  const seen = new Set();
+  const uniqueOrders = [];
+  for (const order of allOrders) {
+    if (!seen.has(order.id)) {
+      seen.add(order.id);
+      uniqueOrders.push(order);
+    }
+  }
+  if (uniqueOrders.length < allOrders.length) {
+    console.log(`[orders] Deduplicated: ${allOrders.length} → ${uniqueOrders.length} orders`);
+  }
+
+  setCache(cacheKey, uniqueOrders, 600); // 10 min cache
+  return uniqueOrders;
 }
 
 // ============================================================================
@@ -1093,10 +1115,13 @@ app.get('/api/courses', async (req, res) => {
       });
     }
 
-    // maxStudents: use Shopify inventory_quantity directly (= total capacity).
+    // maxStudents = total capacity = enrolled + remaining inventory.
+    // inventory_quantity is the REMAINING stock (Shopify decrements on each sale).
     // Fallback to sensible defaults when inventory tracking is off (null).
     courses.forEach(course => {
-      if (course.maxStudents == null) {
+      if (course.maxStudents != null) {
+        course.maxStudents = course.enrollmentCount + course.maxStudents;
+      } else {
         const isOnline = (course.handle || '').includes('online');
         course.maxStudents = isOnline ? 50 : 20;
       }
