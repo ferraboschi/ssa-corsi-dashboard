@@ -971,6 +971,10 @@ app.get('/api/courses', async (req, res) => {
         educatorRegion: (profile && profile.region) || '',
         // Metafield: luogo_e_orari (contains real dates and venue details)
         luogo_e_orari: (metafieldMap[product.id] && metafieldMap[product.id].luogo_e_orari) || '',
+        // Max students from Shopify inventory (total capacity = sold + remaining)
+        maxStudents: (product.variants && product.variants[0] && product.variants[0].inventory_quantity != null)
+          ? product.variants[0].inventory_quantity
+          : null,
         // Enrollment data
         enrollmentCount: 0,
         revenue: 0,
@@ -1089,6 +1093,17 @@ app.get('/api/courses', async (req, res) => {
       });
     }
 
+    // Compute maxStudents: sold (enrollmentCount) + remaining (inventory_quantity)
+    // If Shopify inventory tracking is off (maxStudents is null), use sensible defaults
+    courses.forEach(course => {
+      if (course.maxStudents != null) {
+        course.maxStudents = course.enrollmentCount + course.maxStudents;
+      } else {
+        const isOnline = (course.handle || '').includes('online');
+        course.maxStudents = isOnline ? 50 : 20;
+      }
+    });
+
     // Apply cached Twilio data immediately (non-blocking — no new API calls)
     applyCachedTwilioData(courses);
 
@@ -1116,6 +1131,7 @@ app.get('/api/courses', async (req, res) => {
         educatorBio: c.educatorBio,
         educatorRegion: c.educatorRegion,
         enrollmentCount: c.enrollmentCount,
+        maxStudents: c.maxStudents,
         revenue: c.revenue,
         // Variants trimmed to just price (frontend reads variants[0].price only)
         variants: (c.variants || []).slice(0, 1).map(v => ({ id: v.id, price: v.price })),
