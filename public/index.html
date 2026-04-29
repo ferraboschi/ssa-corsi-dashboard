@@ -1778,13 +1778,26 @@ const CONFIG = {
     },
 
     DATE_MAP: {
+        // Marzo 2026
         'corso-di-sake-sommelier-certificato-marzo-2026-torino': { start: '2026-03-21', end: '2026-03-23', display: '21-23 Mar 2026' },
         'corso-introduttivo-al-sake-marzo-2026-online': { start: '2026-03-24', end: '2026-03-27', display: '24-27 Mar 2026' },
+        // Aprile 2026
         'corso-di-sake-sommelier-certificato-aprile-2026-vercelli': { start: '2026-04-18', end: '2026-04-20', display: '18-20 Apr 2026' },
         'corso-di-sake-sommelier-certificato-aprile-2026-napoli': { start: '2026-04-20', end: '2026-04-22', display: '20-22 Apr 2026' },
         'corso-di-sake-sommelier-certificato-aprile-2026-bolzano': { start: '2026-04-20', end: '2026-04-22', display: '20-22 Apr 2026' },
+        // Maggio 2026
         'corso-di-sake-sommelier-certificato-maggio-2026-milano': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' },
-        'corso-di-sake-sommelier-certificato-maggio-2025-roma': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' }
+        'corso-di-sake-sommelier-certificato-maggio-2025-roma': { start: '2026-05-11', end: '2026-05-13', display: '11-13 Mag 2026' },
+        'corso-introduttivo-al-sake-maggio-2026-piacenza': { start: '2026-05-17', end: '2026-05-17', display: '17 Mag 2026' },
+        'corso-introduttivo-al-sake-maggio-2026-pescara': { start: '2026-05-18', end: '2026-05-18', display: '18 Mag 2026' },
+        'corso-introduttivo-al-sake-maggio-2026-torino': { start: '2026-05-18', end: '2026-05-18', display: '18 Mag 2026' },
+        'corso-introduttivo-al-sake-maggio-2026-firenze': { start: '2026-05-24', end: '2026-05-24', display: '24 Mag 2026' },
+        'corso-introduttivo-al-sake-maggio-2026-online': { start: '2026-05-27', end: '2026-05-29', display: '27-29 Mag 2026' },
+        // Giugno 2026
+        'corso-di-shochu-professional-giugno-2026-milano': { start: '2026-06-07', end: '2026-06-08', display: '7-8 Giu 2026' },
+        'corso-di-sake-sommelier-certificato-giugno-2026-vercelli': { start: '2026-06-12', end: '2026-06-14', display: '12-14 Giu 2026' },
+        // Luglio 2026
+        'corso-introduttivo-al-sake-luglio-2026-online': { start: '2026-07-07', end: '2026-07-09', display: '7-9 Lug 2026' }
     },
 
     COURSE_TEMPLATES: {
@@ -1938,7 +1951,7 @@ function parseCourseCity(handle, title, tags) {
         'napoli': 'Napoli', 'bolzano': 'Bolzano', 'vercelli': 'Vercelli',
         'firenze': 'Firenze', 'castelfranco': 'Castelfranco Veneto',
         'tortona': 'Tortona', 'colli-del-tronto': 'Colli del Tronto',
-        'piacenza': 'Piacenza'
+        'piacenza': 'Piacenza', 'pescara': 'Pescara'
     };
     const h = (handle || '').toLowerCase();
     const t = (title || '').toLowerCase();
@@ -1950,9 +1963,58 @@ function parseCourseCity(handle, title, tags) {
     return '';
 }
 
+// Parse dates from Shopify metafield luogo_e_orari (e.g. "🗓️ 17 Maggio 2026" or "🗓️ 11, 12 e 13 maggio 2026" or "🗓️ 27-28-29 Maggio 2026")
+function parseDateFromLuogoOrari(luogoText) {
+    if (!luogoText) return null;
+    const months = {
+        'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
+        'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
+        'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
+    };
+    const monthLabels = { '01':'Gen','02':'Feb','03':'Mar','04':'Apr','05':'Mag','06':'Giu','07':'Lug','08':'Ago','09':'Set','10':'Ott','11':'Nov','12':'Dic' };
+    const text = luogoText.toLowerCase();
+
+    for (const [monthName, monthNum] of Object.entries(months)) {
+        if (text.includes(monthName)) {
+            const yearMatch = text.match(/(\d{4})/);
+            if (!yearMatch) continue;
+            const year = yearMatch[1];
+
+            // Extract all day numbers before the month name
+            // Find the segment before the month name
+            const beforeMonth = text.split(monthName)[0];
+            // Match all numbers (1-2 digits) in that segment
+            const dayMatches = beforeMonth.match(/\d{1,2}/g);
+            if (dayMatches && dayMatches.length > 0) {
+                const days = dayMatches.map(d => parseInt(d)).filter(d => d >= 1 && d <= 31).sort((a, b) => a - b);
+                if (days.length > 0) {
+                    const firstDay = String(days[0]).padStart(2, '0');
+                    const lastDay = String(days[days.length - 1]).padStart(2, '0');
+                    const startDate = `${year}-${monthNum}-${firstDay}`;
+                    const endDate = `${year}-${monthNum}-${lastDay}`;
+                    const ml = monthLabels[monthNum];
+                    const display = days.length === 1
+                        ? `${days[0]} ${ml} ${year}`
+                        : `${days[0]}-${days[days.length - 1]} ${ml} ${year}`;
+                    return { start: startDate, end: endDate, display, fromMetafield: true };
+                }
+            }
+        }
+    }
+    return null;
+}
+
 function parseCourseDate(handle, courseObj) {
+    // 1. Hardcoded DATE_MAP (most reliable, manually verified)
     if (CONFIG.DATE_MAP[handle]) return CONFIG.DATE_MAP[handle];
 
+    // 2. Parse from Shopify metafield luogo_e_orari (auto-detected real dates)
+    if (courseObj && courseObj.luogo_e_orari) {
+        const parsed = parseDateFromLuogoOrari(courseObj.luogo_e_orari);
+        if (parsed) return parsed;
+    }
+
+    // 3. Fallback: extract month/year from handle (defaults to 1st of month — imprecise)
     const months = {
         'gennaio': '01', 'febbraio': '02', 'marzo': '03', 'aprile': '04',
         'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
@@ -1973,7 +2035,7 @@ function parseCourseDate(handle, courseObj) {
         }
     }
 
-    // Fallback: use Shopify created_at date for courses without dates in handle (e.g. Masterclass)
+    // 4. Last fallback: use Shopify created_at date (for courses without dates in handle, e.g. Masterclass)
     if (courseObj) {
         const fallbackDate = courseObj.created_at || courseObj.published_at || courseObj.updated_at;
         if (fallbackDate) {

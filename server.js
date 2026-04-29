@@ -870,6 +870,11 @@ async function fetchCourseMetafields(courseProducts) {
         if (bioMf && bioMf.value) {
           entry.bio = bioMf.value;
         }
+        // Look for luogo_e_orari metafield (contains real dates and location)
+        const luogoMf = metafields.find(mf => mf.key === 'luogo_e_orari');
+        if (luogoMf && luogoMf.value) {
+          entry.luogo_e_orari = luogoMf.value;
+        }
         if (Object.keys(entry).length > 0) {
           metafieldMap[product.id] = entry;
         }
@@ -954,6 +959,8 @@ app.get('/api/courses', async (req, res) => {
         educatorPhoto: (profile && profile.photo) || '',
         educatorBio: (profile && profile.bio) || '',
         educatorRegion: (profile && profile.region) || '',
+        // Metafield: luogo_e_orari (contains real dates and venue details)
+        luogo_e_orari: (metafieldMap[product.id] && metafieldMap[product.id].luogo_e_orari) || '',
         // Enrollment data
         enrollmentCount: 0,
         revenue: 0,
@@ -1962,7 +1969,7 @@ app.get('/api/export/sake/:handle', async (req, res) => {
     }
 
     // Get city/address
-    const cities = {'milano':'Milano','roma':'Roma','torino':'Torino','napoli':'Napoli','bolzano':'Bolzano','vercelli':'Vercelli','firenze':'Firenze','castelfranco':'Castelfranco Veneto','tortona':'Tortona','colli-del-tronto':'Colli del Tronto','piacenza':'Piacenza'};
+    const cities = {'milano':'Milano','roma':'Roma','torino':'Torino','napoli':'Napoli','bolzano':'Bolzano','vercelli':'Vercelli','firenze':'Firenze','castelfranco':'Castelfranco Veneto','tortona':'Tortona','colli-del-tronto':'Colli del Tronto','piacenza':'Piacenza','pescara':'Pescara'};
     let courseCity = '';
     for (const [key, city] of Object.entries(cities)) {
       if (h.includes(key)) { courseCity = city; break; }
