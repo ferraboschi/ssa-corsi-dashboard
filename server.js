@@ -1093,12 +1093,10 @@ app.get('/api/courses', async (req, res) => {
       });
     }
 
-    // Compute maxStudents: sold (enrollmentCount) + remaining (inventory_quantity)
-    // If Shopify inventory tracking is off (maxStudents is null), use sensible defaults
+    // maxStudents: use Shopify inventory_quantity directly (= total capacity).
+    // Fallback to sensible defaults when inventory tracking is off (null).
     courses.forEach(course => {
-      if (course.maxStudents != null) {
-        course.maxStudents = course.enrollmentCount + course.maxStudents;
-      } else {
+      if (course.maxStudents == null) {
         const isOnline = (course.handle || '').includes('online');
         course.maxStudents = isOnline ? 50 : 20;
       }
