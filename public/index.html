@@ -4129,6 +4129,8 @@ function renderCourseDetailPage() {
             <span class="badge ${c.courseType.delivery}" style="font-size: 13px; padding: 6px 16px;"><i class="fas ${c.courseType.deliveryIcon}" style="margin-right: 4px;"></i>${c.courseType.deliveryLabel}</span>
             <span class="badge" style="background: #f1f5f9; color: #475569; font-size: 13px; padding: 6px 16px;"><i class="fas fa-map-marker-alt"></i> ${c.city}</span>
             <span class="integration-badge shopify" style="font-size: 11px;"><i class="fab fa-shopify"></i> ID: ${c.shopifyId}</span>
+            <a href="https://sakesommelierassociation.myshopify.com/admin/products/${c.shopifyId}" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; background: #e8f5e9; color: #2e7d32; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#c8e6c9'" onmouseout="this.style.background='#e8f5e9'"><i class="fab fa-shopify"></i> Apri su Shopify</a>
+            <button onclick="forceRefreshCourse('${c.shopifyId}', '${c.id}')" style="display: inline-flex; align-items: center; gap: 5px; padding: 4px 12px; background: #e3f2fd; color: #1565c0; border: none; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#bbdefb'" onmouseout="this.style.background='#e3f2fd'"><i class="fas fa-sync-alt"></i> Aggiorna da Shopify</button>
         </div>
 
         <div style="background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
@@ -4587,6 +4589,37 @@ function editNameInline(el) {
         if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
         if (e.key === 'Escape') { renderCourseDetailPage(); }
     });
+}
+
+async function forceRefreshCourse(shopifyId, handle) {
+    const btn = event.target.closest('button');
+    const origHTML = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aggiornamento...';
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/api/courses?nocache=1');
+        const data = await resp.json();
+        if (data.success) {
+            // Re-process all courses with fresh data
+            const coursesData = data.data;
+            ALL_COURSES = coursesData.map(c => normaliseCourse(c))
+                .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
+            COURSES = ALL_COURSES.filter(c => c.isFuture);
+            btn.innerHTML = '<i class="fas fa-check"></i> Aggiornato!';
+            btn.style.background = '#e8f5e9';
+            btn.style.color = '#2e7d32';
+            setTimeout(() => {
+                renderCourseDetailPage();
+            }, 600);
+        } else {
+            throw new Error(data.error || 'Errore');
+        }
+    } catch (e) {
+        btn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Errore';
+        btn.style.background = '#ffebee';
+        btn.style.color = '#c62828';
+        setTimeout(() => { btn.innerHTML = origHTML; btn.disabled = false; btn.style.background = ''; btn.style.color = ''; }, 2000);
+    }
 }
 
 async function saveCourseDetail(courseId) {

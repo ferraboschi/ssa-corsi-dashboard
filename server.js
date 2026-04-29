@@ -299,6 +299,10 @@ function setCache(key, value, ttlSeconds = 300) {
   });
 }
 
+function clearCache(key) {
+  cache.delete(key);
+}
+
 // ============================================================================
 // EXAM RESULTS (Airtable "SSA Sommelier database" — Socrative pipeline)
 // Reads student exam outcomes processed by the Airtable script and exposes
@@ -929,6 +933,14 @@ app.get('/api/courses', async (req, res) => {
     if (cachedResponse && !req.query.nocache) {
       res.set('Cache-Control', 'private, max-age=120');
       return res.json(cachedResponse);
+    }
+
+    // nocache=1 also clears underlying Shopify data caches so we get truly fresh data
+    if (req.query.nocache) {
+      clearCache('shopify_all_products');
+      clearCache('shopify_all_orders');
+      cachedMetafieldMap = null;
+      metafieldMapCacheTime = 0;
     }
 
     const apiStart = Date.now();
