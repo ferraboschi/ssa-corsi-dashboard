@@ -830,70 +830,69 @@ let cachedMetafieldMap = null;
 let metafieldMapCacheTime = 0;
 const METAFIELD_CACHE_TTL = 30 * 60 * 1000; // 30 minutes (metafields rarely change)
 
+function parseMetafieldEntry(metafields) {
+  const entry = {};
+  const educatorMf = metafields.find(mf =>
+    mf.key === 'sake_educator' || mf.key === 'educator' ||
+    (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
+  );
+  if (educatorMf && educatorMf.value) entry.name = educatorMf.value;
+  const photoMf = metafields.find(mf =>
+    mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
+    mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
+    (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
+  );
+  if (photoMf && photoMf.value) entry.photo = photoMf.value;
+  const bioMf = metafields.find(mf =>
+    mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
+    (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
+  );
+  if (bioMf && bioMf.value) entry.bio = bioMf.value;
+  const luogoMf = metafields.find(mf => mf.key === 'luogo_e_orari');
+  if (luogoMf && luogoMf.value) entry.luogo_e_orari = luogoMf.value;
+  return Object.keys(entry).length > 0 ? entry : null;
+}
+
 async function fetchCourseMetafields(courseProducts) {
-  // Return cached if fresh
+  // Return full cache if fresh and covers all requested products
   if (cachedMetafieldMap && (Date.now() - metafieldMapCacheTime < METAFIELD_CACHE_TTL)) {
-    return cachedMetafieldMap;
+    const allCovered = courseProducts.every(p => cachedMetafieldMap[p.id] !== undefined || cachedMetafieldMap['_checked_' + p.id]);
+    if (allCovered) return cachedMetafieldMap;
   }
 
-  const metafieldMap = {};
-  const MFBATCH = 12; // Large batches for faster loading
-  for (let i = 0; i < courseProducts.length; i += MFBATCH) {
-    const batch = courseProducts.slice(i, i + MFBATCH);
+  // Start with existing cached data (merge, don't replace)
+  const metafieldMap = cachedMetafieldMap ? { ...cachedMetafieldMap } : {};
+
+  // Only fetch products not already in cache
+  const toFetch = courseProducts.filter(p => !metafieldMap[p.id] && !metafieldMap['_checked_' + p.id]);
+  if (toFetch.length === 0) return metafieldMap;
+
+  console.log(`Fetching metafields for ${toFetch.length} products (${courseProducts.length - toFetch.length} already cached)`);
+  const MFBATCH = 12;
+  for (let i = 0; i < toFetch.length; i += MFBATCH) {
+    const batch = toFetch.slice(i, i + MFBATCH);
     await Promise.all(batch.map(async (product) => {
       try {
         const mfResp = await shopifyFetch(`/products/${product.id}/metafields.json`);
-        const metafields = mfResp.metafields || [];
-        const entry = {};
-        // Look for educator name metafield
-        const educatorMf = metafields.find(mf =>
-          mf.key === 'sake_educator' || mf.key === 'educator' ||
-          (mf.key && mf.key.toLowerCase().includes('educator') && !mf.key.toLowerCase().includes('photo') && !mf.key.toLowerCase().includes('bio') && !mf.key.toLowerCase().includes('image'))
-        );
-        if (educatorMf && educatorMf.value) {
-          entry.name = educatorMf.value;
-        }
-        // Look for educator photo metafield
-        const photoMf = metafields.find(mf =>
-          mf.key === 'educator_photo' || mf.key === 'sake_educator_photo' ||
-          mf.key === 'educator_image' || mf.key === 'sake_educator_image' ||
-          (mf.key && mf.key.toLowerCase().includes('educator') && (mf.key.toLowerCase().includes('photo') || mf.key.toLowerCase().includes('image')))
-        );
-        if (photoMf && photoMf.value) {
-          entry.photo = photoMf.value;
-        }
-        // Look for educator bio metafield
-        const bioMf = metafields.find(mf =>
-          mf.key === 'educator_bio' || mf.key === 'sake_educator_bio' ||
-          (mf.key && mf.key.toLowerCase().includes('educator') && mf.key.toLowerCase().includes('bio'))
-        );
-        if (bioMf && bioMf.value) {
-          entry.bio = bioMf.value;
-        }
-        // Look for luogo_e_orari metafield (contains real dates and location)
-        const luogoMf = metafields.find(mf => mf.key === 'luogo_e_orari');
-        if (luogoMf && luogoMf.value) {
-          entry.luogo_e_orari = luogoMf.value;
-        }
-        if (Object.keys(entry).length > 0) {
+        const entry = parseMetafieldEntry(mfResp.metafields || []);
+        if (entry) {
           metafieldMap[product.id] = entry;
+        } else {
+          metafieldMap['_checked_' + product.id] = true; // Mark as checked (no metafields)
         }
       } catch (e) {
         console.error(`Metafield fetch failed for product ${product.id} (${product.title}): ${e.message}`);
       }
     }));
-    // Small delay between batches to avoid Shopify rate limits
-    if (i + MFBATCH < courseProducts.length) {
+    if (i + MFBATCH < toFetch.length) {
       await new Promise(r => setTimeout(r, 100));
     }
   }
 
-  // Cache the result
-  if (Object.keys(metafieldMap).length > 0) {
-    cachedMetafieldMap = metafieldMap;
-    metafieldMapCacheTime = Date.now();
-    console.log(`Cached metafields for ${Object.keys(metafieldMap).length} course products`);
-  }
+  // Update cache (merge)
+  cachedMetafieldMap = metafieldMap;
+  metafieldMapCacheTime = Date.now();
+  console.log(`Cached metafields for ${Object.keys(metafieldMap).filter(k => !k.startsWith('_')).length} course products`);
   return metafieldMap;
 }
 
@@ -929,8 +928,19 @@ app.get('/api/courses', async (req, res) => {
     }, {});
     console.log(`[courses] shopify_products=${products.length} course_products=${courseProducts.length} status=${JSON.stringify(statusBreakdown)}`);
 
-    // Fetch metafields (cached 5 min) - includes rate limit retry
-    const metafieldMap = await fetchCourseMetafields(courseProducts);
+    // Fetch metafields: prioritize active/draft courses (fast), then enrich archived in background
+    // This reduces cold-start from ~70s to ~10s (13 active vs 121 total metafield fetches)
+    const activeCourses = courseProducts.filter(p => p.status === 'active' || p.status === 'draft');
+    const archivedCourses = courseProducts.filter(p => p.status !== 'active' && p.status !== 'draft');
+    const metafieldMap = await fetchCourseMetafields(activeCourses);
+    // For archived courses, use any previously cached metafield data (don't block on new fetches)
+    if (cachedMetafieldMap) {
+      archivedCourses.forEach(p => {
+        if (cachedMetafieldMap[p.id] && !metafieldMap[p.id]) {
+          metafieldMap[p.id] = cachedMetafieldMap[p.id];
+        }
+      });
+    }
 
     // Build enrollment data from orders
     const courseMap = new Map();
@@ -1131,7 +1141,14 @@ app.get('/api/courses', async (req, res) => {
     res.set('Cache-Control', 'private, max-age=300, stale-while-revalidate=600');
     res.json(payload);
 
-    // Enrich Twilio data in background (doesn't block the response)
+    // Background enrichment (doesn't block the response)
+    // 1. Fetch metafields for archived courses (so next request has full data)
+    if (archivedCourses.length > 0) {
+      fetchCourseMetafields(courseProducts).catch(err =>
+        console.log('Background archived metafield fetch failed:', err.message)
+      );
+    }
+    // 2. Enrich Twilio data
     enrichStudentsWithWhatsApp(courses).then(() => {
       // Update cache with enriched data
       const enrichedData = { success: true, count: courses.length, data: courses, lastUpdated };
