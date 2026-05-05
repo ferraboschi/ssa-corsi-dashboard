@@ -4223,11 +4223,11 @@ function renderCourseDetailPage() {
 
         ${renderNotebookSection(c)}
 
-        <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.length})</div>
+        <div class="section-title"><i class="fas fa-users"></i> Iscritti (${c.students.reduce((sum, st) => sum + (st.quantity || 1), 0)} partecipanti${c.students.reduce((sum, st) => sum + (st.quantity || 1), 0) !== c.students.length ? ` — ${c.students.length} ordini` : ''})</div>
         ${c.students.length > 0 ? `
         <div style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
         <table class="data-table" style="min-width: 700px;">
-            <thead><tr><th>Corsista</th><th>Telefono</th><th>Importo</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine</th></tr></thead>
+            <thead><tr><th>Corsista</th><th>Telefono</th><th style="text-align:center;">Ticket</th><th>Importo</th><th>Data Ordine</th><th>Pagamento</th><th>Ordine</th></tr></thead>
             <tbody>
                 ${(() => { const _dupEmails = getDuplicateEmails(c.students); return c.students.map(st => {
                     const initials = getInitials(st.name);
@@ -4271,6 +4271,7 @@ function renderCourseDetailPage() {
                                 <span class="phone-display">${st.phone || '<span style="color:#ccc; font-style:italic;">aggiungi</span>'}</span>
                             </div>
                         </td>
+                        <td style="text-align: center; font-weight: 600; font-size: 13px;">${(st.quantity || 1) > 1 ? `<span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 10px; font-size: 12px;">${st.quantity || 1}</span>` : `<span style="color: #9ca3af;">${st.quantity || 1}</span>`}</td>
                         <td style="font-weight: 600; font-size: 13px; white-space: nowrap;">${st.amount ? formatCurrency(st.amount) : (st.amount === 0 ? '0,00 €' : '-')}${st.discountCode ? `<br><span style="font-size: 9px; font-weight: 500; color: #d97706; background: #fffbeb; padding: 1px 5px; border-radius: 6px;" title="Sconto: ${st.discountCode}"><i class="fas fa-tag" style="font-size: 8px;"></i> ${st.discountCode}</span>` : ''}</td>
                         <td>${st.orderDate ? new Date(st.orderDate).toLocaleDateString('it-IT') : '-'}</td>
                         <td><span class="badge ${isPaid ? 'paid' : 'pending'}">${isPaid ? 'Pagato' : (st.financialStatus || 'In attesa')}</span></td>

@@ -1067,6 +1067,7 @@ app.get('/api/courses', async (req, res) => {
             financialStatus: order.financial_status,
             amount: actualAmount,
             grossAmount: parseFloat(item.price || 0) * item.quantity,
+            quantity: item.quantity || 1,
             discountCode: discountCode,
             variantTitle: item.variant_title || ''
           });
@@ -1179,6 +1180,7 @@ app.get('/api/courses', async (req, res) => {
           orderDate: s.orderDate,
           financialStatus: s.financialStatus,
           amount: s.amount,
+          quantity: s.quantity,
           discountCode: s.discountCode,
           hasWhatsApp: s.hasWhatsApp,
           registrationName: s.registrationName,
