@@ -3084,6 +3084,8 @@ function normaliseCourse(c) {
         photo: c.educatorPhoto || educatorProfile.photo || '',
         bio: c.educatorBio || educatorProfile.bio || '',
         region: c.educatorRegion || educatorProfile.region || educatorBase.region,
+        email: c.educatorEmail || '',
+        phone: c.educatorPhone || '',
     };
     const location = CONFIG.LOCATION_MAP[c.handle] || city || '';
     const price = c.variants && c.variants[0] ? parseFloat(c.variants[0].price) : 0;
@@ -3321,6 +3323,7 @@ async function loadApiData() {
             educatorMap.set(ed.name, {
                 name: ed.name, region: ed.region, initials: ed.initials,
                 photo: ed.photo || '', bio: ed.bio || '',
+                email: ed.email || '', phone: ed.phone || '',
                 courses: [], totalStudents: 0
             });
         }
@@ -3951,7 +3954,7 @@ function renderCourseDetailPage() {
             }
             educator = educator || 'Da assegnare';
             const educatorInitials = educator !== 'Da assegnare' ? educator.split(' ').map(w => w[0]).join('').toUpperCase() : '?';
-            const educatorObj = { name: educator, region: '', initials: educatorInitials };
+            const educatorObj = { name: educator, region: '', initials: educatorInitials, email: raw.educatorEmail || '', phone: raw.educatorPhone || '' };
             const costs = COURSE_COSTS[raw.handle] || {
                 educator_fee: isCert ? 600 : 200,
                 ssa_fee: isCert ? 900 : 300,
@@ -4136,7 +4139,7 @@ function renderCourseDetailPage() {
         <div style="background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
             <div><strong>Date:</strong> ${c.dates}</div>
             <div><strong>Location:</strong> ${c.location}</div>
-            <div><strong>Educator:</strong> ${c.educator.name}${c.educator.region ? ` (${c.educator.region})` : ''}</div>
+            <div><strong>Educator:</strong> ${c.educator.name}${c.educator.region ? ` (${c.educator.region})` : ''}${c.educator.email || c.educator.phone ? `<span style="margin-left: 8px; font-size: 12px; color: var(--text-light);">${c.educator.email ? `<a href="mailto:${c.educator.email}" style="color: var(--accent); text-decoration: none;" title="${c.educator.email}"><i class="fas fa-envelope"></i></a>` : ''}${c.educator.phone ? `<a href="tel:${c.educator.phone}" style="color: var(--accent); text-decoration: none; margin-left: 6px;" title="${c.educator.phone}"><i class="fas fa-phone"></i></a>` : ''}</span>` : ''}</div>
             <div><strong>Prezzo:</strong> ${formatCurrency(c.price)}/persona</div>
         </div>
 
@@ -4214,6 +4217,10 @@ function renderCourseDetailPage() {
                     <div style="flex: 1;">
                         <div style="font-size: 14px; font-weight: 600; color: var(--text);">${c.educator.name}</div>
                         <div class="educator-role" id="educatorPreviewRegion" style="margin-top: 4px;">${c.educator.region}</div>
+                        ${c.educator.email || c.educator.phone ? `<div style="margin-top: 6px; font-size: 12px; color: var(--text-light); display: flex; flex-wrap: wrap; gap: 10px;">
+                            ${c.educator.email ? `<a href="mailto:${c.educator.email}" style="color: var(--accent); text-decoration: none;"><i class="fas fa-envelope" style="margin-right: 4px;"></i>${c.educator.email}</a>` : ''}
+                            ${c.educator.phone ? `<a href="tel:${c.educator.phone}" style="color: var(--accent); text-decoration: none;"><i class="fas fa-phone" style="margin-right: 4px;"></i>${c.educator.phone}</a>` : ''}
+                        </div>` : ''}
                     </div>
                 </div>
                 <div id="educatorPreviewBio">${c.educator.bio ? `<div class="educator-bio">${c.educator.bio}</div>` : ''}</div>
@@ -5794,6 +5801,10 @@ function renderEducatorPage() {
             <div>
                 <div class="educator-name">${ed.name}</div>
                 <div class="educator-role">${ed.region} &bull; ${ed.totalStudents} corsisti totali</div>
+                ${ed.email || ed.phone ? `<div style="margin-top: 4px; font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${ed.email ? `<a href="mailto:${ed.email}" style="color: var(--accent); text-decoration: none;"><i class="fas fa-envelope" style="margin-right: 3px;"></i>${ed.email}</a>` : ''}
+                    ${ed.phone ? `<a href="tel:${ed.phone}" style="color: var(--accent); text-decoration: none;"><i class="fas fa-phone" style="margin-right: 3px;"></i>${ed.phone}</a>` : ''}
+                </div>` : ''}
             </div>
         </div>
         ${ed.bio ? `<div class="educator-bio" style="margin-bottom: 12px;">${ed.bio}</div>` : ''}

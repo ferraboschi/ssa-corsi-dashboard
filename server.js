@@ -1140,6 +1140,18 @@ app.get('/api/courses', async (req, res) => {
       }
     });
 
+    // Fetch educator contacts from Shopify Customers API (cached 24h)
+    const educatorNames = courses.map(c => c.educatorName).filter(n => n && n !== 'Da assegnare');
+    if (educatorNames.length > 0) {
+      const contacts = await fetchAllEducatorContacts(educatorNames);
+      courses.forEach(course => {
+        if (course.educatorName && contacts[course.educatorName]) {
+          course.educatorEmail = contacts[course.educatorName].email || '';
+          course.educatorPhone = contacts[course.educatorName].phone || '';
+        }
+      });
+    }
+
     // Apply cached Twilio data immediately (non-blocking — no new API calls)
     applyCachedTwilioData(courses);
 
@@ -1163,6 +1175,8 @@ app.get('/api/courses', async (req, res) => {
         published_at: c.published_at,
         updated_at: c.updated_at,
         educatorName: c.educatorName,
+        educatorEmail: c.educatorEmail || '',
+        educatorPhone: c.educatorPhone || '',
         educatorPhoto: c.educatorPhoto,
         educatorBio: c.educatorBio,
         educatorRegion: c.educatorRegion,
@@ -1439,6 +1453,64 @@ app.get('/api/debug/shopify-collections', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============================================================================
+// EDUCATOR CONTACTS - fetched from Shopify Customers API by name
+// ============================================================================
+let cachedEducatorContacts = {};
+let educatorContactsCacheTime = 0;
+const EDUCATOR_CONTACTS_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+async function fetchEducatorContact(name) {
+  if (!name || name === 'Da assegnare') return null;
+  // Return from cache if fresh
+  if (cachedEducatorContacts[name] && (Date.now() - educatorContactsCacheTime < EDUCATOR_CONTACTS_TTL)) {
+    return cachedEducatorContacts[name];
+  }
+  try {
+    const resp = await shopifyFetch(`/customers/search.json?query=name:${encodeURIComponent(name)}&limit=5`);
+    const customers = resp.customers || [];
+    // Find best match: exact name match preferred
+    const match = customers.find(c => {
+      const fullName = `${c.first_name || ''} ${c.last_name || ''}`.trim();
+      return fullName.toLowerCase() === name.toLowerCase();
+    }) || customers[0];
+    if (match) {
+      const contact = {
+        email: match.email || '',
+        phone: match.phone || (match.default_address && match.default_address.phone) || ''
+      };
+      cachedEducatorContacts[name] = contact;
+      return contact;
+    }
+    cachedEducatorContacts[name] = { email: '', phone: '' };
+    return cachedEducatorContacts[name];
+  } catch (e) {
+    console.error(`Error fetching educator contact for ${name}:`, e.message);
+    return null;
+  }
+}
+
+async function fetchAllEducatorContacts(educatorNames) {
+  // Return full cache if fresh
+  if (Object.keys(cachedEducatorContacts).length > 0 && (Date.now() - educatorContactsCacheTime < EDUCATOR_CONTACTS_TTL)) {
+    const allCached = educatorNames.every(n => cachedEducatorContacts[n] !== undefined);
+    if (allCached) return cachedEducatorContacts;
+  }
+  const uniqueNames = [...new Set(educatorNames.filter(n => n && n !== 'Da assegnare'))];
+  const toFetch = uniqueNames.filter(n => !cachedEducatorContacts[n]);
+  if (toFetch.length > 0) {
+    console.log(`Fetching Shopify contacts for ${toFetch.length} educators`);
+    // Fetch in batches of 4 to respect rate limits
+    for (let i = 0; i < toFetch.length; i += 4) {
+      const batch = toFetch.slice(i, i + 4);
+      await Promise.all(batch.map(name => fetchEducatorContact(name)));
+      if (i + 4 < toFetch.length) await new Promise(r => setTimeout(r, 200));
+    }
+    educatorContactsCacheTime = Date.now();
+  }
+  return cachedEducatorContacts;
+}
 
 // ============================================================================
 // EDUCATOR PROFILES - scraped from Chi Siamo page on sakesommelierassociation.it
