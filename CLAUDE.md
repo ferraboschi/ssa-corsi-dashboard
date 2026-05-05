@@ -349,3 +349,53 @@ I dati del corso (tipo, data, città) vengono estratti dall'handle del prodotto 
 - **`parseCourseCity` accetta un parametro `tags`** per rilevare corsi "ONLINE" dai tag Shopify
 - **Il corso "attivo/futuro" viene determinato dal frontend** confrontando la data parsata con oggi — non c'è un flag Shopify
 - **Dopo ogni modifica, l'utente fa manual deploy su Render** — il push su GitHub non triggera deploy automatico
+
+---
+
+## Changelog — Sessione 5 Maggio 2026
+
+### ssa-corsi-dashboard (questo repo)
+
+**1. Fix maxStudents per corsi con varianti multiple**
+- Il conteggio `maxStudents` sommava l'inventario di tutte le varianti, incluse quelle "Early Bird" esaurite
+- Fix: usa solo la variante con più inventory, oppure il metafield `custom.posti_disponibili` se presente
+- File: `server.js` (funzione calcolo maxStudents dentro `/api/courses`)
+
+**2. Fix ordini duplicati**
+- Ordini con più line_item dello stesso corso (es. quantity > 1) venivano contati come studenti separati
+- Fix: deduplica per `orderId` e usa `line_item.quantity` per contare i ticket correttamente
+- File: `server.js` (aggregazione ordini), `public/index.html` (colonna "Ticket" nella tabella iscritti)
+
+**3. Link diretto Shopify per ogni corso**
+- Aggiunto bottone "Apri su Shopify" nella pagina dettaglio corso con link diretto al prodotto in admin Shopify
+- File: `public/index.html` (template dettaglio corso)
+
+**4. Colonna quantità ticket nella tabella iscritti**
+- Aggiunta colonna "Ticket" che mostra la quantità acquistata per ordine (campo `quantity` dalla API)
+- File: `server.js` (aggiunto `quantity` alla risposta API), `public/index.html` (colonna tabella)
+
+**5. Contatti educator da Shopify Customers API**
+- Nuova funzionalità: email e telefono degli educator recuperati dalla Shopify Customers API (`/customers/search.json?query=name:NomeEducator`)
+- Cache server-side 24h per i contatti
+- Visualizzazione: icone email/telefono cliccabili nella pagina dettaglio corso + contatti completi nelle card della pagina Educator
+- File: `server.js` (funzioni `fetchEducatorContact`, `fetchAllEducatorContacts`, integrazione in `/api/courses`), `public/index.html` (4 punti: info grid, educator card, educator page cards, educator map building)
+
+**6. Fix date parsing per usare date specifiche da Shopify**
+- Le date dei corsi ora vengono estratte dal campo `variants[].title` di Shopify (es. "11-13 Mag 2026") invece che dall'handle
+- Supporta date multi-giorno e range (es. "27-29 Mag 2026")
+- File: `server.js` (parsing date da varianti)
+
+### sake-menu-platform (repo separato: `ferraboschi/sake-menu-platform`)
+
+**7. Fix build TypeScript fallito — campi mancanti in ProposalItem**
+- Il commit `1bb8915` aveva aggiunto 3 campi al tipo `ProposalItem` (`price_box`, `custom_price_bottle`, `custom_price_box`) senza aggiornare le funzioni che costruiscono oggetti di quel tipo
+- Fix: aggiunto i 3 campi in `productToProposalItem()`, fallback di `claudePairingToItem()`, e `itemsForInsert()`
+- File: `lib/proposal-helpers.ts`
+- Commit: `ff55e5a`
+- Deploy: auto-deploy su Render riuscito, servizio live su `https://menu.sakecompany.com`
+
+### Note tecniche — Cache layers
+Il sistema ha **3 livelli di cache** che vanno considerati dopo ogni deploy:
+1. **Server full response cache** (`api_courses_full_response`): 10 min — bypassare con `?nocache=1`
+2. **Browser sessionStorage** (`ssa_courses`): 30 min — l'utente deve fare hard refresh o aspettare
+3. **Cache specifiche server** (prodotti 15min, ordini 10min, metafield 30min, educator contacts 24h)
