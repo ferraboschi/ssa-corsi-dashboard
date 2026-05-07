@@ -4670,8 +4670,14 @@ async function saveCourseDetail(courseId) {
         });
 
         if (response.ok) {
-            // Update local cache
-            COURSE_COSTS[c.handle] = payload;
+            const data = await response.json();
+            // Update local cache with server's FULL merged data (preserves notebook, nameOverrides, phoneOverrides, etc.)
+            if (data.costs) {
+                COURSE_COSTS[c.handle] = data.costs;
+            } else {
+                // Fallback: merge payload into existing local cache instead of overwriting
+                COURSE_COSTS[c.handle] = { ...COURSE_COSTS[c.handle], ...payload };
+            }
 
             // Update course object
             c.costs = newCosts;

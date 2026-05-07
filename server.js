@@ -26,8 +26,8 @@ function saveCostsToFile(costs) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(COSTS_FILE, JSON.stringify(costs, null, 2));
   } catch (e) { console.error('Error saving costs to file:', e); }
-  // Also persist to Airtable (async, fire-and-forget)
-  airtableConfigSet('course_costs', costs).catch(e =>
+  // Also persist to Airtable — returns promise so callers can await if needed
+  return airtableConfigSet('course_costs', costs).catch(e =>
     console.error('Airtable costs save failed:', e.message)
   );
 }
@@ -135,6 +135,11 @@ async function airtableConfigSet(key, value) {
     );
     const data = resp.ok ? await resp.json() : { records: [] };
     const jsonValue = JSON.stringify(value);
+
+    // Warn if data is getting close to Airtable's 100k char limit
+    if (jsonValue.length > 90000) {
+      console.warn(`⚠️ Airtable config '${key}' is ${jsonValue.length} chars — approaching 100k limit!`);
+    }
 
     // Filter to records that actually have a Key value matching
     const matching = (data.records || []).filter(r => r.fields && r.fields.Key === key);
@@ -2201,7 +2206,7 @@ app.get('/api/costs/:courseId', (req, res) => {
   res.json(costs);
 });
 
-app.post('/api/costs/:courseId', (req, res) => {
+app.post('/api/costs/:courseId', async (req, res) => {
   const { courseId } = req.params;
   const { location, educator, food, sake, adv, program, lines, educatorName, whatsappGroupLink } = req.body;
   const existing = courseCosts[courseId] || {};
@@ -2216,7 +2221,8 @@ app.post('/api/costs/:courseId', (req, res) => {
   if (educatorName !== undefined) next.educatorName = educatorName;
   if (whatsappGroupLink !== undefined) next.whatsappGroupLink = whatsappGroupLink;
   courseCosts[courseId] = next;
-  saveCostsToFile(courseCosts);
+  // Await file + Airtable save to prevent data loss on Render restart
+  await saveCostsToFile(courseCosts);
   res.json({ success: true, costs: courseCosts[courseId] });
 });
 
