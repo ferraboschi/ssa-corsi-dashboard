@@ -394,6 +394,24 @@ I dati del corso (tipo, data, città) vengono estratti dall'handle del prodotto 
 - Commit: `ff55e5a`
 - Deploy: auto-deploy su Render riuscito, servizio live su `https://menu.sakecompany.com`
 
+## Changelog — Sessione 7 Maggio 2026
+
+### ssa-corsi-dashboard
+
+**1. Fix perdita dati locali dopo salvataggio costi/programma**
+- Bug: `saveCourseDetail()` nel client sovrascriveva `COURSE_COSTS[handle]` con solo il payload parziale (location, educator, food, sake, adv, lines, program), perdendo notebook, phoneOverrides, nameOverrides, educatorName, whatsappGroupLink etc. dalla memoria del browser
+- Fix: il client ora usa la risposta del server (che contiene i dati completi post-merge) per aggiornare la cache locale. Fallback: merge invece di overwrite
+- File: `public/index.html` (funzione `saveCourseDetail`, riga ~4672)
+
+**2. Fix persistenza Airtable — await nel POST /api/costs**
+- Bug: `saveCostsToFile()` scriveva su Airtable in modalità fire-and-forget. Se Render riavviava il servizio subito dopo il salvataggio, il filesystem efimero veniva cancellato e i dati Airtable potevano essere ancora quelli vecchi
+- Fix: il POST `/api/costs/:courseId` ora fa `await saveCostsToFile()` per assicurarsi che Airtable sia aggiornato prima di rispondere al client. Aggiunto anche warning di dimensione quando i dati si avvicinano al limite di 100k caratteri di Airtable
+- File: `server.js` (handler POST costs + funzione saveCostsToFile)
+
+**3. saveCostsToFile() ora restituisce Promise**
+- La funzione ora fa `return airtableConfigSet(...)` invece di fire-and-forget, permettendo ai chiamanti critici di await-are la persistenza
+- File: `server.js`
+
 ### Note tecniche — Cache layers
 Il sistema ha **3 livelli di cache** che vanno considerati dopo ogni deploy:
 1. **Server full response cache** (`api_courses_full_response`): 10 min — bypassare con `?nocache=1`
