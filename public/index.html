@@ -1454,6 +1454,26 @@
                 <div class="stat-sub">sotto soglia minima</div>
             </div>
         </div>
+        <!-- Health Rules Editor (collapsible) -->
+        <div class="card" id="healthRulesCard" style="margin-bottom: 24px;">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="toggleHealthRulesPanel()">
+                <h2 style="font-size: 14px; font-weight: 600; color: var(--text); margin: 0;"><i class="fas fa-sliders-h"></i> Regole Stato Salute Corso</h2>
+                <span id="healthRulesToggle" style="font-size: 11px; color: var(--text-light);"><i class="fas fa-chevron-down"></i> Mostra</span>
+            </div>
+            <div id="healthRulesPanel" style="display: none; padding: 16px;">
+                <div style="font-size: 12px; color: var(--text-light); margin-bottom: 12px; line-height: 1.5;">
+                    Le regole vengono valutate in ordine di priorità (numero basso = prima). La prima regola che corrisponde assegna lo stato.
+                    Condizioni: <strong>giorni alla partenza</strong> e <strong>% iscrizioni vs minimo</strong>.
+                </div>
+                <div id="healthRulesList"></div>
+                <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+                    <button onclick="addHealthRule()" style="padding: 6px 14px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;"><i class="fas fa-plus"></i> Aggiungi regola</button>
+                    <button onclick="resetHealthRulesToDefaults()" style="padding: 6px 14px; background: #f3f4f6; color: var(--text-light); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; cursor: pointer;"><i class="fas fa-undo"></i> Ripristina default</button>
+                    <button onclick="saveHealthRules()" style="padding: 6px 14px; background: var(--success); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 600;"><i class="fas fa-save"></i> Salva regole</button>
+                </div>
+            </div>
+        </div>
+
         <div class="card" style="margin-bottom: 24px;">
             <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h2 style="font-size: 14px; font-weight: 600; color: var(--text); margin: 0;">Corsi Attivi</h2>
@@ -2291,10 +2311,9 @@ function renderNotebookSection(c) {
     const recHTML = rec ? `
         <div style="padding:12px 14px;background:#f8fafc;border-left:4px solid ${verdictStyle(rec.verdict).fg};border-radius:6px;margin-bottom:16px;">
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-light);margin-bottom:4px;">
-                <i class="fas fa-chart-line"></i> Analisi dati storici · confidence ${rec.confidence}
+                <i class="fas fa-sliders-h"></i> Stato salute · regola: ${escapeHTMLInline(rec.ruleName || rec.verdict)}
             </div>
             <div style="font-size:13px;color:var(--text);line-height:1.5;">${escapeHTMLInline(rec.reasoning)}</div>
-            ${rec.baseline && rec.baseline.sampleSize > 0 ? `<div style="margin-top:6px;font-size:11px;color:var(--text-light);">Basato su ${rec.baseline.sampleSize} corsi storici simili (stesso tipo/modalità/educator).</div>` : ''}
         </div>` : '';
 
     const adminNotesHTML = (nb.notes || []).length
@@ -2809,26 +2828,251 @@ window.corsistiSourceFilter = window.corsistiSourceFilter || 'attuali';
 // Recommendations from the data-driven engine: handle -> { verdict, confidence, metrics, baseline, reasoning, similarCourses }
 window.RECOMMENDATIONS = {};
 
-async function loadRecommendations() {
+// =============================================
+// DYNAMIC HEALTH RULES ENGINE
+// Rules are evaluated in priority order (ascending). First match wins.
+// Each rule checks time-to-start (days) and enrollment% (enrolled/minStudents*100).
+// =============================================
+
+window.HEALTH_RULES = [];
+
+const DEFAULT_HEALTH_RULES = [
+    { id: 'r1', name: 'In traiettoria', verdict: 'in-traiettoria', daysMin: null, daysMax: null, enrollPctMin: 100, enrollPctMax: null, priority: 10, enabled: true },
+    { id: 'r2', name: 'Critico', verdict: 'critico', daysMin: null, daysMax: 14, enrollPctMin: null, enrollPctMax: 50, priority: 20, enabled: true },
+    { id: 'r3', name: 'Rischio', verdict: 'rischio', daysMin: null, daysMax: 30, enrollPctMin: null, enrollPctMax: 80, priority: 30, enabled: true },
+    { id: 'r4', name: 'Monitor', verdict: 'monitor', daysMin: null, daysMax: 60, enrollPctMin: null, enrollPctMax: 100, priority: 40, enabled: true },
+];
+
+async function loadHealthRules() {
     try {
-        const resp = await fetch('/api/recommendations');
+        const resp = await fetch('/api/health-rules');
         if (!resp.ok) return;
         const data = await resp.json();
-        if (data.success && data.byHandle) {
-            window.RECOMMENDATIONS = data.byHandle;
-            console.log(`Recommendations loaded: ${data.count} future courses`);
-            // Re-render if the user is currently on the Corsi page
-            if (typeof currentPage !== 'undefined' && currentPage === 'corsi') {
-                renderCorsiPage();
-            }
-            if (typeof currentPage !== 'undefined' && currentPage === 'dashboard') {
-                renderDashboard();
-            }
+        if (data.success && Array.isArray(data.rules)) {
+            window.HEALTH_RULES = data.rules;
+            console.log(`[health-rules] loaded ${data.rules.length} rules`);
         }
     } catch (e) {
-        console.error('Could not load recommendations:', e);
-        window.RECOMMENDATIONS = {};
+        console.warn('[health-rules] load failed, using defaults:', e);
+        window.HEALTH_RULES = DEFAULT_HEALTH_RULES.map(r => ({ ...r }));
     }
+    if (!window.HEALTH_RULES.length) {
+        window.HEALTH_RULES = DEFAULT_HEALTH_RULES.map(r => ({ ...r }));
+    }
+}
+
+async function saveHealthRules() {
+    try {
+        const resp = await fetch('/api/health-rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rules: window.HEALTH_RULES })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showToast('Regole salvate');
+            applyHealthRules();
+        } else {
+            showError('Errore salvataggio regole: ' + (data.error || ''));
+        }
+    } catch (e) {
+        showError('Errore di rete: ' + e.message);
+    }
+}
+
+// Evaluate all rules against a single course. Returns { verdict, reasoning } or null.
+function evaluateHealthRules(course) {
+    const rules = (window.HEALTH_RULES || []).filter(r => r.enabled).sort((a, b) => a.priority - b.priority);
+    if (!rules.length) return null;
+    if (!course.isFuture) return null;
+    if (course.businessState === 'cancellato') return null;
+
+    // Compute metrics
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const startDate = course.startDate ? new Date(course.startDate + 'T00:00:00') : null;
+    const daysUntilStart = startDate ? Math.ceil((startDate - today) / (1000 * 60 * 60 * 24)) : null;
+
+    // Already started/ended → no health flag
+    if (daysUntilStart !== null && daysUntilStart < 0) return null;
+
+    const enrolled = course.students ? course.students.length : 0;
+    const minStudents = course.minStudents || 6;
+    const enrollPct = Math.round((enrolled / minStudents) * 100);
+
+    for (const rule of rules) {
+        let match = true;
+        // Check days conditions
+        if (rule.daysMin !== null && rule.daysMin !== '' && (daysUntilStart === null || daysUntilStart < Number(rule.daysMin))) match = false;
+        if (rule.daysMax !== null && rule.daysMax !== '' && (daysUntilStart === null || daysUntilStart > Number(rule.daysMax))) match = false;
+        // Check enrollment % conditions
+        if (rule.enrollPctMin !== null && rule.enrollPctMin !== '' && enrollPct < Number(rule.enrollPctMin)) match = false;
+        if (rule.enrollPctMax !== null && rule.enrollPctMax !== '' && enrollPct > Number(rule.enrollPctMax)) match = false;
+
+        if (match) {
+            const daysText = daysUntilStart !== null ? `${daysUntilStart} giorni alla partenza` : 'data non disponibile';
+            const reasoning = `${rule.name}: ${enrolled}/${minStudents} iscritti (${enrollPct}%), ${daysText}. Regola: ${rule.name} (priorità ${rule.priority}).`;
+            return { verdict: rule.verdict, confidence: 'rule', reasoning, ruleName: rule.name };
+        }
+    }
+    return null; // No rule matched → no flag
+}
+
+// Apply health rules to all courses, populating window.RECOMMENDATIONS
+function applyHealthRules() {
+    const newRecs = {};
+    const allCourses = (window.COURSES || []);
+    for (const c of allCourses) {
+        const result = evaluateHealthRules(c);
+        if (result) {
+            newRecs[c.handle] = {
+                handle: c.handle,
+                verdict: result.verdict,
+                confidence: result.confidence,
+                reasoning: result.reasoning,
+                ruleName: result.ruleName,
+                metrics: {},
+                baseline: {},
+                similarCourses: [],
+            };
+        }
+    }
+    window.RECOMMENDATIONS = newRecs;
+    console.log(`[health-rules] applied to ${allCourses.length} courses, ${Object.keys(newRecs).length} flagged`);
+
+    // Re-render current page
+    if (typeof currentPage !== 'undefined') {
+        if (currentPage === 'dashboard') renderDashboard();
+        else if (currentPage === 'corsi') renderCorsiPage();
+    }
+}
+
+async function loadRecommendations() {
+    // Load health rules and apply them client-side instead of using server recommendations
+    await loadHealthRules();
+    applyHealthRules();
+}
+
+// =============================================
+// HEALTH RULES EDITOR UI
+// =============================================
+
+function toggleHealthRulesPanel() {
+    const panel = document.getElementById('healthRulesPanel');
+    const toggle = document.getElementById('healthRulesToggle');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        toggle.innerHTML = '<i class="fas fa-chevron-up"></i> Nascondi';
+        renderHealthRulesEditor();
+    } else {
+        panel.style.display = 'none';
+        toggle.innerHTML = '<i class="fas fa-chevron-down"></i> Mostra';
+    }
+}
+
+function renderHealthRulesEditor() {
+    const container = document.getElementById('healthRulesList');
+    if (!container) return;
+    const rules = window.HEALTH_RULES || [];
+    const sortedRules = rules.slice().sort((a, b) => a.priority - b.priority);
+
+    const verdictOptions = [
+        { value: 'in-traiettoria', label: 'In traiettoria', color: '#15803d' },
+        { value: 'monitor', label: 'Monitor', color: '#b45309' },
+        { value: 'rischio', label: 'Rischio', color: '#c2410c' },
+        { value: 'critico', label: 'Critico', color: '#b91c1c' },
+    ];
+
+    container.innerHTML = sortedRules.map((rule, idx) => {
+        const vs = verdictStyle(rule.verdict);
+        const verdictSelect = verdictOptions.map(v =>
+            `<option value="${v.value}" ${rule.verdict === v.value ? 'selected' : ''}>${v.label}</option>`
+        ).join('');
+
+        return `
+        <div style="display:flex; gap:8px; align-items:center; padding:10px 12px; background:${rule.enabled ? '#fafafa' : '#f3f4f6'}; border:1px solid var(--border); border-radius:8px; margin-bottom:8px; flex-wrap:wrap; opacity:${rule.enabled ? '1' : '0.6'};" data-rule-id="${rule.id}">
+            <!-- Toggle -->
+            <label style="display:flex; align-items:center; gap:4px; cursor:pointer; min-width:32px;" title="${rule.enabled ? 'Attiva' : 'Disattiva'}">
+                <input type="checkbox" ${rule.enabled ? 'checked' : ''} onchange="toggleHealthRule('${rule.id}')" style="cursor:pointer;">
+            </label>
+            <!-- Priority -->
+            <input type="number" value="${rule.priority}" onchange="updateHealthRuleField('${rule.id}','priority',this.value)" style="width:48px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px; text-align:center;" title="Priorità (numero basso = prima)">
+            <!-- Verdict -->
+            <select onchange="updateHealthRuleField('${rule.id}','verdict',this.value)" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; background:${vs.bg}; color:${vs.fg}; font-weight:600;">
+                ${verdictSelect}
+            </select>
+            <!-- Name -->
+            <input type="text" value="${(rule.name || '').replace(/"/g, '&quot;')}" onchange="updateHealthRuleField('${rule.id}','name',this.value)" style="flex:1; min-width:120px; padding:4px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px;" placeholder="Nome regola">
+            <!-- Days conditions -->
+            <div style="display:flex; align-items:center; gap:3px; font-size:11px; color:var(--text-light);">
+                <i class="fas fa-calendar-day" style="font-size:10px;" title="Giorni alla partenza"></i>
+                <input type="number" value="${rule.daysMin != null && rule.daysMin !== '' ? rule.daysMin : ''}" onchange="updateHealthRuleField('${rule.id}','daysMin',this.value)" style="width:42px; padding:3px 4px; border:1px solid var(--border); border-radius:4px; font-size:11px; text-align:center;" placeholder="—" title="Giorni min">
+                <span>–</span>
+                <input type="number" value="${rule.daysMax != null && rule.daysMax !== '' ? rule.daysMax : ''}" onchange="updateHealthRuleField('${rule.id}','daysMax',this.value)" style="width:42px; padding:3px 4px; border:1px solid var(--border); border-radius:4px; font-size:11px; text-align:center;" placeholder="—" title="Giorni max">
+                <span>gg</span>
+            </div>
+            <!-- Enrollment % conditions -->
+            <div style="display:flex; align-items:center; gap:3px; font-size:11px; color:var(--text-light);">
+                <i class="fas fa-user-friends" style="font-size:10px;" title="% iscrizioni vs minimo"></i>
+                <input type="number" value="${rule.enrollPctMin != null && rule.enrollPctMin !== '' ? rule.enrollPctMin : ''}" onchange="updateHealthRuleField('${rule.id}','enrollPctMin',this.value)" style="width:42px; padding:3px 4px; border:1px solid var(--border); border-radius:4px; font-size:11px; text-align:center;" placeholder="—" title="% iscr. min">
+                <span>–</span>
+                <input type="number" value="${rule.enrollPctMax != null && rule.enrollPctMax !== '' ? rule.enrollPctMax : ''}" onchange="updateHealthRuleField('${rule.id}','enrollPctMax',this.value)" style="width:42px; padding:3px 4px; border:1px solid var(--border); border-radius:4px; font-size:11px; text-align:center;" placeholder="—" title="% iscr. max">
+                <span>%</span>
+            </div>
+            <!-- Delete -->
+            <button onclick="deleteHealthRule('${rule.id}')" style="background:none; border:none; color:#b91c1c; cursor:pointer; font-size:13px; padding:4px;" title="Elimina regola"><i class="fas fa-trash"></i></button>
+        </div>`;
+    }).join('');
+
+    if (sortedRules.length === 0) {
+        container.innerHTML = '<div style="color:var(--text-light);font-size:12px;font-style:italic;padding:12px;">Nessuna regola configurata. Clicca "Aggiungi regola" o "Ripristina default".</div>';
+    }
+}
+
+function updateHealthRuleField(ruleId, field, value) {
+    const rule = window.HEALTH_RULES.find(r => r.id === ruleId);
+    if (!rule) return;
+    if (field === 'priority' || field === 'daysMin' || field === 'daysMax' || field === 'enrollPctMin' || field === 'enrollPctMax') {
+        rule[field] = value === '' || value === null || value === undefined ? null : Number(value);
+    } else {
+        rule[field] = value;
+    }
+    // Re-render to update colors when verdict changes
+    if (field === 'verdict') renderHealthRulesEditor();
+}
+
+function toggleHealthRule(ruleId) {
+    const rule = window.HEALTH_RULES.find(r => r.id === ruleId);
+    if (rule) {
+        rule.enabled = !rule.enabled;
+        renderHealthRulesEditor();
+    }
+}
+
+function deleteHealthRule(ruleId) {
+    window.HEALTH_RULES = window.HEALTH_RULES.filter(r => r.id !== ruleId);
+    renderHealthRulesEditor();
+}
+
+function addHealthRule() {
+    const maxPriority = window.HEALTH_RULES.reduce((max, r) => Math.max(max, r.priority || 0), 0);
+    window.HEALTH_RULES.push({
+        id: 'r' + Date.now(),
+        name: 'Nuova regola',
+        verdict: 'monitor',
+        daysMin: null,
+        daysMax: null,
+        enrollPctMin: null,
+        enrollPctMax: null,
+        priority: maxPriority + 10,
+        enabled: true,
+    });
+    renderHealthRulesEditor();
+}
+
+function resetHealthRulesToDefaults() {
+    window.HEALTH_RULES = DEFAULT_HEALTH_RULES.map(r => ({ ...r }));
+    renderHealthRulesEditor();
+    showToast('Regole ripristinate ai valori predefiniti');
 }
 
 function verdictStyle(verdict) {
@@ -2848,10 +3092,7 @@ function renderVerdictBadge(handle) {
     const rec = window.RECOMMENDATIONS[handle];
     if (!rec) return '';
     const s = verdictStyle(rec.verdict);
-    const confLabel = rec.confidence === 'high' ? '' :
-                      rec.confidence === 'medium' ? ' · confidence media' :
-                      ' · confidence bassa';
-    const title = (rec.reasoning + confLabel).replace(/"/g, '&quot;').replace(/\n/g, ' ');
+    const title = (rec.reasoning || rec.verdict).replace(/"/g, '&quot;').replace(/\n/g, ' ');
     return `<span class="state-badge" style="background:${s.bg};color:${s.fg};cursor:help;" title="${title}"><i class="fas ${s.icon}" style="font-size:9px;"></i> ${s.label}</span>`;
 }
 
@@ -3590,7 +3831,11 @@ function renderDashboard() {
     // Stats (active courses only)
     const totalStudents = attiviCourses.reduce((sum, c) => sum + c.students.length, 0);
     const totalRevenue = attiviCourses.reduce((sum, c) => sum + c.revenue, 0);
-    const riskCount = attiviCourses.filter(c => c.sustainability.status === 'critical').length;
+    // Count courses flagged as rischio or critico by the health rules engine
+    const riskCount = attiviCourses.filter(c => {
+        const rec = window.RECOMMENDATIONS[c.handle];
+        return rec && (rec.verdict === 'critico' || rec.verdict === 'rischio');
+    }).length;
 
     document.getElementById('totalCorsi').textContent = attiviCourses.length;
     document.getElementById('totalCorsiSub').textContent = 'con date future';
@@ -3607,12 +3852,13 @@ function renderDashboard() {
         const fillColor = s.status === 'sustainable' ? 'var(--success)' : s.status === 'warning' ? 'var(--warning)' : 'var(--danger)';
         const countdownBadge = countdown ? `<span class="countdown-badge ${countdown.css}" style="margin-left: 0; margin-top: 0; font-size: 9px; padding: 2px 6px;">${countdown.text}</span>` : '';
         const bozzaBadge = c.businessState === 'bozza' ? '<span class="state-badge bozza" style="margin-left: 6px;">Bozza</span>' : '';
+        const healthBadge = renderVerdictBadge(c.handle);
         return `<tr class="dash-course-row" onclick="window.currentCourseId='${c.id}'; openCourseDetail('${c.id}')" style="cursor: pointer;">
             <td>
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <div style="width: 4px; height: 32px; border-radius: 2px; flex-shrink: 0;" class="course-banner ${c.courseType.color}"></div>
                     <div>
-                        <div style="font-weight: 600; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 6px;">${c.city}${bozzaBadge}</div>
+                        <div style="font-weight: 600; font-size: 13px; color: var(--text); display: inline-flex; align-items: center; gap: 6px;">${c.city}${bozzaBadge}${healthBadge}</div>
                         ${countdownBadge}
                     </div>
                 </div>

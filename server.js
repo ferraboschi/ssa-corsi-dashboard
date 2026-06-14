@@ -1738,6 +1738,44 @@ function getCourseEventDate(course) {
   return null;
 }
 
+// ============================================================================
+// HEALTH RULES — dynamic rule engine for course health status verdicts
+// Rules are stored in Airtable config alongside course costs.
+// Each rule: { id, name, verdict, daysMin, daysMax, enrollPctMin, enrollPctMax, priority, enabled }
+// ============================================================================
+
+const HEALTH_RULES_KEY = '__health_rules__';
+
+const DEFAULT_HEALTH_RULES = [
+  { id: 'r1', name: 'In traiettoria', verdict: 'in-traiettoria', daysMin: null, daysMax: null, enrollPctMin: 100, enrollPctMax: null, priority: 10, enabled: true },
+  { id: 'r2', name: 'Critico', verdict: 'critico', daysMin: null, daysMax: 14, enrollPctMin: null, enrollPctMax: 50, priority: 20, enabled: true },
+  { id: 'r3', name: 'Rischio', verdict: 'rischio', daysMin: null, daysMax: 30, enrollPctMin: null, enrollPctMax: 80, priority: 30, enabled: true },
+  { id: 'r4', name: 'Monitor', verdict: 'monitor', daysMin: null, daysMax: 60, enrollPctMin: null, enrollPctMax: 100, priority: 40, enabled: true },
+];
+
+function getHealthRules() {
+  const stored = courseCosts[HEALTH_RULES_KEY];
+  if (stored && Array.isArray(stored.rules) && stored.rules.length > 0) return stored.rules;
+  return DEFAULT_HEALTH_RULES;
+}
+
+app.get('/api/health-rules', (req, res) => {
+  res.json({ success: true, rules: getHealthRules() });
+});
+
+app.post('/api/health-rules', async (req, res) => {
+  const { rules } = req.body;
+  if (!Array.isArray(rules)) return res.status(400).json({ success: false, error: 'rules must be an array' });
+  // Validate each rule
+  for (const r of rules) {
+    if (!r.id || !r.verdict) return res.status(400).json({ success: false, error: `rule missing id or verdict: ${JSON.stringify(r)}` });
+  }
+  courseCosts[HEALTH_RULES_KEY] = { rules, updatedAt: new Date().toISOString() };
+  await saveCostsToFile(courseCosts);
+  console.log(`[health-rules] saved ${rules.length} rules`);
+  res.json({ success: true, rules });
+});
+
 app.get('/api/recommendations', async (req, res) => {
   try {
     const cacheKey = 'recommendations';
