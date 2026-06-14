@@ -1160,6 +1160,33 @@ app.get('/api/courses', async (req, res) => {
     // Apply cached Twilio data immediately (non-blocking — no new API calls)
     applyCachedTwilioData(courses);
 
+    // Sort courses chronologically by event date (extracted from handle or luogo_e_orari)
+    const SORT_MONTHS = {
+      gennaio: 1, febbraio: 2, marzo: 3, aprile: 4, maggio: 5, giugno: 6,
+      luglio: 7, agosto: 8, settembre: 9, ottobre: 10, novembre: 11, dicembre: 12,
+    };
+    function getSortDate(course) {
+      // 1. Try to extract a precise date from luogo_e_orari (e.g. "12 Giugno 2026")
+      const luogo = (course.luogo_e_orari || '').toLowerCase();
+      for (const [mName, mNum] of Object.entries(SORT_MONTHS)) {
+        const rx = new RegExp(`(\\d{1,2})\\s+${mName}\\s+(\\d{4})`);
+        const m = luogo.match(rx);
+        if (m) return new Date(Date.UTC(parseInt(m[2], 10), mNum - 1, parseInt(m[1], 10)));
+      }
+      // 2. Fallback: extract month + year from handle (day defaults to 15)
+      const h = (course.handle || '').toLowerCase();
+      for (const [mName, mNum] of Object.entries(SORT_MONTHS)) {
+        if (h.includes(mName)) {
+          const ym = h.match(/(\d{4})/);
+          if (ym) return new Date(Date.UTC(parseInt(ym[1], 10), mNum - 1, 15));
+        }
+      }
+      // 3. Last resort: created_at
+      if (course.created_at) return new Date(course.created_at);
+      return new Date('2099-01-01'); // unknown dates go last
+    }
+    courses.sort((a, b) => getSortDate(a) - getSortDate(b));
+
     const lastUpdated = new Date().toISOString();
     const responseData = { success: true, count: courses.length, data: courses, lastUpdated };
     // Cache the full response for 10 minutes
