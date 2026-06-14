@@ -1980,11 +1980,30 @@ function parseDateFromLuogoOrari(luogoText) {
             if (!yearMatch) continue;
             const year = yearMatch[1];
 
-            // Extract all day numbers before the month name
-            // Find the segment before the month name
-            const beforeMonth = text.split(monthName)[0];
-            // Match all numbers (1-2 digits) in that segment
-            const dayMatches = beforeMonth.match(/\d{1,2}/g);
+            // IMPORTANT: Only look for day numbers on the SAME LINE as the month name.
+            // This prevents address numbers (e.g. "Via Roma 2") on other lines from
+            // being incorrectly parsed as day numbers.
+            const lines = text.split(/[\n\r]+/);
+            const monthLine = lines.find(l => l.includes(monthName));
+            if (!monthLine) continue;
+
+            // Extract day numbers from the part of the line BEFORE the month name
+            const beforeMonth = monthLine.split(monthName)[0];
+            // Filter out numbers that look like address components:
+            // Skip numbers preceded by "via ", "viale ", "corso ", "piazza ", "n.", "n°", "nr"
+            const addressPattern = /(?:via|viale|corso|piazza|piazzale|largo|vicolo|n\.|n°|nr\.?)\s*\d/i;
+            let cleanBefore = beforeMonth;
+            // If the line contains address-like patterns, only take the part after the last date separator (🗓️, "data", etc.)
+            const dateIndicators = ['🗓', '📅', '📆', 'data:', 'date:', 'quando:'];
+            for (const ind of dateIndicators) {
+                const idx = cleanBefore.lastIndexOf(ind);
+                if (idx >= 0) {
+                    cleanBefore = cleanBefore.substring(idx);
+                    break;
+                }
+            }
+            // Match all numbers (1-2 digits) in the cleaned segment
+            const dayMatches = cleanBefore.match(/\d{1,2}/g);
             if (dayMatches && dayMatches.length > 0) {
                 const days = dayMatches.map(d => parseInt(d)).filter(d => d >= 1 && d <= 31).sort((a, b) => a - b);
                 if (days.length > 0) {
@@ -1996,6 +2015,7 @@ function parseDateFromLuogoOrari(luogoText) {
                     const display = days.length === 1
                         ? `${days[0]} ${ml} ${year}`
                         : `${days[0]}-${days[days.length - 1]} ${ml} ${year}`;
+                    console.log(`[parseDateFromLuogoOrari] "${monthLine.trim()}" → ${startDate} to ${endDate}`);
                     return { start: startDate, end: endDate, display, fromMetafield: true };
                 }
             }
@@ -2005,13 +2025,30 @@ function parseDateFromLuogoOrari(luogoText) {
 }
 
 function parseCourseDate(handle, courseObj) {
+    const h = (handle || '').toLowerCase();
+
     // 1. Hardcoded DATE_MAP (most reliable, manually verified)
-    if (CONFIG.DATE_MAP[handle]) return CONFIG.DATE_MAP[handle];
+    if (CONFIG.DATE_MAP[handle]) {
+        console.log(`[parseCourseDate] ${handle} → DATE_MAP hit`);
+        return CONFIG.DATE_MAP[handle];
+    }
+
+    // 1b. Fuzzy DATE_MAP match: try matching by key substring (handles minor Shopify handle variations)
+    for (const [key, val] of Object.entries(CONFIG.DATE_MAP)) {
+        // Match if the handle contains most of the key or vice versa
+        if (h.includes(key) || key.includes(h)) {
+            console.log(`[parseCourseDate] ${handle} → DATE_MAP fuzzy match on key "${key}"`);
+            return val;
+        }
+    }
 
     // 2. Parse from Shopify metafield luogo_e_orari (auto-detected real dates)
     if (courseObj && courseObj.luogo_e_orari) {
         const parsed = parseDateFromLuogoOrari(courseObj.luogo_e_orari);
-        if (parsed) return parsed;
+        if (parsed) {
+            console.log(`[parseCourseDate] ${handle} → luogo_e_orari: ${parsed.start} to ${parsed.end}`);
+            return parsed;
+        }
     }
 
     // 3. Fallback: extract month/year from handle (defaults to 1st of month — imprecise)
@@ -2020,7 +2057,6 @@ function parseCourseDate(handle, courseObj) {
         'maggio': '05', 'giugno': '06', 'luglio': '07', 'agosto': '08',
         'settembre': '09', 'ottobre': '10', 'novembre': '11', 'dicembre': '12'
     };
-    const h = (handle || '').toLowerCase();
     for (const [monthName, monthNum] of Object.entries(months)) {
         if (h.includes(monthName)) {
             const yearMatch = h.match(/(\d{4})/);
@@ -2030,6 +2066,7 @@ function parseCourseDate(handle, courseObj) {
                 // End = last day of month (handles 28/29/30/31 automatically via day=0 of next month)
                 const lastDay = new Date(parseInt(year, 10), parseInt(monthNum, 10), 0).getDate();
                 const endDate = `${year}-${monthNum}-${String(lastDay).padStart(2, '0')}`;
+                console.log(`[parseCourseDate] ${handle} → handle fallback: ${startDate} to ${endDate}`);
                 return { start: startDate, end: endDate, display: `${monthName.charAt(0).toUpperCase() + monthName.slice(1)} ${year}` };
             }
         }
@@ -2045,10 +2082,12 @@ function parseCourseDate(handle, courseObj) {
             const day = String(d.getDate()).padStart(2, '0');
             const dateStr = `${y}-${m}-${day}`;
             const monthNames = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+            console.log(`[parseCourseDate] ${handle} → Shopify created_at fallback: ${dateStr}`);
             return { start: dateStr, end: dateStr, display: `${day} ${monthNames[d.getMonth()]} ${y}`, fromShopify: true };
         }
     }
 
+    console.warn(`[parseCourseDate] ${handle} → NO DATE FOUND`);
     return null;
 }
 
@@ -2103,11 +2142,32 @@ function getCountdownInfo(course) {
     if (!course.startDate) return null;
 
     const start = new Date(course.startDate + 'T00:00:00');
-    const end = course.endDate ? new Date(course.endDate + 'T23:59:59') : start;
+    const endDate = course.endDate || course.startDate;
+    const end = new Date(endDate + 'T23:59:59');
+    const endDay = new Date(endDate + 'T00:00:00');
     const diffMs = start - today;
     const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-    if (today >= start && today <= end) return { text: 'In corso', css: 'ongoing' };
+    // Course is currently happening
+    if (today >= start && today <= end) {
+        // Calculate which day of the course we're on
+        const dayNumber = Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1;
+        const totalDays = Math.floor((endDay - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        if (totalDays > 1) {
+            // Multi-day course: show "Giorno X di Y"
+            const ordinals = { 1: 'Primo', 2: 'Secondo', 3: 'Terzo', 4: 'Quarto', 5: 'Quinto' };
+            const dayLabel = ordinals[dayNumber] || `${dayNumber}°`;
+            return { text: `${dayLabel} giorno`, css: 'ongoing', dayNumber, totalDays };
+        }
+        // Single-day course
+        return { text: 'In corso', css: 'ongoing', dayNumber: 1, totalDays: 1 };
+    }
+
+    // Course ended (past)
+    if (today > end) return null;
+
+    // Future course
     if (diffDays === 0) return { text: 'Inizia oggi!', css: 'tomorrow' };
     if (diffDays === 1) return { text: 'Inizia domani', css: 'tomorrow' };
     if (diffDays > 1 && diffDays <= 14) return { text: `Tra ${diffDays} giorni`, css: 'soon' };
